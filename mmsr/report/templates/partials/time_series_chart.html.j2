@@ -1,0 +1,42 @@
+<section class="time-series-chart">
+  <h3>
+    {{ chart.title }}
+    <button class="metric-info" title="{{ chart.metric_help_text() }}">ⓘ</button>
+    {% if chart.help_text %}<button class="metric-info" title="{{ chart.help_text }}">?</button>{% endif %}
+  </h3>
+  <div class="time-series-chart__meta">
+    <span>X-axis: {{ chart.x_axis_label }}</span>
+    <span>Y-axis: {{ chart.resolved_y_axis_label() }}</span>
+    <span>Metric: {{ chart.metric.label }}</span>
+  </div>
+  {% if chart.points %}
+    <div class="time-series-chart__placeholder" role="img" aria-label="{{ chart.title }} placeholder">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">X</th>
+            <th scope="col">Date</th>
+            <th scope="col">Bucket</th>
+            <th scope="col">Series</th>
+            <th scope="col">Value</th>
+            <th scope="col">Context</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for point in chart.points %}
+            <tr>
+              <th scope="row">{{ point.x_text }}</th>
+              <td>{{ point.date_text if point.date_text else "—" }}</td>
+              <td>{{ point.time_bucket_text if point.time_bucket_text else "—" }}</td>
+              <td>{{ point.series_text if point.series_text else "—" }}</td>
+              <td>{{ point.value_text }}</td>
+              <td>{{ point.metadata_text if point.metadata_text else "—" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="time-series-chart__empty">No time-series points were supplied for this chart.</p>
+  {% endif %}
+</section>

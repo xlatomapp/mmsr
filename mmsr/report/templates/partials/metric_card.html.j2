@@ -1,0 +1,5 @@
+<section class="metric-card metric-card--{{ card.status }}">
+  <h3>{{ card.metric.label }} <button class="metric-info" title="{{ card.help_text() }}">ⓘ</button></h3>
+  <div class="metric-value">{{ card.value_text }}</div>
+  {% if card.reference_text %}<div class="metric-reference">Reference: {{ card.reference_text }}</div>{% endif %}
+</section>

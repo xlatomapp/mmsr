@@ -1,0 +1,45 @@
+<section class="heatmap">
+  <h3>
+    {{ heatmap.title }}
+    <button class="metric-info" title="{{ heatmap.metric_help_text() }}">ⓘ</button>
+    {% if heatmap.help_text %}<button class="metric-info" title="{{ heatmap.help_text }}">?</button>{% endif %}
+  </h3>
+  <div class="heatmap__meta">
+    <span>X-axis: {{ heatmap.x_axis_label }}</span>
+    <span>Y-axis: {{ heatmap.y_axis_label }}</span>
+    <span>Value: {{ heatmap.value_label() }}</span>
+    <span>Metric: {{ heatmap.metric.label }}</span>
+  </div>
+  {% if heatmap.cells %}
+    <div class="heatmap__placeholder" role="img" aria-label="{{ heatmap.title }} heatmap placeholder">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">X</th>
+            <th scope="col">Y</th>
+            <th scope="col">Date</th>
+            <th scope="col">Bucket</th>
+            <th scope="col">Group</th>
+            <th scope="col">Value</th>
+            <th scope="col">Context</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for cell in heatmap.cells %}
+            <tr>
+              <th scope="row">{{ cell.x_text }}</th>
+              <td>{{ cell.y_text }}</td>
+              <td>{{ cell.date_text if cell.date_text else "—" }}</td>
+              <td>{{ cell.time_bucket_text if cell.time_bucket_text else "—" }}</td>
+              <td>{{ cell.group_text if cell.group_text else "—" }}</td>
+              <td>{{ cell.value_text }}</td>
+              <td>{{ cell.metadata_text if cell.metadata_text else "—" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="heatmap__empty">No heatmap cells were supplied for this placeholder.</p>
+  {% endif %}
+</section>

@@ -1,0 +1,34 @@
+<section class="metric-table">
+  <h3>{{ table.title }}{% if table.help_text %} <button class="metric-info" title="{{ table.help_text }}">ⓘ</button>{% endif %}</h3>
+  {% if table.rows %}
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Metric</th>
+          <th scope="col">Group</th>
+          <th scope="col">Value</th>
+          <th scope="col">Reference</th>
+          <th scope="col">Change</th>
+          <th scope="col">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in table.rows %}
+          <tr class="metric-table__row metric-table__row--{{ row.status }}">
+            <th scope="row">
+              {{ row.metric.label }}
+              <button class="metric-info" title="{{ row.help_text() }}">ⓘ</button>
+            </th>
+            <td>{{ row.group_text if row.group_text else "—" }}</td>
+            <td>{{ row.value_text }}</td>
+            <td>{{ row.reference_text if row.reference_text else "—" }}</td>
+            <td>{{ row.change_text if row.change_text else "—" }}</td>
+            <td><span class="metric-table__status">{{ row.status.replace("_", " ") }}</span></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="metric-table__empty">No metric rows were supplied for this table.</p>
+  {% endif %}
+</section>

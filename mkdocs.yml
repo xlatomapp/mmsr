@@ -1,0 +1,8 @@
+site_name: mmsr
+theme:
+  name: material
+plugins:
+  - search
+  - mkdocstrings
+nav:
+  - Home: index.md

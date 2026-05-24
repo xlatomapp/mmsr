@@ -1,0 +1,6 @@
+<section class="commentary-block">
+  <h3>{{ block.title }}</h3>
+  <ul>
+    {% for comment in block.comments %}<li>{{ comment }}</li>{% endfor %}
+  </ul>
+</section>
