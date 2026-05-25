@@ -4,9 +4,17 @@ import pytest
 
 from mmsr.kdb.schema_contracts import (
     OutputSchemaContractError,
+    activity_input_schema_contract,
+    activity_output_schema_contract,
     extract_result_columns,
+    liquidity_input_schema_contract,
+    liquidity_output_schema_contract,
+    output_schema_contract_for_template,
     toxicity_reversion_input_schema_contracts,
     toxicity_reversion_output_schema_contract,
+    validate_activity_output_schema,
+    validate_liquidity_output_schema,
+    validate_output_schema_for_template,
     validate_toxicity_reversion_input_schemas,
     validate_toxicity_reversion_output_schema,
 )
@@ -27,6 +35,143 @@ def _reversion_result() -> dict[str, list[object]]:
         "positive_reversion_ratio": [0.54],
         "valid_primary_quote_ratio": [0.99],
     }
+
+
+def _activity_result() -> dict[str, list[object]]:
+    return {
+        "date": [date(2026, 5, 1)],
+        "time_bucket": ["09:00-09:05"],
+        "market_cap_bucket": ["Large"],
+        "turnover": [1_500_000.0],
+        "volume": [1_000],
+        "trade_count": [25],
+    }
+
+
+def _liquidity_result() -> dict[str, list[object]]:
+    return {
+        "date": [date(2026, 5, 1)],
+        "time_bucket": ["AMO"],
+        "sector": ["Banks"],
+        "quoted_spread_bps": [12.5],
+        "top_of_book_depth": [5000],
+    }
+
+
+def test_activity_input_contract_lists_source_columns_and_extras() -> None:
+    contract = activity_input_schema_contract(
+        trades_table="trade_l1",
+        extra_required_columns=("sector", "sym"),
+    )
+
+    assert contract.template_name == "activity.q"
+    assert contract.table_role == "trades"
+    assert contract.table_name == "trade_l1"
+    assert contract.required_columns == (
+        "date",
+        "time",
+        "trade_price",
+        "trade_size",
+        "sector",
+        "sym",
+    )
+
+
+def test_liquidity_input_contract_lists_quote_columns_and_extras() -> None:
+    contract = liquidity_input_schema_contract(
+        quotes_table="quote_l1",
+        extra_required_columns=("market_segment",),
+    )
+
+    assert contract.template_name == "liquidity.q"
+    assert contract.table_role == "quotes"
+    assert contract.table_name == "quote_l1"
+    assert contract.required_columns == (
+        "date",
+        "time",
+        "bid_price",
+        "ask_price",
+        "bid_size",
+        "ask_size",
+        "market_segment",
+    )
+
+
+def test_activity_contract_lists_all_template_output_columns() -> None:
+    contract = activity_output_schema_contract(
+        "volume",
+        group_by=("market_cap_bucket",),
+    )
+
+    assert contract.template_name == "activity.q"
+    assert contract.required_columns == (
+        "date",
+        "time_bucket",
+        "market_cap_bucket",
+        "volume",
+        "turnover",
+        "trade_count",
+    )
+
+
+def test_activity_contract_validates_result_and_rejects_missing_aggregate() -> None:
+    validate_activity_output_schema(
+        metric_name="volume",
+        result=_activity_result(),
+        group_by=("market_cap_bucket",),
+    )
+
+    result = _activity_result()
+    del result["trade_count"]
+    with pytest.raises(OutputSchemaContractError, match="trade_count"):
+        validate_activity_output_schema(
+            metric_name="volume",
+            result=result,
+            group_by=("market_cap_bucket",),
+        )
+
+
+def test_activity_contract_rejects_non_activity_metric() -> None:
+    with pytest.raises(OutputSchemaContractError, match="activity metrics"):
+        activity_output_schema_contract("quoted_spread_bps")
+
+
+def test_liquidity_contract_lists_all_template_output_columns() -> None:
+    contract = liquidity_output_schema_contract(
+        "quoted_spread_bps",
+        group_by=("sector",),
+    )
+
+    assert contract.template_name == "liquidity.q"
+    assert contract.required_columns == (
+        "date",
+        "time_bucket",
+        "sector",
+        "quoted_spread_bps",
+        "top_of_book_depth",
+    )
+
+
+def test_liquidity_contract_validates_result_and_rejects_missing_aggregate() -> None:
+    validate_liquidity_output_schema(
+        metric_name="quoted_spread_bps",
+        result=_liquidity_result(),
+        group_by=("sector",),
+    )
+
+    result = _liquidity_result()
+    del result["top_of_book_depth"]
+    with pytest.raises(OutputSchemaContractError, match="top_of_book_depth"):
+        validate_liquidity_output_schema(
+            metric_name="quoted_spread_bps",
+            result=result,
+            group_by=("sector",),
+        )
+
+
+def test_liquidity_contract_rejects_non_liquidity_metric() -> None:
+    with pytest.raises(OutputSchemaContractError, match="liquidity metrics"):
+        liquidity_output_schema_contract("turnover")
 
 
 def test_toxicity_reversion_input_contracts_list_required_source_columns() -> None:
@@ -140,6 +285,8 @@ def test_toxicity_reversion_contract_lists_required_report_boundary_columns() ->
         "positive_reversion_ratio",
         "valid_primary_quote_ratio",
     )
+    assert contract.optional_columns == ("context_sort_order",)
+    assert contract.documented_columns[-1] == "context_sort_order"
 
 
 def test_toxicity_reversion_contract_validates_column_mapping_result() -> None:
@@ -203,6 +350,36 @@ def test_toxicity_reversion_contract_rejects_empty_row_list() -> None:
 def test_toxicity_reversion_contract_rejects_non_reversion_metric() -> None:
     with pytest.raises(OutputSchemaContractError, match="primary_quote_reversion"):
         toxicity_reversion_output_schema_contract("quoted_spread_bps")
+
+
+def test_output_schema_contract_dispatch_validates_template_results() -> None:
+    contract = output_schema_contract_for_template(
+        template_name="activity.q",
+        metric_name="volume",
+        group_by=("market_cap_bucket",),
+    )
+
+    assert contract.required_columns == (
+        "date",
+        "time_bucket",
+        "market_cap_bucket",
+        "volume",
+        "turnover",
+        "trade_count",
+    )
+
+    validate_output_schema_for_template(
+        template_name="liquidity.q",
+        metric_name="quoted_spread_bps",
+        result=_liquidity_result(),
+        group_by=("sector",),
+    )
+
+    with pytest.raises(OutputSchemaContractError, match="not_registered.q"):
+        output_schema_contract_for_template(
+            template_name="not_registered.q",
+            metric_name="volume",
+        )
 
 
 @pytest.mark.kdb_integration

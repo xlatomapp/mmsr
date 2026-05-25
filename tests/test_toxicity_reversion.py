@@ -35,6 +35,7 @@ def _reversion_observation(
             "trade_count": 120,
             "notional": 250_000_000.0,
             "horizon_sort_order": 2 if horizon == "100ms" else 1 if horizon == "10ms" else 4,
+            "context_sort_order": 9,
             "low_confidence": False,
         },
     )
@@ -97,6 +98,7 @@ def test_reversion_curve_points_from_timeseries_are_ordered_by_horizon() -> None
     assert points[0].trade_count == 120
     assert points[0].notional == 250_000_000.0
     assert points[0].horizon_sort_order == 1
+    assert points[0].context_sort_order == 9
     assert points[0].low_confidence is False
 
 
@@ -129,6 +131,25 @@ def test_reversion_curve_points_use_output_horizon_sort_order_when_present() -> 
 
     assert [point.horizon for point in points] == ["10s", "10ms"]
     assert [point.horizon_sort_order for point in points] == [1, 2]
+
+
+def test_reversion_curve_points_reject_invalid_context_sort_order_metadata() -> None:
+    series = MetricTimeSeries.from_observations(
+        [
+            MetricObservation(
+                metric_name="primary_quote_reversion_10ms_bps",
+                date=date(2026, 5, 24),
+                time_bucket="09:00-09:05",
+                group={"venue": "TSE", "horizon": "10ms"},
+                value=1.0,
+                metadata={"context_sort_order": "first"},
+            )
+        ],
+        metric_name="primary_quote_reversion_10ms_bps",
+    )
+
+    with pytest.raises(ReversionCurveConversionError, match="context_sort_order"):
+        reversion_curve_points_from_timeseries(series)
 
 
 def test_reversion_curve_points_from_series_collection_combines_horizons() -> None:

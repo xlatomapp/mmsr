@@ -2116,3 +2116,2752 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 - No new open questions.
 
+
+---
+
+## 2026-05-25 — Phase 9 iteration 22: canonical production-format report builder
+
+### Implemented
+
+- Restarted from `mmsr_phase9_iteration21(1).zip` as the base package.
+- Updated the roadmap to insert Milestone 9A before Milestone 10, reflecting user feedback that report quality must be hardened before kdb integration.
+- Documented that the mock-data demo must use the exact same production-format report builder, page structure, packaged Jinja template, component partials, and metric-help behavior as production; only the data source changes.
+- Added `mmsr.report.market_report.MarketReportInput`, `MarketReportOptions`, and `build_market_monitor_report()` as the canonical production-format report assembly path.
+- Refactored `mmsr.examples.offline_demo.build_offline_demo_report()` into a mock-data adapter that converts fixture metrics into `MarketReportInput` and delegates to `build_market_monitor_report()`.
+- Updated the default mock-data demo wording from offline-specific page names to production-format page names: `Market Summary` and `Intraday Detail`.
+- Updated README and milestone status documentation to describe the demo as a production-format mock-data acceptance harness rather than a separate report layout.
+- Added the requested info-icon/popover issue to Milestone 9A as an explicit requirement: title-only/inert info buttons are not sufficient, and metric/help controls must become accessible deterministic expandable/popover-style controls in a later iteration.
+
+### Files changed
+
+- `_docs/ROADMAP.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/journal.md`
+- `README.md`
+- `mmsr/cli.py`
+- `mmsr/examples/offline_demo.py`
+- `mmsr/report/__init__.py`
+- `mmsr/report/market_report.py`
+- `tests/test_cli.py`
+- `tests/test_docs_governance.py`
+- `tests/test_market_report.py`
+- `tests/test_offline_demo.py`
+
+### Tests added or updated
+
+- Added `tests/test_market_report.py` to verify the canonical production-format report builder, packaged template rendering, component limits, appendix omission, and missing metric-definition validation.
+- Updated offline demo tests to assert that the mock-data demo uses production-format page names and delegates through the canonical report shape.
+- Updated CLI tests for the new mock-data production-format wording.
+- Updated README governance test to assert that the quickstart documents `build_market_monitor_report()` and the rule that only the data source changes.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_market_report.py tests/test_offline_demo.py tests/test_cli.py tests/test_docs_governance.py -q`: passed with 21 tests.
+- Ran `python -m pytest -q -ra`: passed with 2 skipped live-kdb placeholders.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: collected 164 tests.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Milestone 9A: Production-format report polish before kdb integration.
+
+### Current milestone progress
+
+- 20%.
+
+### Remaining work before milestone completion
+
+- Replace title-only metric info buttons with accessible deterministic help controls across metric cards, tables, charts, heatmaps, and trusted HTML blocks.
+- Replace time-series placeholder tables with real trend visuals while preserving accessible backing data.
+- Replace heatmap placeholder tables with visual intraday/group encodings while preserving accessible backing data.
+- Add human-friendly display labels for metrics, buckets, groups, and reference observation units.
+- Rewrite deterministic commentary templates to avoid internal labels such as `time_bucket=AMO` and `unit=trading_day`.
+- Add an executive market overview section that focuses on high-level market trend before per-bucket diagnostics.
+
+### Best next deterministic step
+
+- Implement shared accessible metric/help controls using deterministic template partials and `<details>/<summary>` or equivalent no-JavaScript HTML, then update the relevant rendering tests to prove the help content is visible and not only stored in a `title` attribute.
+
+### Package phase and iteration
+
+- Phase: 9.
+- Iteration: 22.
+- Delivery archive name: `mmsr_phase9_iteration22.zip`.
+
+### Open questions
+
+- No new open questions.
+
+
+## 2026-05-25 — Phase 9 iteration 23: accessible report help controls
+
+### Implemented
+
+- Continued from `mmsr_phase9_iteration22.zip`.
+- Implemented a shared deterministic help-control partial at `mmsr/report/templates/partials/help_control.html.j2`.
+- Replaced title-only/inert info buttons with no-JavaScript `<details>/<summary>` controls across metric cards, metric tables, time-series charts, heatmaps, and trusted HTML blocks.
+- Kept the existing `metric-info` CSS hook on the summary element for compatibility while removing `<button>`-based title-only help.
+- Added report template CSS for expandable help popovers, compact labels, and help bodies.
+- Updated milestone status documentation to mark accessible metric/help controls as met and to identify production trend visuals as the next Milestone 9A step.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/journal.md`
+- `mmsr/report/templates/report.html.j2`
+- `mmsr/report/templates/partials/help_control.html.j2`
+- `mmsr/report/templates/partials/metric_card.html.j2`
+- `mmsr/report/templates/partials/metric_table.html.j2`
+- `mmsr/report/templates/partials/time_series_chart.html.j2`
+- `mmsr/report/templates/partials/heatmap.html.j2`
+- `tests/test_metric_help_controls.py`
+
+### Tests added or updated
+
+- Added `tests/test_metric_help_controls.py`.
+- Added coverage proving the mock-data production-format report renders expandable `<details>/<summary>` help controls for metric definitions, table help, chart help, heatmap help, and section help.
+- Added coverage proving rendered help is not stored only in `title` attributes and that no `<button>` info controls remain in the default report template output.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_metric_help_controls.py tests/test_html_rendering.py tests/test_metric_tables.py tests/test_time_series_charts.py tests/test_heatmaps.py tests/test_offline_demo.py tests/test_market_report.py -q`: passed.
+- Ran `python -m pytest -q -ra`: passed with 166 tests and 2 skipped live-kdb placeholders.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: collected 166 tests.
+- Ran `python -m pytest tests/test_docs_governance.py tests/test_metric_help_controls.py -q`: passed.
+- Ran `python -m mypy mmsr tests`: could not run because `mypy` is not installed in this environment.
+- Ran `python -m black --check mmsr tests`: could not run because `black` is not installed in this environment.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Milestone 9A: Production-format report polish before kdb integration.
+
+### Current milestone progress
+
+- 35%.
+
+### Remaining work before milestone completion
+
+- Replace time-series placeholder tables with real trend visuals while preserving accessible backing data.
+- Replace heatmap placeholder tables with visual intraday/group encodings while preserving accessible backing data.
+- Add human-friendly display labels for metrics, buckets, groups, and reference observation units.
+- Rewrite deterministic commentary templates to avoid internal labels such as `time_bucket=AMO`, `unit=trading_day`, and `market_cap_bucket=Small`.
+- Add an executive market overview section that focuses on high-level market trend before per-bucket diagnostics.
+
+### Best next deterministic step
+
+- Implement production-format time-series trend visuals, starting with deterministic inline SVG line charts for `TimeSeriesChart` while keeping the existing backing table for auditability and accessibility.
+
+### Package phase and iteration
+
+- Phase: 9.
+- Iteration: 23.
+- Delivery archive name: `mmsr_phase9_iteration23.zip`.
+
+### Open questions
+
+- No new open questions.
+
+
+---
+
+## 2026-05-25 — Phase 9 iteration 24: deterministic inline SVG time-series charts
+
+### Implemented
+
+- Continued from `mmsr_phase9_iteration23(1).zip`.
+- Replaced the production-format `TimeSeriesChart` placeholder table with a deterministic inline SVG line chart.
+- Preserved the accessible backing data table under an expanded `<details>` block so every plotted point remains auditable.
+- Added typed SVG helper models for chart series, markers, and ticks.
+- Preserved numeric metric values from normalized `MetricObservation` rows through `TimeSeriesChartPoint.value` so rendering does not need raw market data or external chart dependencies.
+- Added a safe display-text parsing fallback for hand-built chart points that do not supply a numeric value.
+- Rendered one SVG series per `series_text` value with deterministic x/y scaling, sampled x-axis ticks, y-axis ticks, marker titles, and legend labels.
+- Updated the canonical report template CSS for real time-series visuals while leaving heatmap placeholders unchanged for the next step.
+- Updated milestone status documentation to mark time-series trend visuals as met.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/journal.md`
+- `mmsr/report/components.py`
+- `mmsr/report/render_html.py`
+- `mmsr/report/sections.py`
+- `mmsr/report/templates/report.html.j2`
+- `mmsr/report/templates/partials/time_series_chart.html.j2`
+- `tests/test_cli.py`
+- `tests/test_market_report.py`
+- `tests/test_offline_demo.py`
+- `tests/test_time_series_charts.py`
+
+### Tests added or updated
+
+- Updated time-series chart tests to assert inline SVG rendering, retained backing data, removal of the old placeholder class, numeric value preservation, deterministic series/tick generation, and hand-built display-text parsing.
+- Updated market-report, offline-demo, and CLI tests to assert the production-format mock-data report renders SVG time-series visuals and no longer emits the old time-series placeholder class.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_time_series_charts.py tests/test_market_report.py tests/test_metric_help_controls.py tests/test_html_rendering.py -q`: passed.
+- Ran `python -m pytest -q -ra`: initially failed because stale CLI/offline-demo tests still expected `time-series-chart__placeholder`; updated those tests to match the new SVG behavior.
+- Ran `python -m pytest -q -ra`: passed with 2 skipped live-kdb placeholders.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: collected 168 tests.
+- Ran `python -m mypy mmsr tests`: could not run because `mypy` is not installed in this environment.
+- Ran `python -m black --check mmsr tests`: could not run because `black` is not installed in this environment.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Milestone 9A: Production-format report polish before kdb integration.
+
+### Current milestone progress
+
+- 50%.
+
+### Remaining work before milestone completion
+
+- Replace heatmap placeholder tables with deterministic visual intraday/group encodings while preserving accessible backing data.
+- Add human-friendly display labels for metrics, buckets, groups, and reference observation units.
+- Rewrite deterministic commentary templates to avoid internal labels such as `time_bucket=AMO`, `unit=trading_day`, and `market_cap_bucket=Small`.
+- Add an executive market overview section that focuses on high-level market trend before per-bucket diagnostics.
+
+### Best next deterministic step
+
+- Implement deterministic visual heatmap encodings for `Heatmap` while keeping the existing backing table for auditability and accessibility.
+
+### Package phase and iteration
+
+- Phase: 9.
+- Iteration: 24.
+- Delivery archive name: `mmsr_phase9_iteration24.zip`.
+
+### Open questions
+
+- No new open questions.
+
+
+
+---
+
+## 2026-05-25 — Phase 9 iteration 25: deterministic inline SVG heatmaps
+
+### Implemented
+
+- Continued from `mmsr_phase9_iteration24.zip`.
+- Replaced production-format heatmap placeholder tables with deterministic inline SVG matrix visuals.
+- Preserved the accessible backing data table under an expanded `<details>` block so every rendered heatmap cell remains auditable.
+- Added typed SVG helper models for heatmap cells and axis labels.
+- Preserved numeric metric values from normalized `MetricObservation` rows through `HeatmapCell.value` so rendering does not need raw market data or external chart dependencies.
+- Added a safe display-text parsing fallback for hand-built heatmap cells that do not supply a numeric value.
+- Encoded numeric heatmap magnitude through deterministic cell opacity, included missing-value cells with a deterministic missing-cell style, and retained x/y axis labels.
+- Updated the canonical report template CSS for real heatmap visuals.
+- Updated milestone status documentation to mark heatmap/intraday diagnostic visual encodings as met.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/journal.md`
+- `mmsr/report/components.py`
+- `mmsr/report/render_html.py`
+- `mmsr/report/sections.py`
+- `mmsr/report/templates/report.html.j2`
+- `mmsr/report/templates/partials/heatmap.html.j2`
+- `tests/test_cli.py`
+- `tests/test_heatmaps.py`
+- `tests/test_market_report.py`
+- `tests/test_offline_demo.py`
+
+### Tests added or updated
+
+- Updated heatmap tests to assert inline SVG rendering, retained backing data, removal of the old placeholder class, numeric value preservation, deterministic axis labels, cell opacity, missing-cell rendering, and hand-built display-text parsing.
+- Updated market-report, offline-demo, and CLI tests to assert the production-format mock-data report renders SVG heatmap visuals and no longer emits the old heatmap placeholder class.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_heatmaps.py tests/test_market_report.py tests/test_offline_demo.py tests/test_cli.py tests/test_metric_help_controls.py -q`: passed.
+- Ran `python -m pytest -q -ra`: passed with 2 skipped live-kdb placeholders.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: collected 168 tests.
+- Ran `python -m mypy mmsr tests`: could not run because `mypy` is not installed in this environment.
+- Ran `python -m black --check mmsr tests`: could not run because `black` is not installed in this environment.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Milestone 9A: Production-format report polish before kdb integration.
+
+### Current milestone progress
+
+- 65%.
+
+### Remaining work before milestone completion
+
+- Add human-friendly display labels for metrics, buckets, groups, and reference observation units.
+- Rewrite deterministic commentary templates to avoid internal labels such as `time_bucket=AMO`, `unit=trading_day`, and `market_cap_bucket=Small`.
+- Add an executive market overview section that focuses on high-level market trend before per-bucket diagnostics.
+
+### Best next deterministic step
+
+- Add deterministic display-label helpers for intraday buckets, group keys/values, and reference observation units, then route commentary scope and comparison text through those helpers without changing metric calculations.
+
+### Package phase and iteration
+
+- Phase: 9.
+- Iteration: 25.
+- Delivery archive name: `mmsr_phase9_iteration25.zip`.
+
+### Open questions
+
+- No new open questions.
+
+---
+
+## 2026-05-25 — Phase 9 iteration 26: roadmap backlog for ppw extras and Typer CLI
+
+### Implemented
+
+- Continued from `mmsr_phase9_iteration25.zip`.
+- Added a later roadmap milestone for ppw packaging parity and CLI ergonomics.
+- Recorded the requested future work to add explicit `dev` and `doc` optional dependency support without changing runtime dependencies in this iteration.
+- Recorded the requested future work to evaluate a dedicated Typer CLI migration while preserving existing command behavior.
+- Added a governance test that keeps the roadmap backlog items visible.
+
+### Files changed
+
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `tests/test_docs_governance.py`
+
+### Tests added or updated
+
+- Added `test_roadmap_tracks_packaging_and_cli_backlog` to assert that the roadmap continues to track ppw packaging parity, `dev`/`doc` optional dependency support, Typer CLI evaluation, and lean runtime installation.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_docs_governance.py -q`: passed.
+- Ran `python -m pytest -q -ra`: passed with 2 skipped live-kdb placeholders.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: collected 169 tests.
+- Ran `python -m mypy mmsr tests`: could not run because `mypy` is not installed in this environment.
+- Ran `python -m black --check mmsr tests`: could not run because `black` is not installed in this environment.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Milestone 9A: Production-format report polish before kdb integration.
+
+### Current milestone progress
+
+- 65%.
+
+### Remaining work before milestone completion
+
+- Add human-friendly display labels for metrics, buckets, groups, and reference observation units.
+- Rewrite deterministic commentary templates to avoid internal labels such as `time_bucket=AMO`, `unit=trading_day`, and `market_cap_bucket=Small`.
+- Add an executive market overview section that focuses on high-level market trend before per-bucket diagnostics.
+- Later, after the production-format report path is stable, implement the newly recorded ppw packaging parity and Typer CLI backlog items as a separate milestone.
+
+### Best next deterministic step
+
+- Add deterministic display-label helpers for intraday buckets, group keys/values, and reference observation units, then route commentary scope and comparison text through those helpers without changing metric calculations.
+
+### Package phase and iteration
+
+- Phase: 9.
+- Iteration: 26.
+- Delivery archive name: `mmsr_phase9_iteration26.zip`.
+
+### Open questions
+
+- Confirm whether ppw parity should be represented as Poetry extras, Poetry dependency groups, or both for this package before implementing the dependency changes.
+- Confirm whether the Typer migration should remain optional until the current argparse-style CLI has more commands, or happen immediately after Milestone 9A.
+
+
+---
+
+## 2026-05-25 — Phase 9 iteration 27: human-friendly report display labels
+
+### Implemented
+
+- Continued from `mmsr_phase9_iteration26.zip`.
+- Added deterministic presentation label helpers for auction buckets, intraday bucket ranges, group keys, group values, comparison scopes, and reference observation units.
+- Routed deterministic commentary group text and reference observation-unit caveats through the display-label helpers.
+- Routed comparison table scope text, time-series chart bucket/group/metadata text, and heatmap bucket/group/metadata text through the same display-label helpers.
+- Updated production-format, offline-demo, and CLI tests to assert human-facing labels and reject internal strings such as `time_bucket=`, `market_cap_bucket=`, and `reference_observation_unit` in rendered report HTML.
+- Updated milestone status documentation to mark deterministic commentary display labels as complete.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/journal.md`
+- `mmsr/analysis/commentary.py`
+- `mmsr/presentation/__init__.py`
+- `mmsr/presentation/labels.py`
+- `mmsr/report/sections.py`
+- `tests/test_cli.py`
+- `tests/test_commentary.py`
+- `tests/test_display_labels.py`
+- `tests/test_heatmaps.py`
+- `tests/test_market_report.py`
+- `tests/test_metric_tables.py`
+- `tests/test_offline_demo.py`
+- `tests/test_report_sections.py`
+- `tests/test_time_series_charts.py`
+
+### Tests added or updated
+
+- Added `tests/test_display_labels.py` for auction bucket labels, group key/value labels, reference observation-unit labels, and comparison scope ordering.
+- Updated commentary tests to expect human-facing group labels and `trading day` reference-unit caveats.
+- Updated table, chart, and heatmap builder tests to expect display labels produced from normalized observations.
+- Updated market-report, offline-demo, and CLI tests to assert the canonical rendered HTML contains display labels and does not expose selected internal key/value strings.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_display_labels.py tests/test_commentary.py tests/test_metric_tables.py tests/test_time_series_charts.py tests/test_heatmaps.py tests/test_report_sections.py tests/test_market_report.py tests/test_offline_demo.py tests/test_cli.py -q`: passed.
+- Ran `python -m pytest -q -ra`: passed with 2 skipped live-kdb placeholders.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: collected 175 tests.
+- Ran `python -m mypy mmsr tests`: could not run because `mypy` is not installed in this environment.
+- Ran `python -m black --check mmsr tests`: could not run because `black` is not installed in this environment.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Milestone 9A: Production-format report polish before kdb integration.
+
+### Current milestone progress
+
+- 80%.
+
+### Remaining work before milestone completion
+
+- Add an executive market overview section that focuses on high-level market trend and status before per-bucket diagnostics.
+- Keep the newly recorded ppw packaging parity and Typer CLI backlog items for a later milestone after the production-format report path is stable.
+
+### Best next deterministic step
+
+- Add a deterministic executive market overview component/page section that summarizes high-level market trend and status across key metrics before the current per-bucket diagnostic cards and tables.
+
+### Package phase and iteration
+
+- Phase: 9.
+- Iteration: 27.
+- Delivery archive name: `mmsr_phase9_iteration27.zip`.
+
+### Open questions
+
+- Existing ppw extras and Typer CLI timing questions remain tracked from iteration 26; no new open questions.
+---
+
+## 2026-05-25 — Phase 9 iteration 28: executive market overview
+
+### Implemented
+
+- Continued from `mmsr_phase9_iteration27.zip`.
+- Added a deterministic executive market overview builder that summarizes already-computed comparison status across key metrics before per-bucket diagnostics.
+- Added `ExecutiveOverviewOptions` with validated title, help text, and metric-summary limit fields.
+- Wired the canonical market report summary page to render the executive overview before metric cards, comparison tables, and commentary.
+- Rendered executive overview blocks through the existing accessible `HtmlBlock` and shared `<details>/<summary>` metric/help control path.
+- Added report template styling for executive overview status cards.
+- Updated milestone status documentation to mark Milestone 9A complete and identify Milestone 10 as the earliest incomplete roadmap item.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/journal.md`
+- `mmsr/report/__init__.py`
+- `mmsr/report/market_report.py`
+- `mmsr/report/overview.py`
+- `mmsr/report/templates/report.html.j2`
+- `tests/test_cli.py`
+- `tests/test_executive_overview.py`
+- `tests/test_market_report.py`
+- `tests/test_offline_demo.py`
+
+### Tests added or updated
+
+- Added `tests/test_executive_overview.py` for deterministic overview status summaries, metric-summary limits, display-label preservation, missing-definition validation, and option validation.
+- Updated market-report tests to assert the overview block is present on the summary page and renders before diagnostic components.
+- Updated offline-demo and CLI tests to assert the mock-data production-format report includes the executive overview.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_executive_overview.py tests/test_market_report.py tests/test_offline_demo.py tests/test_cli.py -q`: passed.
+- Ran `python -m pytest -q -ra`: passed with 2 skipped live-kdb placeholders.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: collected 179 tests.
+- Ran `python -m mypy mmsr tests`: could not run because `mypy` is not installed in this environment.
+- Ran `python -m black --check mmsr tests`: could not run because `black` is not installed in this environment.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Milestone 9A: Production-format report polish before kdb integration.
+
+### Current milestone progress
+
+- 100%.
+
+### Remaining work before milestone completion
+
+- None for Milestone 9A.
+- Keep the ppw packaging parity and Typer CLI backlog items for a later milestone after the kdb integration demo path is started.
+
+### Best next deterministic step
+
+- Begin Milestone 10 by adding a deterministic mock-kdb integration demo that executes an example query through the existing lazy kdb client/template abstractions and adapts the result into the canonical market report path without requiring production data.
+
+### Package phase and iteration
+
+- Phase: 9.
+- Iteration: 28.
+- Delivery archive name: `mmsr_phase9_iteration28.zip`.
+
+### Open questions
+
+- Existing ppw extras and Typer CLI timing questions remain tracked from iteration 26; no new open questions.
+
+
+---
+
+## 2026-05-25 — Phase 10 iteration 29: deterministic mock-kdb integration demo
+
+### Implemented
+
+- Continued from `mmsr_phase9_iteration28.zip`.
+- Began Milestone 10 by adding a deterministic mock-kdb integration demo that executes rendered q templates through the existing `KdbMetricRunner` path.
+- Added `DeterministicMockKdbClient`, `MockKdbIntegrationDemoOptions`, `MockKdbIntegrationDemoResult`, `build_mock_kdb_integration_demo_result()`, and `build_mock_kdb_integration_demo_report()`.
+- The mock-kdb path executes starter `activity.q` and `liquidity.q` template queries for current and reference periods, normalizes table-shaped mock results into `MetricTimeSeries`, computes reference comparisons, and delegates into the canonical `build_market_monitor_report()` report path.
+- Added the `mmsr mock-kdb-demo --output <path>` CLI command and programmatic `render_mock_kdb_demo_report_file()` helper.
+- Documented the mock-kdb quickstart in README and updated roadmap/status docs to mark Milestone 10 as in progress.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `mmsr/cli.py`
+- `mmsr/examples/__init__.py`
+- `mmsr/examples/mock_kdb_demo.py`
+- `tests/test_cli.py`
+- `tests/test_docs_governance.py`
+- `tests/test_mock_kdb_demo.py`
+
+### Tests added or updated
+
+- Added `tests/test_mock_kdb_demo.py` for mock-kdb q execution, canonical report assembly, rendered HTML labels/visuals, option validation, and no-PyKX behavior.
+- Updated CLI tests for the new `mock-kdb-demo` command, file rendering helper, appendix omission, help output, and programmatic options.
+- Updated docs governance tests to keep the mock-kdb quickstart documented.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_mock_kdb_demo.py tests/test_cli.py -q`: passed.
+- Ran `python -m pytest tests/test_docs_governance.py tests/test_mock_kdb_demo.py tests/test_cli.py -q`: passed.
+- Ran `python -m pytest -q -ra`: passed with 2 skipped live-kdb placeholders.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: collected 188 tests.
+- Ran `python -m mypy mmsr tests`: could not run because `mypy` is not installed in this environment.
+- Ran `python -m black --check mmsr tests`: could not run because `black` is not installed in this environment.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Milestone 10: kdb integration demo.
+
+### Current milestone progress
+
+- 35%.
+
+### Remaining work before milestone completion
+
+- Add explicit output schema contracts for `activity.q` and `liquidity.q`.
+- Validate starter-template output contracts inside `KdbMetricRunner` before normalization.
+- Document how deterministic mock-kdb tests differ from live kdb integration tests.
+- Keep live-kdb tests skipped unless a real kdb process and production-like schemas are explicitly available.
+
+### Best next deterministic step
+
+- Add explicit output schema contracts for `activity.q` and `liquidity.q`, validate those contracts in `KdbMetricRunner`, and cover missing-column failures with unit tests.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 29.
+- Delivery archive name: `mmsr_phase10_iteration29.zip`.
+
+### Open questions
+
+- Existing ppw extras and Typer CLI timing questions remain tracked from iteration 26.
+- Confirm whether starter activity/liquidity schema contracts should require only the requested metric value column or every aggregate column emitted by each template.
+
+
+
+---
+
+## 2026-05-25 — Phase 10 iteration 30: starter q-template output schema contracts
+
+### Implemented
+
+- Continued from `mmsr_phase10_iteration29.zip`.
+- Added explicit output schema contracts for `activity.q` and `liquidity.q`.
+- The starter contracts require `date`, `time_bucket`, caller-requested group
+  columns, the requested metric value column, and sibling aggregate columns that
+  each q template always emits.
+- Routed `KdbMetricRunner` through template-specific output-schema validation
+  before normalizing q results into `MetricTimeSeries`.
+- Documented the new schema-contract boundary in the `activity.q` and
+  `liquidity.q` template headers.
+- Updated milestone status and roadmap text to reflect offline starter-template
+  schema validation progress.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `mmsr/kdb/q_templates/activity.q`
+- `mmsr/kdb/q_templates/liquidity.q`
+- `mmsr/kdb/runner.py`
+- `mmsr/kdb/schema_contracts.py`
+- `tests/test_kdb_metric_runner.py`
+- `tests/test_kdb_schema_contracts.py`
+
+### Tests added or updated
+
+- Added activity and liquidity schema-contract tests for required output column
+  order, row/result validation, invalid metric-family rejection, and missing
+  sibling aggregate failures.
+- Added metric-runner tests proving missing starter-template output columns fail
+  after query execution but before normalization.
+- Re-ran the mock-kdb demo tests to verify the canonical report path still
+  satisfies the stricter contracts.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_kdb_schema_contracts.py tests/test_kdb_metric_runner.py tests/test_mock_kdb_demo.py -q`: passed with 2 skipped live-kdb placeholders.
+- Ran `python -m pytest -q -ra`: passed with 2 skipped live-kdb placeholders.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: collected 197 tests.
+- Ran `python -m mypy mmsr tests`: could not run because `mypy` is not installed in this environment.
+- Ran `python -m black --check mmsr tests`: could not run because `black` is not installed in this environment.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Milestone 10: kdb integration demo.
+
+### Current milestone progress
+
+- 65%.
+
+### Remaining work before milestone completion
+
+- Document how deterministic mock-kdb tests differ from live kdb integration
+  tests.
+- Add explicit live-kdb integration test setup guidance, including environment
+  variables, table/schema assumptions, and why live tests remain skipped by
+  default.
+- Keep live-kdb tests skipped unless a real kdb process and production-like
+  schemas are explicitly available.
+
+### Best next deterministic step
+
+- Document the mock-kdb versus live-kdb integration testing boundary, including
+  live environment variables, table/schema assumptions, and skip behavior for
+  live tests.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 30.
+- Delivery archive name: `mmsr_phase10_iteration30.zip`.
+
+### Open questions
+
+- Existing ppw extras and Typer CLI timing questions remain tracked from
+  iteration 26.
+- Resolved the iteration 29 starter-template schema ambiguity by requiring every
+  aggregate column that `activity.q` and `liquidity.q` currently emit, not only
+  the requested value column. This keeps sibling aggregates available as
+  deterministic observation metadata and matches the q templates' explicit
+  select lists.
+---
+
+## 2026-05-25 — Phase 10 iteration 31: live-kdb integration testing boundary documentation
+
+### Implemented
+
+- Continued from `mmsr_phase10_iteration30.zip`.
+- Documented the deterministic mock-kdb versus opt-in live-kdb integration
+  testing boundary in `docs/kdb_integration_testing.md`.
+- Added the required live-kdb environment-variable contract, including
+  `MMSR_KDB_HOST`, `MMSR_KDB_PORT`, starter trades/quotes table variables,
+  calendar table variable, reversion table variables, and bounded smoke-test
+  date/symbol variables.
+- Documented starter table/schema assumptions for `activity.q`, `liquidity.q`,
+  and `toxicity_reversion.q`.
+- Documented why `@pytest.mark.kdb_integration` tests remain skipped by default
+  and how a future live harness should opt in safely.
+- Linked the integration-testing guide from README and the MkDocs navigation.
+- Updated roadmap and milestone status to show integration-test documentation is
+  now complete while live execution remains intentionally deferred.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `docs/kdb_integration_testing.md`
+- `mkdocs.yml`
+- `tests/test_docs_governance.py`
+
+### Tests added or updated
+
+- Added a docs-governance test that asserts the integration-testing guide
+  contains the required environment variables, live-test marker, skip behavior,
+  schema-boundary terms, and documentation links from README/MkDocs.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_docs_governance.py -q`: passed.
+- Ran `python -m pytest -q -ra`: passed with 2 skipped live-kdb placeholders.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: collected 198 tests.
+- Ran `python -m mypy mmsr tests`: could not run because `mypy` is not
+  installed in this environment.
+- Ran `python -m black --check mmsr tests`: could not run because `black` is not
+  installed in this environment.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before
+  Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Milestone 10: kdb integration demo.
+
+### Current milestone progress
+
+- 85%.
+
+### Remaining work before milestone completion
+
+- Live kdb execution remains intentionally deferred until a real kdb+ process,
+  credentials, and production-like schemas are available.
+- Add a small environment-gated live-kdb smoke-test harness that safely skips
+  when required variables are missing and validates a bounded starter-template
+  result through the existing schema-contract boundary.
+
+### Best next deterministic step
+
+- Add a small environment-gated live-kdb smoke-test harness that reads the
+  documented `MMSR_KDB_*` variables, skips safely when they are absent, and
+  validates one bounded `activity.q` or `liquidity.q` result through the existing
+  schema-contract boundary.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 31.
+- Delivery archive name: `mmsr_phase10_iteration31.zip`.
+
+### Open questions
+
+- Existing ppw extras and Typer CLI timing questions remain tracked from
+  iteration 26.
+- Exact production kdb table names, authentication conventions, and schema
+  variants remain to be confirmed before enabling live execution.
+
+
+
+---
+
+## 2026-05-25 — Phase 10 iteration 32: environment-gated live activity smoke harness
+
+### Implemented
+
+- Continued from `mmsr_phase10_iteration31.zip`.
+- Added `mmsr.kdb.live_smoke.LiveKdbActivitySmokeConfig` to parse the documented
+  live-kdb smoke environment variables, including host, port, trades table,
+  calendar table, bounded test date, optional credentials, and optional test
+  symbol.
+- Added `run_live_activity_smoke()` to execute one bounded `activity.q` turnover
+  request through `KdbMetricRunner`, so live smoke validation reuses the same
+  output schema-contract boundary as deterministic mock-kdb tests.
+- Added an optional starter-template `symbol_filter` parameter for `activity.q`
+  and `liquidity.q`, allowing live smoke runs to restrict the query to
+  `MMSR_KDB_TEST_SYMBOL` without broadening the report-boundary model.
+- Replaced the unconditional live metric-runner placeholder with an
+  environment-gated pytest that skips safely when required `MMSR_KDB_*`
+  variables are missing and imports PyKX only after the gate passes.
+- Updated live integration documentation, README, roadmap, and milestone status
+  to describe the implemented smoke harness and the remaining real-kdb execution
+  boundary.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `docs/kdb_integration_testing.md`
+- `mmsr/kdb/__init__.py`
+- `mmsr/kdb/live_smoke.py`
+- `mmsr/kdb/q_templates/activity.q`
+- `mmsr/kdb/q_templates/liquidity.q`
+- `mmsr/kdb/runner.py`
+- `tests/test_docs_governance.py`
+- `tests/test_kdb_metric_runner.py`
+- `tests/test_kdb_query_loader.py`
+- `tests/test_live_kdb_smoke.py`
+
+### Tests added or updated
+
+- Added unit tests for live-smoke environment parsing, q-date parsing,
+  port validation, request construction, and dynamic skip behavior.
+- Added a live `@pytest.mark.kdb_integration` activity smoke test that skips when
+  required environment variables are absent.
+- Added a metric-runner test for starter-template symbol filtering.
+- Updated q-template parameter tests for the new `symbol_filter` placeholder.
+- Updated docs-governance tests to cover the implemented harness and docs links.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_kdb_metric_runner.py tests/test_live_kdb_smoke.py tests/test_docs_governance.py -q`: passed with 1 skipped live-kdb smoke test.
+- Ran `python -m pytest -q -ra`: passed with 2 skipped live-kdb tests.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: collected 204 tests.
+- Ran `python -m mypy mmsr tests`: could not run because `mypy` is not
+  installed in this environment.
+- Ran `python -m black --check mmsr tests`: could not run because `black` is not
+  installed in this environment.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before
+  Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Milestone 10: kdb integration demo.
+
+### Current milestone progress
+
+- 95%.
+
+### Remaining work before milestone completion
+
+- Execute the environment-gated live activity smoke test against a real kdb+
+  process with confirmed production-like schemas.
+- Record exact source table/schema findings from live execution.
+- Decide whether to add a matching `liquidity.q` live smoke slice after the
+  activity smoke has been validated against a real environment.
+- Keep reversion live validation skipped until venue-trade and primary-quote
+  production schemas are confirmed.
+
+### Best next deterministic step
+
+- Run `python -m pytest -m kdb_integration tests/test_live_kdb_smoke.py` against
+  a confirmed production-like kdb+ process with the documented `MMSR_KDB_*`
+  variables set, then record the observed live schema and output behavior.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 32.
+- Delivery archive name: `mmsr_phase10_iteration32.zip`.
+
+### Open questions
+
+- Existing ppw extras and Typer CLI timing questions remain tracked from
+  iteration 26.
+- Exact production kdb table names, authentication conventions, and schema
+  variants remain to be confirmed before live execution can be treated as
+  validated.
+- The first implemented live smoke covers `activity.q`; a separate deterministic
+  step should decide whether `liquidity.q` needs its own live smoke slice before
+  closing Milestone 10.
+
+
+---
+
+## 2026-05-25 — Phase 10 iteration 33: environment-gated live liquidity smoke harness
+
+### Implemented
+
+- Continued from `mmsr_phase10_iteration32.zip`.
+- Added `mmsr.kdb.live_smoke.LiveKdbLiquiditySmokeConfig` to mirror the existing
+  activity smoke harness for `liquidity.q`.
+- Added `REQUIRED_LIVE_LIQUIDITY_SMOKE_ENV_VARS` and `run_live_liquidity_smoke()`
+  so a bounded `quoted_spread_bps` request can be executed through
+  `KdbMetricRunner` against a real kdb+ process once the documented
+  `MMSR_KDB_*` variables are configured.
+- Kept live validation opt-in and environment-gated; the new liquidity smoke test
+  skips safely when required variables are absent and imports PyKX only after the
+  gate passes.
+- Updated live integration documentation, README, roadmap, and milestone status
+  to state that both starter templates now have environment-gated live smoke
+  harnesses.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `docs/kdb_integration_testing.md`
+- `mmsr/kdb/__init__.py`
+- `mmsr/kdb/live_smoke.py`
+- `tests/test_docs_governance.py`
+- `tests/test_live_kdb_smoke.py`
+
+### Tests added or updated
+
+- Added unit tests for liquidity live-smoke required environment variables,
+  environment parsing, q-date parsing, port validation, and bounded
+  `quoted_spread_bps` request construction.
+- Added an environment-gated `@pytest.mark.kdb_integration` liquidity smoke test
+  that skips safely when required variables are missing.
+- Updated docs-governance tests to require documentation of
+  `LiveKdbLiquiditySmokeConfig` and the liquidity live smoke test.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_live_kdb_smoke.py tests/test_docs_governance.py -q`: passed with 2 skipped live-kdb smoke tests.
+- Ran `python -m pytest -q -ra`: passed with 3 skipped live-kdb/schema tests.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: passed collection.
+- Ran `python -m mypy mmsr tests`: could not run because `mypy` is not installed in this environment.
+- Ran `python -m black --check mmsr tests`: could not run because `black` is not installed in this environment.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before
+  Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Milestone 10: kdb integration demo.
+
+### Current milestone progress
+
+- 98%.
+
+### Remaining work before milestone completion
+
+- Execute the environment-gated live activity and liquidity smoke tests against a
+  real kdb+ process with confirmed production-like schemas.
+- Record exact source table/schema findings from live execution.
+- Keep reversion live validation skipped until venue-trade and primary-quote
+  production schemas are confirmed.
+
+### Best next deterministic step
+
+- Run `python -m pytest -m kdb_integration tests/test_live_kdb_smoke.py` against
+  a confirmed production-like kdb+ process with the documented `MMSR_KDB_*`
+  variables set, then record observed activity and liquidity source schemas and
+  output behavior.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 33.
+- Delivery archive name: `mmsr_phase10_iteration33.zip`.
+
+### Open questions
+
+- Exact production kdb table names, authentication conventions, and schema
+  variants remain to be confirmed before live execution can be treated as
+  validated.
+- Reversion live validation remains blocked until venue-trade and primary-quote
+  production schemas are confirmed.
+
+
+---
+
+## 2026-05-25 — Phase 10 iteration 34: documentation dependency group and packaging setup paths
+
+### Implemented
+
+- Continued from `mmsr_phase10_iteration33.zip`.
+- Added a dedicated Poetry `doc` dependency group for documentation tooling while
+  keeping runtime dependencies unchanged.
+- Documented runtime-only, kdb-extra, contributor `dev`, and documentation `doc`
+  installation profiles in README.
+- Added a tox documentation environment and a GitHub Actions documentation build
+  job that install only the `doc` group before running `mkdocs build --strict`.
+- Updated the ppw packaging parity roadmap/status notes to record the completed
+  dependency-group slice and the remaining CLI/Typer decision.
+
+### Files changed
+
+- `.github/workflows/ci.yml`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `pyproject.toml`
+- `tests/test_packaging_metadata.py`
+- `tox.ini`
+
+### Tests added or updated
+
+- Added `tests/test_packaging_metadata.py` covering lean runtime dependencies,
+  explicit `dev` and `doc` Poetry groups, README installation profile docs, tox
+  documentation build wiring, CI documentation build wiring, and roadmap
+  tracking for the remaining CLI ergonomics work.
+- Existing governance docs tests continue to validate the packaging backlog and
+  live-kdb documentation boundary.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_packaging_metadata.py tests/test_docs_governance.py -q`: passed.
+- Ran `python -m pytest -q -ra`: passed with 3 expected skips for live-kdb/schema
+  tests.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: collected 215 tests.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before
+  Python validation commands, but pytest and compileall returned success.
+- `mkdocs build --strict` was wired into tox and CI but not executed locally
+  because the new `doc` dependency group is not installed in this execution
+  environment.
+
+### Current milestone
+
+- Milestone 10: kdb integration demo remains the earliest incomplete milestone.
+- Offline backlog item advanced: ppw packaging parity and CLI ergonomics.
+
+### Current milestone progress
+
+- Milestone 10 remains 98%.
+- ppw packaging parity and CLI ergonomics is estimated at 45% after adding the
+  explicit `doc` group, documenting setup paths, and wiring docs validation.
+
+### Remaining work before milestone completion
+
+- Milestone 10 still requires execution of the environment-gated live starter
+  smoke tests against a confirmed production-like kdb+ process.
+- ppw packaging parity still needs a dedicated Typer CLI migration decision and,
+  if accepted, tests that preserve current `offline-demo` and `mock-kdb-demo`
+  behavior.
+
+### Best next deterministic step
+
+- If live kdb+ remains unavailable, evaluate the Typer CLI migration as a
+  dedicated offline step by first adding CLI behavior snapshots for the current
+  argparse commands before changing the CLI implementation.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 34.
+- Delivery archive name: `mmsr_phase10_iteration34.zip`.
+
+### Open questions
+
+- Exact production kdb table names, authentication conventions, and schema
+  variants remain to be confirmed before live execution can be treated as
+  validated.
+- Reversion live validation remains blocked until venue-trade and primary-quote
+  production schemas are confirmed.
+- Typer CLI migration remains undecided; the safe first step is to preserve
+  current command behavior in tests before changing dependencies or CLI code.
+
+
+
+---
+
+## 2026-05-25 — Phase 10 iteration 35: CLI behavior snapshots before implementation decision
+
+### Implemented
+
+- Continued from `mmsr_phase10_iteration34.zip`.
+- Honored the user direction to defer actual live-kdb work and advance later
+  offline stages instead.
+- Added pre-migration CLI behavior snapshots for the current argparse command
+  surface before making any Typer or CLI implementation change.
+- Snapshotted top-level help, `offline-demo` and `mock-kdb-demo` default
+  arguments, override argument parsing, option presence in command help, and the
+  offline/mock-kdb safety language that must survive a future CLI migration.
+- Updated roadmap and milestone status so the CLI ergonomics backlog now records
+  the completed pre-migration snapshot slice and the remaining explicit
+  argparse-vs-Typer decision.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `tests/test_cli_behavior_snapshots.py`
+- `tests/test_packaging_metadata.py`
+
+### Tests added or updated
+
+- Added `tests/test_cli_behavior_snapshots.py` with focused parser behavior
+  snapshots for `offline-demo` and `mock-kdb-demo`.
+- Updated `tests/test_packaging_metadata.py` so governance tests track the new
+  snapshot milestone and the revised remaining CLI decision.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_cli_behavior_snapshots.py -q`: passed.
+- Ran `python -m pytest tests/test_cli_behavior_snapshots.py tests/test_packaging_metadata.py tests/test_docs_governance.py -q`: passed.
+- Ran `python -m pytest -q -ra`: passed with 3 expected skips for live-kdb/schema
+  tests.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: collected 225 tests.
+- Ran `python -m mypy mmsr tests`: could not run because `mypy` is not installed in this environment.
+- Ran `python -m black --check mmsr tests`: could not run because `black` is not installed in this environment.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before
+  Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Milestone 10: kdb integration demo remains deferred by user direction.
+- Offline backlog item advanced: ppw packaging parity and CLI ergonomics.
+
+### Current milestone progress
+
+- Milestone 10 remains 98% because no live kdb+ endpoint is available and the
+  user requested skipping actual kdb-related work for now.
+- ppw packaging parity and CLI ergonomics is estimated at 65% after adding
+  pre-migration CLI behavior snapshots.
+
+### Remaining work before milestone completion
+
+- Milestone 10 still requires execution of the environment-gated live starter
+  smoke tests against a confirmed production-like kdb+ process when that work is
+  resumed.
+- ppw packaging parity still needs the explicit CLI implementation decision:
+  keep argparse and mark the ergonomics backlog complete for now, or migrate one
+  command at a time to Typer while preserving the new behavior snapshots and
+  existing render-path tests.
+
+### Best next deterministic step
+
+- Decide whether the snapshotted CLI should remain argparse for this package
+  phase or migrate one command to Typer in a dedicated step with no behavior
+  changes.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 35.
+- Delivery archive name: `mmsr_phase10_iteration35.zip`.
+
+### Open questions
+
+- Exact production kdb table names, authentication conventions, and schema
+  variants remain deferred with live-kdb work.
+- Reversion live validation remains deferred until venue-trade and primary-quote
+  production schemas are confirmed.
+- Typer CLI migration remains undecided; behavior snapshots are now in place to
+  make that decision safer.
+
+
+---
+
+## 2026-05-25 — Phase 10 iteration 36: deterministic symbol anomaly page foundation
+
+### Implemented
+
+- Continued from `mmsr_phase10_iteration35.zip`.
+- Honored the user direction to keep actual live-kdb work deferred and advance
+  later offline report stages.
+- Made the CLI implementation decision for this phase: keep the existing
+  argparse command surface because it is small, behavior-snapshotted, and does
+  not justify adding Typer as a new dependency at this point.
+- Added deterministic symbol-level anomaly page helpers:
+  - `SymbolAnomalyPageOptions`.
+  - `select_symbol_anomalies()`.
+  - `build_symbol_anomaly_page()`.
+- Implemented conservative symbol anomaly ranking from already-computed
+  `MetricComparison` facts using status, adverse-tail diagnostics, z-score
+  magnitude, and absolute percentage-change magnitude.
+- Deduplicated symbol anomaly output to the worst comparison per symbol and
+  excluded normal rows by default, while retaining an explicit normal-row
+  watchlist mode.
+- Wired the canonical `build_market_monitor_report()` path to automatically
+  insert a symbol anomaly page when symbol-scoped anomaly rows are present, with
+  an opt-out through `MarketReportOptions.include_symbol_anomaly_page`.
+- Documented the symbol anomaly page behavior in README, roadmap, and milestone
+  status.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `mmsr/report/__init__.py`
+- `mmsr/report/market_report.py`
+- `mmsr/report/symbols.py`
+- `tests/test_packaging_metadata.py`
+- `tests/test_symbol_anomaly_pages.py`
+
+### Tests added or updated
+
+- Added `tests/test_symbol_anomaly_pages.py` covering symbol ranking,
+  deduplication, normal-row watchlist mode, metric-table rendering, no-symbol
+  no-op behavior, option validation, and canonical report integration.
+- Updated `tests/test_packaging_metadata.py` to record the phase decision to keep
+  argparse rather than migrate to Typer now.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_symbol_anomaly_pages.py -q`: passed.
+- Ran `python -m pytest tests/test_symbol_anomaly_pages.py tests/test_packaging_metadata.py tests/test_docs_governance.py -q`: passed.
+- Ran `python -m pytest -q -ra`: passed with 3 expected skips for live-kdb/schema
+  tests.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: collected 232 tests.
+- Ran `python -m mypy mmsr tests`: could not run because `mypy` is not installed
+  in this environment.
+- Ran `python -m black --check mmsr tests`: could not run because `black` is not
+  installed in this environment.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before
+  Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Milestone 10: kdb integration demo remains deferred by user direction.
+- Active offline milestone: Symbol-level anomaly pages.
+
+### Current milestone progress
+
+- Milestone 10 remains 98% because no live kdb+ endpoint is available and the
+  user requested skipping actual kdb-related work for now.
+- ppw packaging parity and CLI ergonomics is complete for this phase after the
+  explicit keep-argparse decision.
+- Symbol-level anomaly pages are estimated at 35% after adding deterministic
+  selection, page assembly, canonical report integration, docs, and tests.
+
+### Remaining work before milestone completion
+
+- Add deterministic synthetic symbol fixtures so the offline demo visibly
+  exercises the symbol anomaly page without real market data.
+- Add optional per-symbol detail pages with time-series trends and intraday
+  heatmap diagnostics for selected symbols.
+- Add configuration-driven symbol group key preferences if production schemas use
+  client-specific identifiers beyond the default aliases.
+
+### Best next deterministic step
+
+- Add offline synthetic symbol comparison fixtures and render-path tests so
+  `mmsr offline-demo` can show the new symbol anomaly page without using real
+  market data.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 36.
+- Delivery archive name: `mmsr_phase10_iteration36.zip`.
+
+### Open questions
+
+- Exact production kdb table names, authentication conventions, and schema
+  variants remain deferred with live-kdb work.
+- Reversion live validation remains deferred until venue-trade and primary-quote
+  production schemas are confirmed.
+- Future Typer migration remains optional and should only be reconsidered if the
+  CLI grows enough to justify a new dependency.
+
+
+---
+
+## 2026-05-25 — Phase 10 iteration 37: offline symbol anomaly fixtures and render coverage
+
+### Implemented
+
+- Continued from `mmsr_phase10_iteration36.zip`.
+- Kept live kdb work deferred per user direction and advanced the offline
+  symbol-level anomaly milestone.
+- Added deterministic synthetic symbol-scoped comparison fixtures for the
+  offline demo:
+  - `build_offline_symbol_metric_comparisons()`.
+  - Symbol rows for `7203`, `6758`, and `8306`.
+  - Fixture metadata that distinguishes market-level sample rows from
+    `symbol_anomaly_sample` rows.
+- Routed the synthetic symbol rows through the existing
+  `compare_metric_timeseries()` reference-comparison engine rather than
+  hand-coding report-only anomalies.
+- Included the symbol comparison rows in `build_offline_metric_comparisons()` and
+  `build_offline_sample_metrics()` so `mmsr offline-demo` visibly renders the
+  `Symbol Anomalies` page without live kdb+, PyKX, real market data, or LLM
+  access.
+- Polished symbol scope formatting so rendered rows use human-readable
+  `Symbol: 7203` style labels rather than raw `symbol=7203` prefixes.
+- Updated README, roadmap, and milestone status to record the completed
+  offline-demo fixture/render slice.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `mmsr/examples/__init__.py`
+- `mmsr/examples/offline_fixtures.py`
+- `mmsr/report/symbols.py`
+- `tests/test_market_report.py`
+- `tests/test_offline_demo.py`
+- `tests/test_offline_fixtures.py`
+- `tests/test_symbol_anomaly_pages.py`
+
+### Tests added or updated
+
+- Added fixture coverage for `build_offline_symbol_metric_comparisons()`,
+  including sample size, confidence, alert status, deterministic symbols,
+  fixture metadata, and z-score availability.
+- Updated offline-demo render-path tests so the default report includes
+  `Symbol Anomalies`, shows all three synthetic symbols, and avoids raw
+  `symbol=` scope text.
+- Updated canonical market-report tests for the now-visible symbol anomaly page
+  in the offline sample input.
+- Extended symbol anomaly page tests to assert human-readable symbol scope text.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_offline_fixtures.py tests/test_offline_demo.py tests/test_market_report.py tests/test_symbol_anomaly_pages.py -q`: passed.
+- Ran `python -m pytest -q -ra`: passed with 3 expected skips for live-kdb/schema
+  tests.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: collected 233 tests.
+- Ran `python -m mypy mmsr tests`: could not run because `mypy` is not installed
+  in this environment.
+- Ran `python -m black --check mmsr tests`: could not run because `black` is not
+  installed in this environment.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before
+  Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Milestone 10: kdb integration demo remains deferred by user direction.
+- Active offline milestone: Symbol-level anomaly pages.
+
+### Current milestone progress
+
+- Milestone 10 remains 98% because no live kdb+ endpoint is available and the
+  user requested skipping actual kdb-related work for now.
+- Symbol-level anomaly pages are estimated at 60% after deterministic selection,
+  summary-page assembly, canonical report integration, and visible offline-demo
+  fixture coverage.
+
+### Remaining work before milestone completion
+
+- Add optional per-symbol detail pages with time-series trends and intraday
+  heatmap diagnostics for selected symbols.
+- Add configuration-driven symbol group key preferences if production schemas use
+  client-specific identifiers beyond the default aliases.
+
+### Best next deterministic step
+
+- Add a deterministic per-symbol detail page builder for selected symbol
+  anomalies using existing `MetricTimeSeries` rows where symbol-scoped series are
+  available, without querying kdb or adding new dependencies.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 37.
+- Delivery archive name: `mmsr_phase10_iteration37.zip`.
+
+### Open questions
+
+- Exact production kdb table names, authentication conventions, and schema
+  variants remain deferred with live-kdb work.
+- Reversion live validation remains deferred until venue-trade and primary-quote
+  production schemas are confirmed.
+- Production symbol identifier preferences beyond `symbol`, `ticker`,
+  `security_code`, and `sym` remain to be confirmed.
+
+---
+
+## 2026-05-25 — Phase 10 iteration 38: per-symbol detail pages from normalized series
+
+### Implemented
+
+- Continued from `mmsr_phase10_iteration37.zip`.
+- Kept live kdb work deferred per user direction and advanced the offline
+  symbol-level anomaly milestone.
+- Added deterministic optional per-symbol detail page support:
+  - `SymbolDetailPageOptions`.
+  - `build_symbol_detail_pages()`.
+  - Existing symbol anomaly ranking is reused so detail pages follow the same
+    selected-symbol order as the summary anomaly page.
+- Added `MarketReportInput.symbol_series` so callers can provide normalized
+  symbol-scoped `MetricTimeSeries` rows without mixing them into the market-level
+  intraday detail page.
+- Added `MarketReportOptions.include_symbol_detail_pages`,
+  `symbol_detail_page_title_template`, `symbol_detail_help_text`, and
+  `max_symbol_detail_pages`.
+- Wired `build_market_monitor_report()` to insert per-symbol detail pages only
+  when selected anomaly symbols also have symbol-scoped time-series rows.
+- Added deterministic offline symbol detail fixtures via
+  `build_offline_symbol_metric_time_series()` and routed `mmsr offline-demo`
+  through them so the mock report visibly renders per-symbol trend charts and
+  intraday heatmaps without live kdb+, PyKX, real market data, or LLM access.
+- Updated README, roadmap, milestone status, and this journal.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `mmsr/examples/__init__.py`
+- `mmsr/examples/offline_demo.py`
+- `mmsr/examples/offline_fixtures.py`
+- `mmsr/report/__init__.py`
+- `mmsr/report/market_report.py`
+- `mmsr/report/symbols.py`
+- `tests/test_market_report.py`
+- `tests/test_offline_demo.py`
+- `tests/test_offline_fixtures.py`
+- `tests/test_symbol_anomaly_pages.py`
+
+### Tests added or updated
+
+- Added symbol-detail page tests for existing-series filtering, max-symbol
+  limiting, no-series no-op behavior, option validation, canonical report
+  integration, and disabling detail pages.
+- Added offline fixture tests for deterministic symbol detail time series.
+- Updated offline-demo render-path tests so the generated mock report includes
+  `Symbol 7203 Detail`, `Symbol 6758 Detail`, and `Symbol 8306 Detail` pages.
+- Updated market report option validation tests for the new symbol-detail fields.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_symbol_anomaly_pages.py tests/test_offline_fixtures.py tests/test_offline_demo.py tests/test_market_report.py -q`: passed.
+- Ran `python -m pytest -q -ra`: passed with 3 expected skips for live-kdb/schema
+  tests.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: collected 244 tests.
+- Ran `python -m mypy mmsr tests`: could not run because `mypy` is not installed
+  in this environment.
+- Ran `python -m black --check mmsr tests`: could not run because `black` is not
+  installed in this environment.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before
+  Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Milestone 10: kdb integration demo remains deferred by user direction.
+- Active offline milestone: Symbol-level anomaly pages.
+
+### Current milestone progress
+
+- Milestone 10 remains 98% because no live kdb+ endpoint is available and the
+  user requested skipping actual kdb-related work for now.
+- Symbol-level anomaly pages are estimated at 80% after deterministic selection,
+  summary-page assembly, per-symbol detail pages, canonical report integration,
+  and visible offline-demo fixture coverage.
+
+### Remaining work before milestone completion
+
+- Add configuration-driven symbol group key preferences if production schemas use
+  client-specific identifiers beyond the default aliases.
+- Consider a compact symbol-detail navigation/index section if production reports
+  routinely include many selected symbols.
+
+### Best next deterministic step
+
+- Add `MarketReportOptions.symbol_group_keys` and pass it through the anomaly and
+  detail page builders so client-specific symbol identifiers can be configured
+  without changing report-layer code.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 38.
+- Delivery archive name: `mmsr_phase10_iteration38.zip`.
+
+### Open questions
+
+- Exact production kdb table names, authentication conventions, and schema
+  variants remain deferred with live-kdb work.
+- Reversion live validation remains deferred until venue-trade and primary-quote
+  production schemas are confirmed.
+- Production symbol identifier preferences beyond `symbol`, `ticker`,
+  `security_code`, and `sym` remain to be confirmed.
+
+---
+
+## 2026-05-25 — Phase 10 iteration 39: configurable symbol identifier keys
+
+### Implemented
+
+- Continued from `mmsr_phase10_iteration38.zip`.
+- Kept live kdb work deferred per user direction and completed the offline
+  symbol-level anomaly milestone for this package phase.
+- Added `MarketReportOptions.symbol_group_keys` with the same default aliases as
+  the lower-level symbol page builders: `symbol`, `ticker`, `security_code`, and
+  `sym`.
+- Passed the configured symbol key order through both `SymbolAnomalyPageOptions`
+  and `SymbolDetailPageOptions`, so client-specific identifiers such as
+  `client_symbol`, `issue_code`, or `local_code` can drive anomaly selection and
+  per-symbol detail pages without report-layer code changes.
+- Exported `DEFAULT_SYMBOL_GROUP_KEYS` from `mmsr.report`.
+- Documented the configured symbol-key behavior in README.
+- Updated roadmap and milestone status.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `mmsr/report/__init__.py`
+- `mmsr/report/market_report.py`
+- `tests/test_market_report.py`
+- `tests/test_symbol_anomaly_pages.py`
+
+### Tests added or updated
+
+- Added a canonical report-builder test proving custom `symbol_group_keys`
+  enable both the symbol anomaly page and matching per-symbol detail page for a
+  non-default group key.
+- Added `MarketReportOptions.symbol_group_keys` validation coverage for empty
+  key lists and blank key aliases.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_symbol_anomaly_pages.py tests/test_market_report.py -q`: passed.
+- Ran `python -m pytest tests/test_docs_governance.py tests/test_symbol_anomaly_pages.py tests/test_market_report.py -q`: passed.
+- Ran `python -m pytest -q -ra`: passed with 3 expected skips for live-kdb/schema
+  tests.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: passed; `python -m pytest --collect-only`
+  reported 240 tests collected.
+- Ran `python -m mypy mmsr tests`: could not run because `mypy` is not installed
+  in this environment.
+- Ran `python -m black --check mmsr tests`: could not run because `black` is not
+  installed in this environment.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before
+  Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Milestone 10: kdb integration demo remains deferred by user direction.
+- Active offline milestone: Symbol-level anomaly pages.
+
+### Current milestone progress
+
+- Milestone 10 remains 98% because no live kdb+ endpoint is available and the
+  user requested skipping actual kdb-related work for now.
+- Symbol-level anomaly pages are 100% complete for this package phase after
+  deterministic selection, summary-page assembly, per-symbol detail pages,
+  offline-demo fixture coverage, and configurable symbol identifier keys.
+
+### Remaining work before milestone completion
+
+- No required symbol-level anomaly work remains for this package phase.
+- A compact symbol-detail navigation/index section can be revisited later if
+  production reports routinely include many selected symbols.
+
+### Best next deterministic step
+
+- Start the sector, segment, and market-cap drilldown milestone by adding a small
+  typed drilldown configuration model and deterministic comparison filtering
+  helper for existing normalized facts.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 39.
+- Delivery archive name: `mmsr_phase10_iteration39.zip`.
+
+### Open questions
+
+- Exact production kdb table names, authentication conventions, and schema
+  variants remain deferred with live-kdb work.
+- Reversion live validation remains deferred until venue-trade and primary-quote
+  production schemas are confirmed.
+- Production symbol-detail page count and navigation preferences remain
+  client-specific and can be revisited if reports include many selected symbols.
+
+
+
+---
+
+## 2026-05-25 — Phase 10 iteration 40: drilldown comparison selector
+
+### Implemented
+
+- Continued from `mmsr_phase10_iteration39.zip`.
+- Kept live kdb work deferred because no real kdb+ process, credentials, or
+  production-like schemas are available.
+- Started the sector, segment, and market-cap drilldown milestone with a small
+  typed selection layer for existing normalized comparison facts.
+- Added `DrilldownSelectionOptions` with configurable drilldown group keys,
+  row limits, status filters, symbol group aliases, and symbol-scoped row
+  handling.
+- Added `select_drilldown_comparisons()` to select comparisons containing
+  configured group dimensions such as `market_cap_bucket`, `market_segment`,
+  `segment`, and `sector`, excluding symbol-scoped rows by default so the future
+  drilldown page will not duplicate symbol anomaly pages.
+- Added `drilldown_scope_key()` to preserve configured key order for future
+  deterministic page/table grouping.
+- Exported the drilldown selector helpers from `mmsr.report`.
+- Documented the drilldown selector in README, roadmap, and milestone status.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `mmsr/report/__init__.py`
+- `mmsr/report/drilldowns.py`
+- `tests/test_drilldowns.py`
+
+### Tests added or updated
+
+- Added `tests/test_drilldowns.py` with coverage for default sector/segment/
+  market-cap dimensions, symbol-scoped exclusion, optional symbol-scoped
+  inclusion, custom keys, status filters, row limits, configured scope ordering,
+  and validation of empty keys/statuses and negative limits.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_drilldowns.py -q`: passed.
+- Ran `python -m pytest tests/test_drilldowns.py tests/test_import.py tests/test_docs_governance.py -q`: passed.
+- Ran `python -m pytest -q -ra`: passed with 3 expected skips for live-kdb/schema
+  tests.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: passed and collected 246 tests.
+- Ran `python -m mypy mmsr tests`: could not run because `mypy` is not installed
+  in this environment.
+- Ran `python -m black --check mmsr tests`: could not run because `black` is not
+  installed in this environment.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before
+  Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Milestone 10: kdb integration demo remains deferred by user direction and
+  unavailable live kdb+ infrastructure.
+- Active offline milestone: Sector, segment, and market-cap drilldowns.
+
+### Current milestone progress
+
+- Milestone 10 remains 98% because no live kdb+ endpoint is available and the
+  user requested skipping actual kdb-related work for now.
+- Sector, segment, and market-cap drilldowns are estimated at 25% after adding
+  the typed selector/options layer, deterministic comparison filtering, exports,
+  documentation, and focused tests.
+
+### Remaining work before milestone completion
+
+- Build a deterministic drilldown report page with metric help controls.
+- Wire the drilldown page into `build_market_monitor_report()` behind report
+  options.
+- Add offline-demo fixture coverage so sector, segment, and market-cap drilldown
+  pages are visibly rendered without live kdb+, PyKX, real market data, or LLM
+  access.
+
+### Best next deterministic step
+
+- Add `build_drilldown_report_page()` that formats selected drilldown
+  comparisons as a metric table with metric help and human-readable group labels,
+  without calculating new metrics or querying kdb+.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 40.
+- Delivery archive name: `mmsr_phase10_iteration40.zip`.
+
+### Open questions
+
+- Exact production kdb table names, authentication conventions, and schema
+  variants remain deferred with live-kdb work.
+- Reversion live validation remains deferred until venue-trade and primary-quote
+  production schemas are confirmed.
+- Production sector/segment/market-cap group key preferences beyond
+  `market_cap_bucket`, `market_segment`, `segment`, and `sector` remain
+  client-specific and can be configured through the selector options for now.
+
+
+
+---
+
+## 2026-05-25 — Phase 10 iteration 41: drilldown report page builder
+
+### Implemented
+
+- Continued from `mmsr_phase10_iteration40.zip`.
+- Kept live kdb work deferred because no real kdb+ process, credentials, or
+  production-like schemas are available.
+- Added `DrilldownReportPageOptions` for deterministic sector/segment/market-cap
+  drilldown page presentation.
+- Added `build_drilldown_report_page()` to select existing normalized
+  `MetricComparison` facts and render them as a `ReportPage` with a documented
+  `MetricTable`.
+- Preserved registry-backed metric help for every drilldown table row.
+- Added human-readable drilldown scope labels for report date, auction/intraday
+  bucket, market-cap bucket, segment, sector, and custom group keys while
+  preserving configured drilldown key order.
+- Exported the drilldown page builder and options from `mmsr.report`.
+- Documented the page builder in README, roadmap, and milestone status.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `mmsr/report/__init__.py`
+- `mmsr/report/drilldowns.py`
+- `tests/test_drilldowns.py`
+
+### Tests added or updated
+
+- Added drilldown page-builder coverage for metric-help-backed table rendering,
+  human-readable group labels, HTML rendering, custom selection options, no-row
+  no-op behavior, missing metric definitions, and page-option validation.
+- Updated drilldown tests to cover the exported report-page builder in addition
+  to the selector.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_drilldowns.py -q`: passed.
+- Ran `python -m pytest tests/test_drilldowns.py tests/test_import.py -q`: passed.
+- Ran `python -m pytest tests/test_drilldowns.py tests/test_import.py tests/test_docs_governance.py -q`: passed.
+- Ran `python -m pytest -q -ra`: passed with 3 expected skips for live-kdb/schema
+  tests.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: passed and collected 252 tests.
+- Ran `python -m mypy mmsr tests`: could not run because `mypy` is not installed
+  in this environment.
+- Ran `python -m black --check mmsr tests`: could not run because `black` is not
+  installed in this environment.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before
+  Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Milestone 10: kdb integration demo remains deferred by user direction and
+  unavailable live kdb+ infrastructure.
+- Active offline milestone: Sector, segment, and market-cap drilldowns.
+
+### Current milestone progress
+
+- Milestone 10 remains 98% because no live kdb+ endpoint is available and the
+  user requested skipping actual kdb-related work for now.
+- Sector, segment, and market-cap drilldowns are estimated at 55% after adding
+  typed selection, deterministic comparison filtering, report-page table
+  rendering, metric help, human-readable group labels, exports, documentation,
+  and focused tests.
+
+### Remaining work before milestone completion
+
+- Wire the drilldown page into `build_market_monitor_report()` behind report
+  options.
+- Add offline-demo fixture coverage so sector, segment, and market-cap drilldown
+  pages are visibly rendered without live kdb+, PyKX, real market data, or LLM
+  access.
+
+### Best next deterministic step
+
+- Add `MarketReportOptions.include_drilldown_page`, drilldown page labels/limits,
+  and `drilldown_group_keys`, then insert `build_drilldown_report_page()` into
+  the canonical market report only when matching group-level comparison rows are
+  present.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 41.
+- Delivery archive name: `mmsr_phase10_iteration41.zip`.
+
+### Open questions
+
+- Exact production kdb table names, authentication conventions, and schema
+  variants remain deferred with live-kdb work.
+- Reversion live validation remains deferred until venue-trade and primary-quote
+  production schemas are confirmed.
+- Production sector/segment/market-cap group key preferences beyond
+  `market_cap_bucket`, `market_segment`, `segment`, and `sector` remain
+  client-specific and can be configured through the drilldown options for now.
+
+
+---
+
+## 2026-05-25 — Phase 10 iteration 42: canonical drilldown report wiring
+
+### Implemented
+
+- Continued from `mmsr_phase10_iteration41.zip`.
+- Kept live kdb work deferred because no real kdb+ process, credentials, or
+  production-like schemas are available.
+- Added canonical market-report options for sector/segment/market-cap drilldown
+  pages:
+  - `include_drilldown_page`
+  - `drilldown_page_title`
+  - `drilldown_table_title`
+  - `drilldown_help_text`
+  - `max_drilldown_rows`
+  - `drilldown_group_keys`
+- Wired `build_drilldown_report_page()` into `build_market_monitor_report()`.
+  The page is inserted only when matching group-level comparison rows are
+  present and remains opt-out through `include_drilldown_page=False`.
+- Reused the existing symbol key configuration when excluding symbol-scoped rows
+  from drilldowns, so custom symbol identifiers do not duplicate symbol anomaly
+  pages.
+- Updated canonical market-report, offline-demo, mock-kdb-demo, and custom symbol
+  key tests for the new deterministic page order.
+- Documented canonical drilldown page wiring in README, roadmap, and milestone
+  status.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `mmsr/report/market_report.py`
+- `tests/test_market_report.py`
+- `tests/test_mock_kdb_demo.py`
+- `tests/test_offline_demo.py`
+- `tests/test_symbol_anomaly_pages.py`
+
+### Tests added or updated
+
+- Added market-report coverage for:
+  - default drilldown page insertion when group-level rows exist;
+  - disabling the page through `include_drilldown_page=False`;
+  - no-op behavior when no group-level rows are present;
+  - custom drilldown title/table/help text, group keys, and row limits;
+  - validation for drilldown labels, row limits, and group keys.
+- Updated offline-demo and mock-kdb-demo render/path tests so the drilldown page
+  is visible from existing synthetic group-level comparison facts.
+- Updated custom symbol-key coverage so custom symbol rows are excluded from
+  drilldowns when `symbol_group_keys` is configured.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_market_report.py -q`: passed.
+- Ran `python -m pytest tests/test_market_report.py tests/test_offline_demo.py -q`:
+  passed.
+- Ran `python -m pytest tests/test_drilldowns.py tests/test_market_report.py tests/test_offline_demo.py -q`:
+  passed.
+- Ran `python -m pytest -q -ra`: passed with 3 expected skips for live-kdb/schema
+  tests.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: passed and collected 255 tests.
+- Ran `python -m mypy mmsr tests`: could not run because `mypy` is not installed
+  in this environment.
+- Ran `python -m black --check mmsr tests`: could not run because `black` is not
+  installed in this environment.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before
+  Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Milestone 10: kdb integration demo remains deferred by user direction and
+  unavailable live kdb+ infrastructure.
+- Active offline milestone: Sector, segment, and market-cap drilldowns.
+
+### Current milestone progress
+
+- Milestone 10 remains 98% because no live kdb+ endpoint is available and the
+  user requested skipping actual kdb-related work for now.
+- Sector, segment, and market-cap drilldowns are complete for the current phase
+  after adding typed selection, deterministic comparison filtering, report-page
+  table rendering, metric help, human-readable group labels, canonical report
+  wiring, offline/mock-kdb demo visibility, documentation, and tests.
+
+### Remaining work before milestone completion
+
+- Add richer sector-specific offline fixture rows once production sector naming
+  conventions are confirmed.
+- Live production validation remains deferred until kdb+ schemas and credentials
+  are available.
+
+### Best next deterministic step
+
+- Add optional offline-demo and mock-kdb-demo option/CLI passthroughs for
+  drilldown page inclusion and row limits so sample reports can demonstrate both
+  the default drilldown page and opt-out behavior from the command line.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 42.
+- Delivery archive name: `mmsr_phase10_iteration42.zip`.
+
+### Open questions
+
+- Exact production kdb table names, authentication conventions, and schema
+  variants remain deferred with live-kdb work.
+- Reversion live validation remains deferred until venue-trade and primary-quote
+  production schemas are confirmed.
+- Production sector naming and any client-specific sector taxonomy remain
+  unconfirmed; current drilldown keys stay configurable through
+  `drilldown_group_keys`.
+
+
+---
+
+## 2026-05-25 — Phase 10 iteration 43: drilldown demo CLI passthroughs
+
+### Implemented
+
+- Continued from `mmsr_phase10_iteration42.zip`.
+- Kept live kdb work deferred because no real kdb+ process, credentials, or
+  production-like schemas are available.
+- Added drilldown presentation passthroughs to `OfflineDemoReportOptions`:
+  - `include_drilldown_page`
+  - `max_drilldown_rows`
+- Added the same passthroughs to `MockKdbIntegrationDemoOptions`.
+- Passed both option sets into canonical `MarketReportOptions` so the demos still
+  use the single production-format report builder.
+- Added `--no-drilldown-page` and `--max-drilldown-rows` to both
+  `mmsr offline-demo` and `mmsr mock-kdb-demo`.
+- Updated CLI behavior snapshots, demo render-path tests, README, roadmap, and
+  milestone status for the new deterministic controls.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `mmsr/cli.py`
+- `mmsr/examples/mock_kdb_demo.py`
+- `mmsr/examples/offline_demo.py`
+- `tests/test_cli.py`
+- `tests/test_cli_behavior_snapshots.py`
+- `tests/test_mock_kdb_demo.py`
+- `tests/test_offline_demo.py`
+
+### Tests added or updated
+
+- Added offline-demo option tests for disabling the drilldown page, limiting
+  drilldown rows, and validating negative row limits.
+- Added mock-kdb-demo option tests for disabling the drilldown page, limiting
+  drilldown rows, and validating negative row limits.
+- Added CLI render-path tests for `--no-drilldown-page`.
+- Updated CLI behavior snapshots to cover the new `--no-drilldown-page` and
+  `--max-drilldown-rows` arguments.
+- Updated programmatic render-file option tests to prove drilldown opt-out flows
+  through the public file-rendering helpers.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_offline_demo.py tests/test_mock_kdb_demo.py tests/test_cli.py tests/test_cli_behavior_snapshots.py -q`: passed.
+- Ran `python -m pytest tests/test_offline_demo.py tests/test_mock_kdb_demo.py tests/test_cli.py tests/test_cli_behavior_snapshots.py tests/test_docs_governance.py -q`: passed.
+- Ran `python -m pytest -q -ra`: passed with 3 expected skips for live-kdb/schema
+  tests.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: passed and collected 262 tests.
+- Ran `python -m mypy mmsr tests`: could not run because `mypy` is not installed
+  in this environment.
+- Ran `python -m black --check mmsr tests`: could not run because `black` is not
+  installed in this environment.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before
+  Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Milestone 10: kdb integration demo remains deferred by user direction and
+  unavailable live kdb+ infrastructure.
+- Active offline milestone: Sector, segment, and market-cap drilldowns.
+
+### Current milestone progress
+
+- Milestone 10 remains 98% because no live kdb+ endpoint is available and the
+  user requested skipping actual kdb-related work for now.
+- Sector, segment, and market-cap drilldowns are complete for the current phase
+  after adding typed selection, deterministic comparison filtering, report-page
+  table rendering, metric help, human-readable group labels, canonical report
+  wiring, demo/CLI passthroughs, documentation, and tests.
+
+### Remaining work before milestone completion
+
+- Add richer sector-specific offline fixture rows once production sector naming
+  conventions are confirmed.
+- Live production validation remains deferred until kdb+ schemas and credentials
+  are available.
+
+### Best next deterministic step
+
+- Add MkDocs quickstart coverage for the demo drilldown CLI options so the docs
+  site and README stay aligned before adding any more report behavior.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 43.
+- Delivery archive name: `mmsr_phase10_iteration43.zip`.
+
+### Open questions
+
+- Exact production kdb table names, authentication conventions, and schema
+  variants remain deferred with live-kdb work.
+- Reversion live validation remains deferred until venue-trade and primary-quote
+  production schemas are confirmed.
+- Production sector naming and any client-specific sector taxonomy remain
+  unconfirmed; current drilldown keys stay configurable through
+  `drilldown_group_keys`.
+
+
+---
+
+## 2026-05-25 — Phase 10 iteration 44: MkDocs drilldown quickstart alignment
+
+### Implemented
+
+- Continued from `mmsr_phase10_iteration43.zip`.
+- Kept live kdb work deferred because no real kdb+ process, credentials, or
+  production-like schemas are available.
+- Expanded `docs/index.md` from a placeholder landing page into a concise
+  MkDocs quickstart covering installation, deterministic tests, documentation
+  builds, offline-demo rendering, mock-kdb-demo rendering, and live-kdb testing
+  boundaries.
+- Added MkDocs demo examples for sector, segment, and market-cap drilldown
+  controls using `--max-drilldown-rows` and `--no-drilldown-page` for both
+  `offline-demo` and `mock-kdb-demo`.
+- Updated the README demo quickstart so it shows the same drilldown opt-out and
+  compact-table command examples as the MkDocs site.
+- Updated roadmap and milestone-status evidence for documentation/CLI alignment.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `docs/index.md`
+- `tests/test_docs_governance.py`
+
+### Tests added or updated
+
+- Added `test_mkdocs_quickstart_documents_drilldown_demo_options()` to ensure
+  the MkDocs quickstart and README both document offline/mock-kdb demo commands,
+  `--max-drilldown-rows`, `--no-drilldown-page`, and the offline/mock-kdb safety
+  boundaries.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_docs_governance.py -q`: passed after fixing
+  the MkDocs quickstart wording to include the exact offline safety phrase.
+- Ran `python -m pytest tests/test_docs_governance.py tests/test_cli_behavior_snapshots.py tests/test_cli.py -q`:
+  passed.
+- Ran `python -m pytest -q -ra`: passed with 3 expected skips for live-kdb/schema
+  tests.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: passed and collected 263 tests.
+- Ran `python -m mkdocs build --strict`: could not run because `mkdocs` is not
+  installed in this environment.
+- Ran `python -m mypy mmsr tests`: could not run because `mypy` is not installed
+  in this environment.
+- Ran `python -m black --check mmsr tests`: could not run because `black` is not
+  installed in this environment.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before
+  Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Milestone 10: kdb integration demo remains deferred by user direction and
+  unavailable live kdb+ infrastructure.
+- Active offline milestone: Sector, segment, and market-cap drilldowns plus
+  documentation/CLI alignment.
+
+### Current milestone progress
+
+- Milestone 10 remains 98% because no live kdb+ endpoint is available and the
+  user requested skipping actual kdb-related work for now.
+- Sector, segment, market-cap drilldowns, demo CLI passthroughs, and MkDocs/README
+  quickstart alignment are complete for the current package phase.
+
+### Remaining work before milestone completion
+
+- Add richer sector-specific offline fixture rows once production sector naming
+  conventions are confirmed.
+- Live production validation remains deferred until kdb+ schemas and credentials
+  are available.
+
+### Best next deterministic step
+
+- Add a production-readiness checklist documenting the sector taxonomy and kdb
+  schema fields required before implementing richer production-specific drilldown
+  fixtures or live validation.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 44.
+- Delivery archive name: `mmsr_phase10_iteration44.zip`.
+
+### Open questions
+
+- Exact production kdb table names, authentication conventions, and schema
+  variants remain deferred with live-kdb work.
+- Reversion live validation remains deferred until venue-trade and primary-quote
+  production schemas are confirmed.
+- Production sector naming and any client-specific sector taxonomy remain
+  unconfirmed; current drilldown keys stay configurable through
+  `drilldown_group_keys`.
+
+---
+
+## 2026-05-25 — Phase 10 iteration 45: Production readiness checklist
+
+### Implemented
+
+- Continued from `mmsr_phase10_iteration44.zip`.
+- Kept live kdb work deferred because no real kdb+ process, credentials, or
+  production-like schemas are available.
+- Added `docs/production_readiness.md` as the checklist required before richer
+  sector-specific offline fixtures or broader live validation.
+- Documented sector taxonomy ownership/versioning, segment label confirmation,
+  market-cap bucket thresholds, symbol identifier conventions, effective-dated
+  metadata joins, unknown/suspended instrument handling, and normalized
+  group-key mapping.
+- Documented required kdb+ source fields for the trading calendar, `activity.q`
+  trades table, `liquidity.q` quotes table, `toxicity_reversion.q` venue-trade
+  and primary-quote tables, and symbol metadata/taxonomy joins.
+- Added the checklist to MkDocs navigation and linked it from the MkDocs
+  quickstart and README.
+- Updated roadmap and milestone-status evidence so the checklist becomes the
+  documented prerequisite for richer production-specific drilldown fixtures.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `docs/index.md`
+- `docs/production_readiness.md`
+- `mkdocs.yml`
+- `tests/test_docs_governance.py`
+
+### Tests added or updated
+
+- Added `test_docs_document_production_readiness_checklist()` to verify the
+  checklist is present, linked from README/MkDocs, listed in MkDocs navigation,
+  and referenced by roadmap/status evidence.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_docs_governance.py -q`: passed.
+- Ran `python -m pytest tests/test_docs_governance.py tests/test_cli_behavior_snapshots.py tests/test_cli.py -q`:
+  passed.
+- Ran `python -m pytest -q -ra`: passed with 3 expected skips for live-kdb/schema
+  tests.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: passed and collected 264 tests.
+- Ran `python -m mkdocs build --strict`: could not run because `mkdocs` is not
+  installed in this environment.
+- Ran `python -m mypy mmsr tests`: could not run because `mypy` is not installed
+  in this environment.
+- Ran `python -m black --check mmsr tests`: could not run because `black` is not
+  installed in this environment.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before
+  Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Milestone 10: kdb integration demo remains deferred by user direction and
+  unavailable live kdb+ infrastructure.
+- Active offline milestone: Sector, segment, and market-cap drilldowns plus
+  production-readiness documentation.
+
+### Current milestone progress
+
+- Milestone 10 remains 98% because no live kdb+ endpoint is available and the
+  user requested skipping actual kdb-related work for now.
+- Sector, segment, market-cap drilldowns, demo CLI passthroughs, MkDocs/README
+  quickstart alignment, and production-readiness documentation are complete for
+  the current package phase.
+
+### Remaining work before milestone completion
+
+- Use the production-readiness checklist to confirm client taxonomy, metadata
+  joins, and kdb+ source schemas before adding richer sector-specific offline
+  fixture rows.
+- Live production validation remains deferred until kdb+ schemas and credentials
+  are available.
+
+### Best next deterministic step
+
+- Add a metadata-ready offline fixture sample that exercises sector drilldowns
+  only after the checklist's taxonomy and schema assumptions are either
+  confirmed or explicitly documented as synthetic.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 45.
+- Delivery archive name: `mmsr_phase10_iteration45.zip`.
+
+### Open questions
+
+- Exact production kdb table names, authentication conventions, and schema
+  variants remain deferred with live-kdb work.
+- Reversion live validation remains deferred until venue-trade and primary-quote
+  production schemas are confirmed.
+- Production sector naming and any client-specific sector taxonomy remain
+  unconfirmed; current drilldown keys stay configurable through
+  `drilldown_group_keys`.
+
+
+
+## 2026-05-25 — Phase 10 iteration 46: Production toxicity reversion report page
+
+### Implemented
+
+- Continued from `mmsr_phase10_iteration45.zip`.
+- Corrected direction away from offline/demo-first work after user feedback and
+  refocused on production report behavior assuming the kdb reversion query output
+  is correct.
+- Added `mmsr.report.toxicity` with `ToxicityReversionPageOptions` and
+  `build_toxicity_reversion_page()`.
+- The new production report page consumes normalized
+  `primary_quote_reversion_*_bps` `MetricTimeSeries` rows, groups them by
+  report date, intraday bucket, and remaining production group keys, and renders
+  deterministic SVG reversion curves.
+- The required visual semantics are now implemented in the canonical report path:
+  horizon progression on the x-axis, reversion in bps on the y-axis, and one
+  line per venue.
+- Added low-confidence sample-size metadata display and deterministic toxicity
+  commentary from existing reversion curve facts.
+- Wired the page into `build_market_monitor_report()` with opt-out and limit
+  controls on `MarketReportOptions`.
+- Exported the new production report builder from `mmsr.report`.
+- Updated README, roadmap, and milestone status to describe the production
+  report feature rather than treating the curve as an offline/demo placeholder.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `mmsr/report/__init__.py`
+- `mmsr/report/market_report.py`
+- `mmsr/report/toxicity.py`
+- `tests/test_toxicity_reversion_report.py`
+
+### Tests added or updated
+
+- Added `tests/test_toxicity_reversion_report.py`.
+- Tests cover direct toxicity page construction from normalized kdb-style metric
+  rows, no-op behavior without reversion rows, context chart limits, missing
+  metric definitions, canonical market-report insertion, and report-level opt-out.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_toxicity_reversion_report.py -q`: passed.
+- Ran `python -m pytest tests/test_toxicity_reversion_report.py tests/test_toxicity_reversion.py -q`:
+  passed.
+- Ran `python -m pytest tests/test_market_report.py tests/test_html_rendering.py tests/test_import.py -q`:
+  passed.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest -q -ra`: passed with 3 expected live-kdb/schema skips.
+- Ran `python -m pytest --collect-only -q`: passed and collected 270 tests.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before
+  Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Cross-venue toxicity reversion production report features.
+- Milestone 10 live kdb validation remains unavailable, but production feature
+  work now assumes the kdb query output schema is correct as requested.
+
+### Current milestone progress
+
+- Cross-venue toxicity/reversion production report page: 85% complete.
+- Milestone 10 remains 98% because no live kdb+ endpoint or credentials are
+  available in this environment.
+
+### Remaining work before milestone completion
+
+- Add production report controls for selecting which toxicity contexts should be
+  rendered first when there are many date/bucket/group combinations.
+- Optionally exclude reversion metric series from the generic intraday detail
+  page once the dedicated toxicity page is confirmed as the canonical display for
+  that metric family.
+- Live production validation remains blocked by missing kdb+ endpoint and
+  credentials, not by report-layer implementation.
+
+### Best next deterministic step
+
+- Add deterministic context-ranking options for the Cross-Venue Toxicity page so
+  production reports with many venue/horizon groups show the most important
+  curves first.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 46.
+- Delivery archive name: `mmsr_phase10_iteration46.zip`.
+
+### Open questions
+
+- Should reversion metrics be excluded from the generic `Intraday Detail` page
+  now that the production `Cross-Venue Toxicity` page renders the canonical
+  venue/horizon curve?
+- Which production grouping dimension should rank toxicity contexts first when
+  many sector/symbol/bucket combinations are present: largest positive
+  reversion, lowest confidence, turnover/notional, or explicit upstream sort
+  metadata?
+
+---
+
+
+## 2026-05-25 — Phase 10 iteration 47: Toxicity context ranking controls
+
+### Implemented
+
+- Continued from `mmsr_phase10_iteration46.zip`.
+- Refocused on production report behavior, not offline demo expansion.
+- Added deterministic context-ranking controls to the production
+  `Cross-Venue Toxicity` page.
+- Added `ToxicityContextRanking`, `TOXICITY_CONTEXT_RANKINGS`, and
+  `DEFAULT_TOXICITY_CONTEXT_RANKING`.
+- Added `ToxicityReversionPageOptions.context_ranking` with supported modes:
+  `max_positive_reversion`, `max_absolute_reversion`, `lowest_confidence`, and
+  `chronological`.
+- Made the default context ranking surface the largest positive reversion first,
+  because positive reversion means primary-quote movement in the aggressive
+  trade direction and is the most direct toxicity signal.
+- Added `MarketReportOptions.toxicity_reversion_context_ranking` and passed it
+  into the toxicity page builder.
+- Exported the context-ranking constants and type alias from `mmsr.report`.
+- Updated README, roadmap, and milestone status to describe context ranking as a
+  production report feature.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `mmsr/report/__init__.py`
+- `mmsr/report/market_report.py`
+- `mmsr/report/toxicity.py`
+- `tests/test_toxicity_reversion_report.py`
+
+### Tests added or updated
+
+- Updated `tests/test_toxicity_reversion_report.py`.
+- Added coverage for default largest-positive context ranking.
+- Added coverage for chronological ranking.
+- Added coverage for low-confidence context ranking.
+- Added validation coverage for unknown ranking names.
+- Added canonical market-report coverage proving
+  `MarketReportOptions.toxicity_reversion_context_ranking` is passed through to
+  `build_toxicity_reversion_page()`.
+
+### Validation performed
+
+- Ran `python -m compileall -q mmsr/report/toxicity.py mmsr/report/market_report.py tests/test_toxicity_reversion_report.py`:
+  passed.
+- Ran `python -m pytest tests/test_toxicity_reversion_report.py -q`: passed.
+- Ran `python -m pytest tests/test_toxicity_reversion_report.py tests/test_market_report.py tests/test_import.py -q`:
+  passed.
+- Ran `python -m pytest tests/test_docs_governance.py -q`: passed.
+- Ran `python -m pytest -q -ra`: passed with 3 expected live-kdb/schema skips.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: passed and collected 273 tests.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before
+  Python validation commands, but the commands returned success.
+
+### Current milestone
+
+- Active milestone: Cross-venue toxicity reversion production report features.
+
+### Current milestone progress
+
+- Cross-venue toxicity/reversion production report page: 95% complete.
+- Milestone 10 remains 98% because no live kdb+ endpoint or credentials are
+  available in this environment.
+
+### Remaining work before milestone completion
+
+- Decide whether to exclude `primary_quote_reversion_*_bps` series from the
+  generic `Intraday Detail` page when the dedicated production
+  `Cross-Venue Toxicity` page is present, to avoid duplicate visuals.
+- Live production validation remains blocked by missing kdb+ endpoint and
+  credentials, not by report-layer implementation.
+
+### Best next deterministic step
+
+- Add a `MarketReportOptions` control that excludes the reversion metric family
+  from the generic `Intraday Detail` page whenever the dedicated
+  `Cross-Venue Toxicity` page is present.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 47.
+- Delivery archive name: `mmsr_phase10_iteration47.zip`.
+
+### Open questions
+
+- Should duplicate reversion visuals be suppressed from `Intraday Detail` by
+  default, or only through an explicit opt-in option?
+- Should production context ranking eventually support an upstream
+  `context_sort_order` metadata field from kdb when callers want business-owned
+  prioritization?
+
+
+---
+
+## 2026-05-25 — Phase 10 iteration 48: Suppress duplicate reversion detail visuals
+
+### Implemented
+
+- Continued from `mmsr_phase10_iteration47.zip`.
+- Added `MarketReportOptions.include_toxicity_reversion_metrics_in_detail_page`, defaulting to `False`.
+- Updated the canonical `build_market_monitor_report()` flow so it first determines whether the dedicated `Cross-Venue Toxicity` page is present, then filters `primary_quote_reversion_*_bps` series out of the generic `Intraday Detail` page by default.
+- Kept a deterministic opt-in path for production callers that explicitly want both the dedicated toxicity curves and the generic detail charts/heatmaps.
+- Preserved generic Intraday Detail rendering for reversion series when the dedicated toxicity page is disabled or absent, so supplied data remains visible.
+- Updated README, roadmap, and milestone status documentation to describe the duplicate-suppression behavior and the opt-in option.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `mmsr/report/market_report.py`
+- `tests/test_toxicity_reversion_report.py`
+
+### Tests added or updated
+
+- Updated `tests/test_toxicity_reversion_report.py`.
+- Added coverage proving the dedicated `Cross-Venue Toxicity` page suppresses duplicate generic Intraday Detail reversion charts by default.
+- Added coverage for `include_toxicity_reversion_metrics_in_detail_page=True` to retain both displays.
+- Added coverage proving disabled toxicity pages still leave supplied reversion series visible in Intraday Detail.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_toxicity_reversion_report.py -q`: passed.
+- Ran `python -m pytest tests/test_toxicity_reversion_report.py tests/test_market_report.py tests/test_docs_governance.py -q`: passed.
+- Ran `python -m pytest -q -ra`: passed with 3 expected live-kdb/schema skips.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: passed and collected 274 tests.
+- Ran `python -m pytest tests/test_docs_governance.py -q` after updating `_docs/journal.md`: passed.
+- Ran `python -m black --check .`: could not run because Black is not installed in this execution environment.
+- The environment emitted the unrelated spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Cross-venue toxicity reversion production report features.
+
+### Current milestone progress
+
+- Cross-venue toxicity/reversion production report page: 100% complete under the documented assumption that the kdb reversion output schema is correct.
+- Milestone 10 remains 98% because no live kdb+ endpoint or credentials are available in this environment.
+
+### Remaining work before milestone completion
+
+- Live production validation remains blocked by missing kdb+ endpoint and credentials, not by report-layer implementation.
+- Optional future production polish may add an upstream `context_sort_order` metadata hook if callers need business-owned toxicity context ordering beyond the deterministic ranking modes already implemented.
+
+### Best next deterministic step
+
+- Keep live-kdb work deferred until schemas and credentials are available; otherwise, add the upstream `context_sort_order` metadata hook only if production callers confirm that the existing context-ranking modes are insufficient.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 48.
+- Delivery archive name: `mmsr_phase10_iteration48.zip`.
+
+### Open questions
+
+- Should production context ranking eventually support an upstream `context_sort_order` metadata field from kdb when callers want business-owned prioritization?
+
+---
+
+## 2026-05-25 — Phase 10 iteration 49: Upstream toxicity context sort-order hook
+
+### Implemented
+
+- Continued from `mmsr_phase10_iteration48.zip`.
+- Added optional `context_sort_order` metadata support to toxicity reversion curve points.
+- Added `context_sort_order` as a supported `ToxicityContextRanking` mode.
+- The new ranking mode sorts toxicity contexts by the smallest supplied upstream numeric `context_sort_order`, then uses positive reversion, absolute reversion, and chronological keys as deterministic tie-breakers.
+- Surfaced supplied context sort order in chart point metadata for auditability.
+- Preserved the default largest-positive-reversion ranking so existing production reports do not change unless callers opt in.
+- Verified that kdb-runner normalization preserves optional `context_sort_order` output columns as observation metadata without making the field mandatory in the q output schema.
+- Updated README, roadmap, and milestone status documentation to describe the optional upstream ordering hook.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `mmsr/report/toxicity.py`
+- `mmsr/visuals/toxicity.py`
+- `tests/test_kdb_metric_runner.py`
+- `tests/test_toxicity_reversion.py`
+- `tests/test_toxicity_reversion_report.py`
+
+### Tests added or updated
+
+- Updated `tests/test_toxicity_reversion.py` to preserve `context_sort_order` metadata and reject non-integer values.
+- Updated `tests/test_toxicity_reversion_report.py` to cover direct toxicity-page ranking by upstream `context_sort_order` and canonical market-report option pass-through.
+- Updated `tests/test_kdb_metric_runner.py` to prove optional `context_sort_order` kdb output columns are preserved as normalized observation metadata.
+
+### Validation performed
+
+- Ran `python -m compileall -q mmsr/report/toxicity.py mmsr/visuals/toxicity.py tests/test_toxicity_reversion.py tests/test_toxicity_reversion_report.py`: passed.
+- Ran `python -m pytest tests/test_toxicity_reversion.py tests/test_toxicity_reversion_report.py -q`: passed.
+- Ran `python -m pytest tests/test_toxicity_reversion.py tests/test_toxicity_reversion_report.py tests/test_kdb_metric_runner.py -q`: passed.
+- Ran `python -m pytest tests/test_docs_governance.py -q`: passed.
+- Ran `python -m pytest -q -ra`: passed with 3 expected live-kdb/schema skips.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: passed and collected 278 tests.
+- Ran `python -m black --check .`: could not run because Black is not installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Cross-venue toxicity reversion production report features.
+
+### Current milestone progress
+
+- Cross-venue toxicity/reversion production report page and controls: 100% complete under the documented assumption that the kdb reversion output schema is correct.
+- Milestone 10 remains 98% because no live kdb+ endpoint or credentials are available in this environment.
+
+### Remaining work before milestone completion
+
+- Live production validation remains blocked by missing kdb+ endpoint and credentials, not by report-layer implementation.
+- No further deterministic toxicity report-layer backlog remains under the currently documented assumptions.
+
+### Best next deterministic step
+
+- Run the environment-gated live kdb+ smoke validation once production-like schemas, endpoint, and credentials are available.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 49.
+- Delivery archive name: `mmsr_phase10_iteration49.zip`.
+
+### Open questions
+
+- None for this implementation step.
+
+---
+
+## 2026-05-25 — Phase 10 iteration 50: Symbol detail index navigation
+
+### Implemented
+
+- Continued from `mmsr_phase10_iteration49.zip`.
+- Accepted user direction to prioritize an actual production-report feature over
+  another live-smoke validation step.
+- Added stable optional `ReportPage.anchor_id` support and rendered anchors in
+  the packaged HTML template.
+- Added `symbol_detail_anchor_id()` for deterministic per-symbol detail anchors.
+- Added `SymbolDetailIndexOptions` and `build_symbol_detail_index_block()` to
+  build a compact trusted-HTML navigation table from already-computed
+  symbol-scoped comparison facts and emitted symbol detail pages.
+- Updated the canonical `build_market_monitor_report()` flow so the
+  `Symbol Anomalies` page includes a `Symbol Detail Index` by default whenever
+  per-symbol detail pages are emitted.
+- Added `MarketReportOptions.include_symbol_detail_index`,
+  `symbol_detail_index_title`, and `symbol_detail_index_help_text` so production
+  callers can keep detail pages while omitting or relabeling the index.
+- Added basic table styling for trusted HTML blocks so the index renders
+  consistently with other report tables.
+- Updated README, roadmap, and milestone status documentation to describe the
+  compact symbol-detail navigation behavior.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `mmsr/report/__init__.py`
+- `mmsr/report/components.py`
+- `mmsr/report/market_report.py`
+- `mmsr/report/symbols.py`
+- `mmsr/report/templates/report.html.j2`
+- `tests/test_symbol_anomaly_pages.py`
+
+### Tests added or updated
+
+- Updated `tests/test_symbol_anomaly_pages.py`.
+- Added coverage for stable symbol-detail page anchors.
+- Added coverage for direct `build_symbol_detail_index_block()` output and
+  filtering to only emitted detail pages.
+- Added coverage for disabling the detail index via index options.
+- Added canonical market-report coverage proving the `Symbol Anomalies` page
+  receives the index when detail pages are emitted.
+- Added rendered HTML coverage proving the index links target detail-page
+  anchors.
+- Added canonical market-report coverage for
+  `MarketReportOptions.include_symbol_detail_index=False`.
+
+### Validation performed
+
+- Ran `python -m compileall -q mmsr/report/components.py mmsr/report/symbols.py mmsr/report/market_report.py`:
+  passed.
+- Ran `python -m pytest tests/test_symbol_anomaly_pages.py -q`: passed.
+- Ran `python -m pytest tests/test_market_report.py tests/test_html_rendering.py tests/test_symbol_anomaly_pages.py -q`:
+  passed.
+- Ran `python -m pytest tests/test_docs_governance.py -q`: passed.
+- Ran `python -m pytest -q -ra`: passed with 3 expected live-kdb/schema skips.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest --collect-only -q`: passed and collected 283 tests.
+- Ran `python -m black --check .`: could not run because Black is not installed
+  in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before
+  Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Symbol-level anomaly and detail production report pages.
+
+### Current milestone progress
+
+- Symbol anomaly summary, detail pages, and compact detail-index navigation: 100%
+  complete for the current report-layer phase.
+- Milestone 10 remains 98% because no live kdb+ endpoint or credentials are
+  available in this environment.
+
+### Remaining work before milestone completion
+
+- No deterministic symbol report-layer backlog remains under the current
+  assumptions.
+- Live production validation remains blocked by missing kdb+ endpoint and
+  credentials, not by the report-layer implementation.
+- Future production feedback may refine the index columns, add a separate
+  detail-page table of contents, or introduce richer alert-delivery formatting.
+
+### Best next deterministic step
+
+- Keep live-kdb execution deferred until schemas and credentials are available.
+  For local feature work, choose the next narrow production-report refinement
+  backed by user feedback, such as drilldown summary navigation or alert delivery
+  formatting.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 50.
+- Delivery archive name: `mmsr_phase10_iteration50.zip`.
+
+### Open questions
+
+- None for this implementation step.
+
+
+---
+
+## 2026-05-25 — Phase 10 iteration 51: kdb query-plan and schema-boundary hardening
+
+### Implemented
+
+- Continued from `mmsr_phase10_iteration50.zip`.
+- Accepted user direction to harden the expected kdb table schema and isolate
+  query rendering so production q can be manually edited toward a stable Python
+  result contract.
+- Added `mmsr.kdb.query_plan` with `KdbMetricQueryPlanner`,
+  `RenderedMetricQuery`, and the public `MetricRunRequest` boundary.
+- `KdbMetricQueryPlanner.render()` now returns rendered q text, requested and
+  normalized grouping columns, source input-table contracts, required output
+  columns, supported optional output columns, and a reusable output contract
+  before any client IO occurs.
+- Refactored `KdbMetricRunner` so `run()` plans first, executes the planned q,
+  validates the planned output schema, then normalizes to `MetricTimeSeries`.
+- Preserved `KdbMetricRunner.render_query()` for compatibility while adding
+  `KdbMetricRunner.plan_query()` for callers that need schema details before
+  execution.
+- Added activity and liquidity source-table contracts, including extra required
+  source columns for configured `group_by` fields and optional symbol-bounded
+  starter queries.
+- Centralized output schema contract dispatch with
+  `output_schema_contract_for_template()` and
+  `validate_output_schema_for_template()`.
+- Documented supported optional kdb output columns through
+  `QTemplateOutputSchemaContract.optional_columns`; reversion now documents
+  optional `context_sort_order` without making it mandatory.
+- Updated README, roadmap, milestone status, q-template comments, and the
+  production-readiness checklist to describe the query-plan/schema-boundary
+  workflow for manual q edits.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `docs/production_readiness.md`
+- `mmsr/kdb/__init__.py`
+- `mmsr/kdb/query_plan.py`
+- `mmsr/kdb/runner.py`
+- `mmsr/kdb/schema_contracts.py`
+- `mmsr/kdb/q_templates/activity.q`
+- `mmsr/kdb/q_templates/liquidity.q`
+- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_kdb_metric_runner.py`
+- `tests/test_kdb_schema_contracts.py`
+
+### Tests added or updated
+
+- Added `tests/test_kdb_query_plan.py` covering plan rendering for activity,
+  liquidity, and reversion metrics; input contracts; required/optional output
+  columns; plan-level result validation; runner metadata; public grouping
+  helpers; and pre-execution identifier validation.
+- Updated `tests/test_kdb_schema_contracts.py` to cover activity/liquidity input
+  contracts, optional reversion output columns, and centralized template output
+  schema dispatch.
+- Existing kdb metric-runner tests now exercise the refactored plan-first runner
+  path through the same public `MetricRunRequest` compatibility import.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_kdb_query_plan.py tests/test_kdb_metric_runner.py tests/test_kdb_schema_contracts.py -q`: passed with 1 expected live-kdb/schema skip.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest -q -ra`: passed with 3 expected live-kdb/schema skips.
+- Ran `python -m pytest tests/test_docs_governance.py -q`: passed.
+- Ran `python -m pytest --collect-only -q`: passed and collected 290 tests.
+- Ran `python -m black --check .`: could not run because Black is not installed
+  in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before
+  Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: kdb query/schema boundary hardening for production q edits.
+
+### Current milestone progress
+
+- Query rendering is isolated from execution and the expected Python-facing kdb
+  result schema is explicit for activity, liquidity, and reversion templates:
+  100% complete for this hardening slice.
+- Milestone 10 remains 98% because no live kdb+ endpoint or credentials are
+  available in this environment.
+
+### Remaining work before milestone completion
+
+- No further deterministic work remains for this schema-boundary hardening slice.
+- Live schema validation against production tables remains blocked by missing
+  kdb+ endpoint, credentials, and confirmed production schemas.
+- Future production feedback may add stricter type contracts or source-table
+  metadata probes, but the column-shape contract is now explicit and reusable.
+
+### Best next deterministic step
+
+- Add the first quote-quality metric family on top of the hardened query-plan
+  boundary, such as locked/crossed quote rate, stale quote rate, or
+  spread-time-at-wide, using explicit schema contracts and offline tests.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 51.
+- Delivery archive name: `mmsr_phase10_iteration51.zip`.
+
+### Open questions
+
+- Should future production validation include q type checks in addition to column
+  presence checks once live schema metadata is available?

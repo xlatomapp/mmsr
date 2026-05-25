@@ -33,12 +33,13 @@ def test_time_series_chart_renders_metric_help_and_period_context() -> None:
         help_text="Bucketed median quoted spread.",
         points=[
             TimeSeriesChartPoint(
-                x_text="2026-05-22 AMO",
+                x_text="2026-05-22 AM opening auction",
                 date_text="2026-05-22",
                 time_bucket_text="AMO",
                 series_text="venue=TSE",
                 value_text="12.4000 bps",
-                metadata_text="sample_size=120",
+                metadata_text="Sample size: 120",
+                value=12.4,
             )
         ],
     )
@@ -55,8 +56,11 @@ def test_time_series_chart_renders_metric_help_and_period_context() -> None:
     assert "AMO" in html
     assert "venue=TSE" in html
     assert "12.4000 bps" in html
-    assert "sample_size=120" in html
-    assert "time-series-chart__placeholder" in html
+    assert "Sample size: 120" in html
+    assert "time-series-chart__svg" in html
+    assert "<polyline" in html
+    assert "Backing data" in html
+    assert "time-series-chart__placeholder" not in html
 
 
 def test_build_time_series_chart_preserves_observation_order_and_bucket_context() -> None:
@@ -93,18 +97,20 @@ def test_build_time_series_chart_preserves_observation_order_and_bucket_context(
     assert chart.title == "Quoted Spread Trend"
     assert chart.metric == QUOTED_SPREAD_BPS
     assert [point.x_text for point in chart.points] == [
-        "2026-05-22 AMO",
+        "2026-05-22 AM opening auction",
         "2026-05-22 09:05",
     ]
     assert [point.date_text for point in chart.points] == [
         "2026-05-22",
         "2026-05-22",
     ]
-    assert [point.time_bucket_text for point in chart.points] == ["AMO", "09:05"]
-    assert [point.series_text for point in chart.points] == ["venue=TSE", "venue=ODX"]
+    assert [point.time_bucket_text for point in chart.points] == ["AM opening auction", "09:05"]
+    assert [point.series_text for point in chart.points] == ["Venue: TSE", "Venue: ODX"]
     assert chart.points[0].value_text == "12.4000 bps"
     assert chart.points[1].value_text == "not available"
-    assert chart.points[0].metadata_text == "sample_size=120"
+    assert chart.points[0].metadata_text == "Sample size: 120"
+    assert chart.points[0].value == 12.4
+    assert chart.points[1].value is None
 
 
 def test_report_renders_time_series_charts_and_appendix_collects_definition() -> None:
@@ -138,6 +144,68 @@ def test_report_renders_time_series_charts_and_appendix_collects_definition() ->
     assert "time-series-chart" in html
     assert [definition.name for definition in definitions] == ["volume"]
     assert "Volume" in render_report(enriched)
+
+
+def test_time_series_chart_builds_deterministic_inline_svg_series() -> None:
+    chart = TimeSeriesChart(
+        title="Venue Reversion Trend",
+        metric=QUOTED_SPREAD_BPS,
+        points=[
+            TimeSeriesChartPoint(
+                x_text="09:00",
+                value_text="1.0000 bps",
+                series_text="venue=TSE",
+                value=1.0,
+            ),
+            TimeSeriesChartPoint(
+                x_text="09:01",
+                value_text="2.0000 bps",
+                series_text="venue=TSE",
+                value=2.0,
+            ),
+            TimeSeriesChartPoint(
+                x_text="09:00",
+                value_text="1.5000 bps",
+                series_text="venue=ODX",
+                value=1.5,
+            ),
+            TimeSeriesChartPoint(
+                x_text="09:01",
+                value_text="not available",
+                series_text="venue=ODX",
+                value=None,
+            ),
+        ],
+    )
+
+    assert chart.has_svg_plot()
+    assert chart.svg_view_box() == "0 0 720 260"
+    assert chart.svg_legend_labels() == ("venue=TSE", "venue=ODX")
+    assert len(chart.svg_y_ticks()) == 3
+    assert [tick.label for tick in chart.svg_x_ticks()] == ["09:00", "09:01"]
+
+    series = chart.svg_series()
+    assert [item.label for item in series] == ["venue=TSE", "venue=ODX"]
+    assert series[0].polyline_points.count(" ") == 1
+    assert series[1].polyline_points.count(" ") == 0
+    assert series[0].markers[0].title == "venue=TSE: 09:00 = 1.0000 bps"
+
+
+def test_time_series_chart_parses_numeric_display_text_for_hand_built_points() -> None:
+    chart = TimeSeriesChart(
+        title="Manual Volume Trend",
+        metric=VOLUME,
+        points=[
+            TimeSeriesChartPoint(
+                x_text="2026-05-22",
+                value_text="1,000",
+            )
+        ],
+    )
+
+    assert chart.points[0].numeric_value() == 1000.0
+    assert chart.has_svg_plot()
+    assert "time-series-chart__svg" in render_time_series_chart(chart)
 
 
 def test_build_time_series_chart_validates_inputs() -> None:

@@ -22,6 +22,7 @@
 /   date | time_bucket | venue | horizon | optional group columns |
 /   value column | horizon_sort_order | trade_count | notional | positive_reversion_ratio |
 /   valid_primary_quote_ratio
+/   optional: context_sort_order
 /
 / This template is schema-explicit enough for offline runner integration while
 / still documenting assumptions that must be confirmed before live production

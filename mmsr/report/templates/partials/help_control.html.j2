@@ -1,0 +1,14 @@
+{% macro help_control(label, body, control_label="Help") -%}
+  {% if body %}
+    <details class="metric-help">
+      <summary class="metric-help__summary metric-info" aria-label="{{ control_label }}{% if label %}: {{ label }}{% endif %}">
+        <span class="metric-help__icon" aria-hidden="true">ⓘ</span>
+        <span class="metric-help__label">{{ control_label }}</span>
+      </summary>
+      <div class="metric-help__body">
+        <strong class="metric-help__title">{{ control_label }}{% if label %}: {{ label }}{% endif %}</strong>
+        <p>{{ body }}</p>
+      </div>
+    </details>
+  {% endif %}
+{%- endmacro %}

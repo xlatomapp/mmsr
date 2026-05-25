@@ -67,6 +67,7 @@ class OfflineSampleMetrics:
     current_series: tuple[MetricTimeSeries, ...]
     reference_series: tuple[MetricTimeSeries, ...]
     comparisons: tuple[MetricComparison, ...]
+    symbol_current_series: tuple[MetricTimeSeries, ...] = ()
 
 
 def build_offline_metric_time_series() -> tuple[MetricTimeSeries, ...]:
@@ -95,6 +96,30 @@ def build_offline_reference_time_series() -> tuple[MetricTimeSeries, ...]:
     )
 
 
+def build_offline_symbol_metric_time_series() -> tuple[MetricTimeSeries, ...]:
+    """Return deterministic symbol-scoped current series for detail pages.
+
+    These rows are already-normalized diagnostics for the same symbols surfaced
+    by ``build_offline_symbol_metric_comparisons()``. They are separate from the
+    market-level sample series so the canonical market detail page stays focused
+    on market/market-cap aggregates while optional symbol detail pages can render
+    per-symbol trends and intraday heatmaps.
+    """
+
+    return tuple(
+        MetricTimeSeries.from_observations(
+            observations,
+            metric_name=metric_name,
+            metadata={
+                "fixture": "offline_sample",
+                "role": "current",
+                "fixture_slice": "symbol_detail_sample",
+            },
+        )
+        for metric_name, observations in _symbol_detail_observations_by_metric().items()
+    )
+
+
 def build_offline_metric_comparisons() -> tuple[MetricComparison, ...]:
     """Return deterministic comparisons for the offline sample metrics."""
 
@@ -114,6 +139,32 @@ def build_offline_metric_comparisons() -> tuple[MetricComparison, ...]:
         metric_directions=directions,
         policy=ComparisonPolicy(),
     )
+    return (*comparisons, *build_offline_symbol_metric_comparisons())
+
+
+def build_offline_symbol_metric_comparisons() -> tuple[MetricComparison, ...]:
+    """Return deterministic symbol-scoped comparisons for anomaly-page demos.
+
+    The fixtures are already-normalized aggregate observations, not raw market
+    data. They intentionally pass through the same reference-comparison engine as
+    the market-level sample so ``mmsr offline-demo`` exercises the symbol anomaly
+    page from production-shaped ``MetricComparison`` facts.
+    """
+
+    registry = build_default_registry()
+    definitions = {
+        metric_name: registry.get(metric_name)
+        for metric_name in _SAMPLE_METRIC_NAMES
+    }
+    directions = {
+        name: definition.higher_is_better for name, definition in definitions.items()
+    }
+    comparisons = compare_metric_timeseries(
+        _flatten_observation_mapping(_symbol_current_observations_by_metric()),
+        _flatten_observation_mapping(_symbol_reference_observations_by_metric()),
+        metric_directions=directions,
+        policy=ComparisonPolicy(),
+    )
     return tuple(comparisons)
 
 
@@ -127,6 +178,7 @@ def build_offline_sample_metrics() -> OfflineSampleMetrics:
     }
     current = build_offline_metric_time_series()
     reference = build_offline_reference_time_series()
+    symbol_current = build_offline_symbol_metric_time_series()
     comparisons = build_offline_metric_comparisons()
     return OfflineSampleMetrics(
         report_date=SAMPLE_REPORT_DATE,
@@ -134,6 +186,7 @@ def build_offline_sample_metrics() -> OfflineSampleMetrics:
         current_series=current,
         reference_series=reference,
         comparisons=comparisons,
+        symbol_current_series=symbol_current,
     )
 
 
@@ -270,8 +323,253 @@ def _reference_observations_by_metric() -> dict[str, tuple[MetricObservation, ..
             )
         )
 
-    return {metric_name: tuple(observations) for metric_name, observations in rows.items()}
+    return {
+        metric_name: tuple(observations)
+        for metric_name, observations in rows.items()
+    }
 
+
+
+def _symbol_detail_observations_by_metric() -> dict[str, tuple[MetricObservation, ...]]:
+    return {
+        "quoted_spread_bps": (
+            _observation(
+                "quoted_spread_bps",
+                SAMPLE_REPORT_DATE,
+                "AMO",
+                {
+                    "market_segment": "Prime",
+                    "market_cap_bucket": "Large",
+                    "symbol": "7203",
+                },
+                17.8,
+                sample_size=48,
+                fixture_slice="symbol_detail_sample",
+            ),
+            _observation(
+                "quoted_spread_bps",
+                SAMPLE_REPORT_DATE,
+                "09:00-09:05",
+                {
+                    "market_segment": "Prime",
+                    "market_cap_bucket": "Large",
+                    "symbol": "7203",
+                },
+                16.9,
+                sample_size=55,
+                fixture_slice="symbol_detail_sample",
+            ),
+            _observation(
+                "quoted_spread_bps",
+                SAMPLE_REPORT_DATE,
+                "09:05-09:10",
+                {
+                    "market_segment": "Prime",
+                    "market_cap_bucket": "Large",
+                    "symbol": "7203",
+                },
+                15.4,
+                sample_size=61,
+                fixture_slice="symbol_detail_sample",
+            ),
+        ),
+        "volume": (
+            _observation(
+                "volume",
+                SAMPLE_REPORT_DATE,
+                "AMO",
+                {
+                    "market_segment": "Prime",
+                    "market_cap_bucket": "Large",
+                    "symbol": "8306",
+                },
+                820_000,
+                sample_size=34,
+                fixture_slice="symbol_detail_sample",
+            ),
+            _observation(
+                "volume",
+                SAMPLE_REPORT_DATE,
+                "09:00-09:05",
+                {
+                    "market_segment": "Prime",
+                    "market_cap_bucket": "Large",
+                    "symbol": "8306",
+                },
+                1_050_000,
+                sample_size=36,
+                fixture_slice="symbol_detail_sample",
+            ),
+            _observation(
+                "volume",
+                SAMPLE_REPORT_DATE,
+                "09:05-09:10",
+                {
+                    "market_segment": "Prime",
+                    "market_cap_bucket": "Large",
+                    "symbol": "8306",
+                },
+                940_000,
+                sample_size=38,
+                fixture_slice="symbol_detail_sample",
+            ),
+        ),
+        "top_of_book_depth": (
+            _observation(
+                "top_of_book_depth",
+                SAMPLE_REPORT_DATE,
+                "AMO",
+                {
+                    "market_segment": "Prime",
+                    "market_cap_bucket": "Large",
+                    "symbol": "6758",
+                },
+                21_000,
+                sample_size=50,
+                fixture_slice="symbol_detail_sample",
+            ),
+            _observation(
+                "top_of_book_depth",
+                SAMPLE_REPORT_DATE,
+                "09:00-09:05",
+                {
+                    "market_segment": "Prime",
+                    "market_cap_bucket": "Large",
+                    "symbol": "6758",
+                },
+                18_500,
+                sample_size=52,
+                fixture_slice="symbol_detail_sample",
+            ),
+            _observation(
+                "top_of_book_depth",
+                SAMPLE_REPORT_DATE,
+                "09:05-09:10",
+                {
+                    "market_segment": "Prime",
+                    "market_cap_bucket": "Large",
+                    "symbol": "6758",
+                },
+                20_200,
+                sample_size=54,
+                fixture_slice="symbol_detail_sample",
+            ),
+        ),
+    }
+
+
+def _symbol_current_observations_by_metric() -> dict[
+    str,
+    tuple[MetricObservation, ...],
+]:
+    return {
+        "quoted_spread_bps": (
+            _observation(
+                "quoted_spread_bps",
+                SAMPLE_REPORT_DATE,
+                "AMO",
+                {
+                    "market_segment": "Prime",
+                    "market_cap_bucket": "Large",
+                    "symbol": "7203",
+                },
+                17.8,
+                sample_size=48,
+                fixture_slice="symbol_anomaly_sample",
+            ),
+        ),
+        "volume": (
+            _observation(
+                "volume",
+                SAMPLE_REPORT_DATE,
+                "09:00-09:05",
+                {
+                    "market_segment": "Prime",
+                    "market_cap_bucket": "Large",
+                    "symbol": "8306",
+                },
+                1_050_000,
+                sample_size=36,
+                fixture_slice="symbol_anomaly_sample",
+            ),
+        ),
+        "top_of_book_depth": (
+            _observation(
+                "top_of_book_depth",
+                SAMPLE_REPORT_DATE,
+                "09:00-09:05",
+                {
+                    "market_segment": "Prime",
+                    "market_cap_bucket": "Large",
+                    "symbol": "6758",
+                },
+                18_500,
+                sample_size=52,
+                fixture_slice="symbol_anomaly_sample",
+            ),
+        ),
+    }
+
+
+def _symbol_reference_observations_by_metric() -> dict[
+    str,
+    tuple[MetricObservation, ...],
+]:
+    rows: dict[str, list[MetricObservation]] = {
+        metric_name: [] for metric_name in _SAMPLE_METRIC_NAMES
+    }
+
+    for index, reference_date in enumerate(SAMPLE_REFERENCE_DATES):
+        rows["quoted_spread_bps"].append(
+            _observation(
+                "quoted_spread_bps",
+                reference_date,
+                "AMO",
+                {
+                    "market_segment": "Prime",
+                    "market_cap_bucket": "Large",
+                    "symbol": "7203",
+                },
+                _cycle_value(10.8, index, amplitude=0.6),
+                sample_size=42 + (index % 6),
+                fixture_slice="symbol_anomaly_sample",
+            )
+        )
+        rows["volume"].append(
+            _observation(
+                "volume",
+                reference_date,
+                "09:00-09:05",
+                {
+                    "market_segment": "Prime",
+                    "market_cap_bucket": "Large",
+                    "symbol": "8306",
+                },
+                round(_cycle_value(780_000, index, amplitude=40_000)),
+                sample_size=31 + (index % 5),
+                fixture_slice="symbol_anomaly_sample",
+            )
+        )
+        rows["top_of_book_depth"].append(
+            _observation(
+                "top_of_book_depth",
+                reference_date,
+                "09:00-09:05",
+                {
+                    "market_segment": "Prime",
+                    "market_cap_bucket": "Large",
+                    "symbol": "6758",
+                },
+                round(_cycle_value(32_000, index, amplitude=1_800)),
+                sample_size=45 + (index % 7),
+                fixture_slice="symbol_anomaly_sample",
+            )
+        )
+
+    return {
+        metric_name: tuple(observations)
+        for metric_name, observations in rows.items()
+    }
 
 def _observation(
     metric_name: str,
@@ -281,6 +579,7 @@ def _observation(
     value: float | int,
     *,
     sample_size: int,
+    fixture_slice: str = "market_sample",
 ) -> MetricObservation:
     return MetricObservation(
         metric_name=metric_name,
@@ -292,6 +591,7 @@ def _observation(
             "fixture": "offline_sample",
             "source": "synthetic",
             "sample_size": sample_size,
+            "fixture_slice": fixture_slice,
         },
     )
 
@@ -313,12 +613,24 @@ def _flatten_observations(
     )
 
 
+def _flatten_observation_mapping(
+    observations_by_metric: Mapping[str, tuple[MetricObservation, ...]],
+) -> tuple[MetricObservation, ...]:
+    return tuple(
+        observation
+        for observations in observations_by_metric.values()
+        for observation in observations
+    )
+
+
 __all__ = [
     "OfflineSampleMetrics",
     "SAMPLE_REFERENCE_DATES",
     "SAMPLE_REPORT_DATE",
     "build_offline_metric_comparisons",
     "build_offline_metric_time_series",
+    "build_offline_symbol_metric_comparisons",
+    "build_offline_symbol_metric_time_series",
     "build_offline_reference_time_series",
     "build_offline_sample_metrics",
 ]

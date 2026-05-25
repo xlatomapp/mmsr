@@ -46,6 +46,7 @@ class ReversionCurvePoint:
     low_confidence: bool | None = None
     confidence_reasons: tuple[str, ...] = ()
     horizon_sort_order: int | None = None
+    context_sort_order: int | None = None
 
 
 def reversion_curve_points_from_timeseries(
@@ -381,6 +382,10 @@ def _point_from_observation(observation: MetricObservation) -> ReversionCurvePoi
         horizon_sort_order=_optional_int_metadata(
             observation.metadata,
             "horizon_sort_order",
+        ),
+        context_sort_order=_optional_int_metadata(
+            observation.metadata,
+            "context_sort_order",
         ),
         low_confidence=_optional_bool_metadata(observation.metadata, "low_confidence"),
     )

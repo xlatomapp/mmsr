@@ -7,6 +7,8 @@ from mmsr.examples import (
     build_offline_metric_time_series,
     build_offline_reference_time_series,
     build_offline_sample_metrics,
+    build_offline_symbol_metric_comparisons,
+    build_offline_symbol_metric_time_series,
 )
 from mmsr.metrics.results import MetricComparison, MetricTimeSeries
 
@@ -53,7 +55,7 @@ def test_offline_reference_dates_are_explicit_historical_observation_units() -> 
 def test_offline_metric_comparisons_are_precomputed_and_comparable() -> None:
     comparisons = build_offline_metric_comparisons()
 
-    assert len(comparisons) == 6
+    assert len(comparisons) == 9
     assert all(isinstance(comparison, MetricComparison) for comparison in comparisons)
     assert {comparison.reference_sample_size for comparison in comparisons} == {30}
     assert {comparison.comparison_confidence for comparison in comparisons} == {
@@ -70,6 +72,62 @@ def test_offline_metric_comparisons_are_precomputed_and_comparable() -> None:
         and comparison.status == "alert"
         for comparison in comparisons
     )
+    assert {
+        comparison.group["symbol"]
+        for comparison in comparisons
+        if "symbol" in comparison.group
+    } == {"7203", "6758", "8306"}
+
+
+def test_offline_symbol_metric_comparisons_are_demo_anomalies() -> None:
+    comparisons = build_offline_symbol_metric_comparisons()
+
+    assert len(comparisons) == 3
+    assert {comparison.reference_sample_size for comparison in comparisons} == {30}
+    assert {comparison.comparison_confidence for comparison in comparisons} == {
+        "normal"
+    }
+    assert {comparison.status for comparison in comparisons} == {"alert"}
+    assert {comparison.metadata["fixture_slice"] for comparison in comparisons} == {
+        "symbol_anomaly_sample"
+    }
+    assert [comparison.group["symbol"] for comparison in comparisons] == [
+        "7203",
+        "8306",
+        "6758",
+    ]
+    assert all(comparison.z_score is not None for comparison in comparisons)
+
+
+
+
+def test_offline_symbol_metric_time_series_are_detail_page_diagnostics() -> None:
+    series = build_offline_symbol_metric_time_series()
+
+    assert [item.metric_name for item in series] == [
+        "quoted_spread_bps",
+        "volume",
+        "top_of_book_depth",
+    ]
+    assert all(
+        item.metadata["fixture_slice"] == "symbol_detail_sample"
+        for item in series
+    )
+    assert all(len(item.observations) == 3 for item in series)
+    assert [
+        item.observations[0].group["symbol"]
+        for item in series
+    ] == ["7203", "8306", "6758"]
+    assert {
+        observation.metadata["fixture_slice"]
+        for item in series
+        for observation in item.observations
+    } == {"symbol_detail_sample"}
+    assert "09:05-09:10" in {
+        str(observation.time_bucket)
+        for item in series
+        for observation in item.observations
+    }
 
 
 def test_offline_sample_metrics_bundles_definitions_series_and_comparisons() -> None:
@@ -87,5 +145,10 @@ def test_offline_sample_metrics_bundles_definitions_series_and_comparisons() -> 
     assert tuple(series.metric_name for series in sample.reference_series) == tuple(
         sample.metric_definitions
     )
-    assert len(sample.comparisons) == 6
+    assert len(sample.comparisons) == 9
+    assert len(sample.symbol_current_series) == 3
+    assert (
+        sample.symbol_current_series[0].metadata["fixture_slice"]
+        == "symbol_detail_sample"
+    )
     assert sample.metric_definitions["quoted_spread_bps"].label == "Quoted Spread"

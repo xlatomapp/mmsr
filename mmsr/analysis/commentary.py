@@ -8,6 +8,11 @@ from math import isfinite
 
 from mmsr.metrics.base import MetricDefinition
 from mmsr.metrics.results import MetricComparison
+from mmsr.presentation.labels import (
+    format_group_label,
+    format_intraday_bucket_label,
+    format_reference_observation_unit_label,
+)
 
 
 @dataclass(frozen=True)
@@ -41,10 +46,7 @@ class TemplateCommentaryEngine:
             ),
         )
         for fact in sorted_facts[:max_comments]:
-            group = (
-                ", ".join(f"{k}={v}" for k, v in fact.group.items())
-                or "the selected universe"
-            )
+            group = format_group_label(fact.group) or "the selected universe"
             caveat_text = _format_caveats(fact.caveats)
             if fact.fact_type == "section_summary":
                 comments.append(
@@ -262,7 +264,9 @@ def _metric_definition_map(
 def _comparison_group(comparison: MetricComparison) -> dict[str, str]:
     group = {str(key): str(value) for key, value in comparison.group.items()}
     if comparison.time_bucket is not None and "time_bucket" not in group:
-        group["time_bucket"] = str(comparison.time_bucket)
+        bucket_label = format_intraday_bucket_label(comparison.time_bucket)
+        if bucket_label is not None:
+            group["time_bucket"] = bucket_label
     return group
 
 
@@ -340,8 +344,9 @@ def _comparison_caveats(comparison: MetricComparison) -> list[str]:
         )
 
     reference_unit = comparison.metadata.get("reference_observation_unit")
-    if reference_unit:
-        caveats.append(f"Reference observation unit: {reference_unit}.")
+    reference_unit_label = format_reference_observation_unit_label(reference_unit)
+    if reference_unit_label:
+        caveats.append(f"Reference observation unit: {reference_unit_label}.")
 
     return list(dict.fromkeys(caveats))
 

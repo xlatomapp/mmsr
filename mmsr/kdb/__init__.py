@@ -1,6 +1,15 @@
 """kdb client, query loading, and metric runner APIs."""
 
 from mmsr.kdb.client import KdbClient, KdbConfig
+from mmsr.kdb.live_smoke import (
+    LiveKdbActivitySmokeConfig,
+    LiveKdbLiquiditySmokeConfig,
+    REQUIRED_LIVE_ACTIVITY_SMOKE_ENV_VARS,
+    REQUIRED_LIVE_LIQUIDITY_SMOKE_ENV_VARS,
+    run_live_activity_smoke,
+    run_live_liquidity_smoke,
+)
+
 from mmsr.kdb.query_loader import (
     QueryTemplateError,
     load_q_template,
@@ -11,11 +20,23 @@ from mmsr.kdb.schema_contracts import (
     OutputSchemaContractError,
     QTemplateInputTableSchemaContract,
     QTemplateOutputSchemaContract,
+    activity_input_schema_contract,
+    activity_output_schema_contract,
     extract_result_columns,
+    liquidity_input_schema_contract,
+    liquidity_output_schema_contract,
+    output_schema_contract_for_template,
     toxicity_reversion_input_schema_contracts,
     toxicity_reversion_output_schema_contract,
+    validate_output_schema_for_template,
     validate_toxicity_reversion_input_schemas,
     validate_toxicity_reversion_output_schema,
+)
+from mmsr.kdb.query_plan import (
+    KdbMetricQueryPlanError,
+    KdbMetricQueryPlanner,
+    RenderedMetricQuery,
+    group_by_for_metric_result,
 )
 
 from mmsr.kdb.runner import (
@@ -31,7 +52,23 @@ __all__ = [
     "KdbConfig",
     "KdbMetricRunner",
     "KdbMetricRunnerError",
+    "validate_output_schema_for_template",
+    "output_schema_contract_for_template",
+    "liquidity_output_schema_contract",
+    "liquidity_input_schema_contract",
+    "group_by_for_metric_result",
+    "activity_output_schema_contract",
+    "activity_input_schema_contract",
+    "RenderedMetricQuery",
+    "KdbMetricQueryPlanner",
+    "KdbMetricQueryPlanError",
     "MetricRunRequest",
+    "run_live_activity_smoke",
+    "run_live_liquidity_smoke",
+    "REQUIRED_LIVE_ACTIVITY_SMOKE_ENV_VARS",
+    "REQUIRED_LIVE_LIQUIDITY_SMOKE_ENV_VARS",
+    "LiveKdbActivitySmokeConfig",
+    "LiveKdbLiquiditySmokeConfig",
     "OutputSchemaContractError",
     "QTemplateInputTableSchemaContract",
     "QTemplateOutputSchemaContract",

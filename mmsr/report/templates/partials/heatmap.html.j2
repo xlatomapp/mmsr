@@ -1,9 +1,12 @@
+{% from "partials/help_control.html.j2" import help_control %}
 <section class="heatmap">
-  <h3>
-    {{ heatmap.title }}
-    <button class="metric-info" title="{{ heatmap.metric_help_text() }}">ⓘ</button>
-    {% if heatmap.help_text %}<button class="metric-info" title="{{ heatmap.help_text }}">?</button>{% endif %}
-  </h3>
+  <div class="component-heading">
+    <h3>{{ heatmap.title }}</h3>
+    <div class="component-heading__help">
+      {{ help_control(heatmap.metric.label, heatmap.metric_help_text(), "Metric definition") }}
+      {{ help_control(heatmap.title, heatmap.help_text, "Heatmap help") }}
+    </div>
+  </div>
   <div class="heatmap__meta">
     <span>X-axis: {{ heatmap.x_axis_label }}</span>
     <span>Y-axis: {{ heatmap.y_axis_label }}</span>
@@ -11,7 +14,30 @@
     <span>Metric: {{ heatmap.metric.label }}</span>
   </div>
   {% if heatmap.cells %}
-    <div class="heatmap__placeholder" role="img" aria-label="{{ heatmap.title }} heatmap placeholder">
+    {% if heatmap.has_svg_matrix() %}
+      <div class="heatmap__visual" role="img" aria-label="{{ heatmap.title }} heatmap">
+        <svg class="heatmap__svg" viewBox="{{ heatmap.svg_view_box() }}" aria-labelledby="{{ heatmap.title | replace(' ', '-') }}-heatmap-title">
+          <title id="{{ heatmap.title | replace(' ', '-') }}-heatmap-title">{{ heatmap.title }} heatmap</title>
+          <desc>Deterministic inline SVG heatmap. The backing data table below preserves every rendered cell for auditability.</desc>
+          {% for label in heatmap.svg_x_labels() %}
+            <text class="{{ label.css_class }}" x="{{ label.x }}" y="{{ label.y }}">{{ label.text }}</text>
+          {% endfor %}
+          {% for label in heatmap.svg_y_labels() %}
+            <text class="{{ label.css_class }}" x="{{ label.x }}" y="{{ label.y }}">{{ label.text }}</text>
+          {% endfor %}
+          {% for cell in heatmap.svg_cells() %}
+            <rect class="{{ cell.css_class }}" x="{{ cell.x }}" y="{{ cell.y }}" width="{{ cell.width }}" height="{{ cell.height }}" opacity="{{ cell.opacity }}">
+              <title>{{ cell.title }}</title>
+            </rect>
+            <text class="heatmap__cell-label" x="{{ cell.label_x }}" y="{{ cell.label_y }}">{{ cell.label }}</text>
+          {% endfor %}
+        </svg>
+      </div>
+    {% else %}
+      <p class="heatmap__empty">No numeric values were supplied for the heatmap visual; backing data is shown below.</p>
+    {% endif %}
+    <details class="heatmap__data" open>
+      <summary>Backing data</summary>
       <table>
         <thead>
           <tr>
@@ -38,8 +64,8 @@
           {% endfor %}
         </tbody>
       </table>
-    </div>
+    </details>
   {% else %}
-    <p class="heatmap__empty">No heatmap cells were supplied for this placeholder.</p>
+    <p class="heatmap__empty">No heatmap cells were supplied for this visual.</p>
   {% endif %}
 </section>

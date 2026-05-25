@@ -126,7 +126,7 @@ def test_build_comparison_metric_table_formats_and_orders_rows() -> None:
     assert table.rows[0].change_text == "change +10.7000 bps +34.1%"
     assert table.rows[0].status == "alert"
     assert table.rows[0].group_text == (
-        "date=2026-05-22, time_bucket=09:00-09:05, market_cap_bucket=Small"
+        "Date: 2026-05-22, Intraday bucket: 09:00–09:05, Market cap bucket: Small cap"
     )
 
 

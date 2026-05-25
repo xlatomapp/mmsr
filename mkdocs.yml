@@ -6,3 +6,5 @@ plugins:
   - mkdocstrings
 nav:
   - Home: index.md
+  - kdb integration testing: kdb_integration_testing.md
+  - Production readiness checklist: production_readiness.md

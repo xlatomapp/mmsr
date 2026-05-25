@@ -1,3 +1,4 @@
+{% from "partials/help_control.html.j2" import help_control %}
 <!doctype html>
 <html lang="en">
 <head>
@@ -56,16 +57,74 @@
     }
     .metric-card--watch { background: var(--mmsr-watch); }
     .metric-card--alert { background: var(--mmsr-alert); }
-    .metric-card h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; }
-    .metric-info {
+    .component-heading {
+      align-items: flex-start;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 10px;
+      margin-bottom: 8px;
+    }
+    .component-heading h3 { margin: 0; }
+    .component-heading__help {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .metric-card h3 { margin: 0; }
+    .metric-help {
+      display: inline-block;
+      position: relative;
+    }
+    .metric-help__summary {
+      align-items: center;
       border: 1px solid var(--mmsr-border);
       border-radius: 999px;
       background: #fff;
       color: var(--mmsr-muted);
-      cursor: help;
+      cursor: pointer;
+      display: inline-flex;
       font-size: 12px;
-      height: 22px;
-      width: 22px;
+      gap: 4px;
+      list-style: none;
+      min-height: 22px;
+      padding: 2px 8px;
+    }
+    .metric-help__summary::-webkit-details-marker { display: none; }
+    .metric-help__summary::marker { content: ""; }
+    .metric-info { color: var(--mmsr-muted); }
+    .metric-help[open] .metric-help__summary {
+      border-color: var(--mmsr-muted);
+      color: var(--mmsr-text);
+    }
+    .metric-help__icon { font-weight: 700; }
+    .metric-help__label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .metric-help__body {
+      background: #fff;
+      border: 1px solid var(--mmsr-border);
+      border-radius: 12px;
+      box-shadow: 0 8px 28px rgba(24, 32, 47, 0.12);
+      color: var(--mmsr-text);
+      margin-top: 6px;
+      max-width: min(520px, calc(100vw - 64px));
+      min-width: 260px;
+      padding: 12px;
+      position: absolute;
+      right: 0;
+      z-index: 10;
+    }
+    .metric-help__body p {
+      margin: 6px 0 0;
+      white-space: pre-wrap;
+    }
+    .metric-table__metric-cell {
+      align-items: flex-start;
+      display: flex;
+      gap: 8px;
+      justify-content: space-between;
     }
     .metric-value { font-size: 24px; font-weight: 700; }
     .metric-reference { color: var(--mmsr-muted); }
@@ -110,12 +169,109 @@
       gap: 10px 18px;
       margin-bottom: 10px;
     }
-    .time-series-chart__placeholder, .heatmap__placeholder {
-      border: 1px dashed var(--mmsr-border);
+    .time-series-chart__visual, .time-series-chart__data, .heatmap__visual, .heatmap__data {
+      border: 1px solid var(--mmsr-border);
       border-radius: 16px;
       overflow-x: auto;
       padding: 12px;
       background: #fff;
+    }
+    .time-series-chart__data, .heatmap__data {
+      margin-top: 10px;
+    }
+    .time-series-chart__data summary, .heatmap__data summary {
+      color: var(--mmsr-muted);
+      cursor: pointer;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .time-series-chart__svg {
+      display: block;
+      height: auto;
+      max-height: 320px;
+      min-width: 640px;
+      width: 100%;
+    }
+    .time-series-chart__axis, .time-series-chart__gridline {
+      stroke: var(--mmsr-border);
+      stroke-width: 1;
+    }
+    .time-series-chart__gridline {
+      opacity: 0.72;
+    }
+    .time-series-chart__series {
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 2.25;
+    }
+    .time-series-chart__series--1 { stroke-dasharray: 7 4; }
+    .time-series-chart__series--2 { stroke-dasharray: 2 4; }
+    .time-series-chart__series--3 { stroke-dasharray: 10 4 2 4; }
+    .time-series-chart__series--4 { stroke-dasharray: 12 5; }
+    .time-series-chart__series--5 { stroke-dasharray: 4 3 1 3; }
+    .time-series-chart__marker {
+      fill: #fff;
+      stroke: currentColor;
+      stroke-width: 1.75;
+    }
+    .time-series-chart__tick-label {
+      fill: var(--mmsr-muted);
+      font-size: 11px;
+    }
+    .time-series-chart__tick-label--x {
+      text-anchor: middle;
+    }
+    .time-series-chart__tick-label--y {
+      dominant-baseline: middle;
+      text-anchor: end;
+    }
+    .time-series-chart__legend {
+      color: var(--mmsr-muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 16px;
+      margin: 8px 0 0;
+      padding-left: 18px;
+    }
+    .heatmap__svg {
+      display: block;
+      height: auto;
+      max-height: 420px;
+      min-width: 640px;
+      width: 100%;
+    }
+    .heatmap__cell {
+      fill: currentColor;
+      stroke: var(--mmsr-border);
+      stroke-width: 1;
+    }
+    .heatmap__cell--missing {
+      fill: #fff;
+      stroke-dasharray: 4 3;
+    }
+    .heatmap__axis-label {
+      fill: var(--mmsr-muted);
+      font-size: 11px;
+    }
+    .heatmap__axis-label--x {
+      text-anchor: middle;
+    }
+    .heatmap__axis-label--y {
+      dominant-baseline: middle;
+      text-anchor: end;
+    }
+    .heatmap__cell-label {
+      dominant-baseline: middle;
+      fill: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      pointer-events: none;
+      text-anchor: middle;
+    }
+    .heatmap__cell--missing + .heatmap__cell-label {
+      fill: var(--mmsr-muted);
     }
     .time-series-chart table, .heatmap table {
       border-collapse: collapse;
@@ -134,6 +290,38 @@
       letter-spacing: 0.03em;
     }
     .html-block__body { overflow-x: auto; }
+    .html-block table {
+      border-collapse: collapse;
+      width: 100%;
+      background: #fff;
+    }
+    .html-block th, .html-block td {
+      border-bottom: 1px solid var(--mmsr-border);
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    .html-block thead th {
+      color: var(--mmsr-muted);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .executive-overview {
+      border: 1px solid var(--mmsr-border);
+      border-radius: 16px;
+      padding: 14px;
+      background: #fff;
+    }
+    .executive-overview--watch { background: var(--mmsr-watch); }
+    .executive-overview--alert { background: var(--mmsr-alert); }
+    .executive-overview__status { margin: 0 0 10px; }
+    .executive-overview__metrics { margin: 0; padding-left: 20px; }
+    .executive-overview__metrics li { margin: 6px 0; }
+    .executive-overview__omitted {
+      color: var(--mmsr-muted);
+      margin: 10px 0 0;
+    }
     .metric-definition {
       border: 1px solid var(--mmsr-border);
       border-radius: 14px;
@@ -174,8 +362,18 @@
     </header>
 
     {% for page in document.pages %}
-      <section class="report-page">
+      <section class="report-page"{% if page.anchor_id %} id="{{ page.anchor_id }}"{% endif %}>
         <h2>{{ page.title }}</h2>
+        {% for block in page.html_blocks %}
+          <section class="html-block">
+            <div class="component-heading">
+              <h3>{{ block.title }}</h3>
+              {{ help_control(block.title, block.help_text, "Section help") }}
+            </div>
+            <div class="html-block__body">{{ block.body_html | safe }}</div>
+          </section>
+        {% endfor %}
+
         {% if page.metric_cards %}
           <div class="metric-grid">
             {% for card in page.metric_cards %}
@@ -198,13 +396,6 @@
 
         {% for block in page.commentary_blocks %}
           {% include "partials/commentary_block.html.j2" %}
-        {% endfor %}
-
-        {% for block in page.html_blocks %}
-          <section class="html-block">
-            <h3>{{ block.title }}{% if block.help_text %} <button class="metric-info" title="{{ block.help_text }}">ⓘ</button>{% endif %}</h3>
-            <div class="html-block__body">{{ block.body_html | safe }}</div>
-          </section>
         {% endfor %}
       </section>
     {% endfor %}

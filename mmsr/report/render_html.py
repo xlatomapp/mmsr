@@ -53,14 +53,14 @@ def render_metric_table(table: MetricTable) -> str:
 
 
 def render_time_series_chart(chart: TimeSeriesChart) -> str:
-    """Render a time-series chart placeholder using the shared partial template."""
+    """Render a time-series chart using the shared partial template."""
     env = build_template_environment()
     template = env.get_template("partials/time_series_chart.html.j2")
     return template.render(chart=chart)
 
 
 def render_heatmap(heatmap: Heatmap) -> str:
-    """Render a heatmap placeholder using the shared partial template."""
+    """Render a heatmap visual using the shared partial template."""
     env = build_template_environment()
     template = env.get_template("partials/heatmap.html.j2")
     return template.render(heatmap=heatmap)

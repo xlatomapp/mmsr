@@ -82,7 +82,7 @@ def test_commentary_facts_from_comparisons_use_metric_docs_and_caveats() -> None
     assert facts[0].direction_word == "higher"
     assert facts[0].status == "watch"
     assert "Low confidence: 12 reference observations" in facts[0].caveats[0]
-    assert "Reference observation unit: trading_day." in facts[0].caveats
+    assert "Reference observation unit: trading day." in facts[0].caveats
 
 
 def test_template_commentary_handles_comparison_only_without_statistical_score() -> None:
@@ -104,7 +104,7 @@ def test_template_commentary_handles_comparison_only_without_statistical_score()
     )
 
     assert comments == [
-        "Volume comparison for sector=Banks: current 1,000 shares versus "
+        "Volume comparison for Sector: Banks: current 1,000 shares versus "
         "reference 900 shares (change +100 shares +11.1%); statistical score "
         "not shown. Caveats: One reference observation; z-score is intentionally "
         "omitted."

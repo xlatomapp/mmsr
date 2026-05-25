@@ -1,24 +1,19 @@
-"""Deterministic offline demo report assembly.
+"""Deterministic mock-data demo report assembly.
 
-This module wires the synthetic fixture data into report-layer components without
-connecting to kdb+, importing PyKX, writing output files, or calling an LLM.
+This module adapts synthetic fixture data into the canonical production-format
+report builder. The demo and production report share one report-document shape
+and one packaged Jinja template; only the data source changes.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping
 
-from mmsr.metrics.base import MetricDefinition
-from mmsr.metrics.results import MetricTimeSeries
-from mmsr.report.components import ReportBranding, ReportDocument, ReportPage
-from mmsr.report.metric_docs import append_metric_definitions_appendix
-from mmsr.report.sections import (
-    ComparisonSectionOptions,
-    build_comparison_metric_table,
-    build_comparison_report_page,
-    build_heatmap,
-    build_time_series_chart,
+from mmsr.report.components import ReportDocument
+from mmsr.report.market_report import (
+    MarketReportInput,
+    MarketReportOptions,
+    build_market_monitor_report,
 )
 
 from mmsr.examples.offline_fixtures import (
@@ -29,21 +24,25 @@ from mmsr.examples.offline_fixtures import (
 
 @dataclass(frozen=True)
 class OfflineDemoReportOptions:
-    """Presentation options for the deterministic offline demo report."""
+    """Presentation options for the deterministic mock-data demo report.
 
-    title: str = "Japanese Market Microstructure Monitor — Offline Demo"
-    brand_name: str = "mmsr offline sample"
-    generated_at_text: str = "deterministic offline sample"
-    summary_page_title: str = "Offline Market Summary"
-    detail_page_title: str = "Offline Intraday Detail"
-    comparison_table_title: str = "Current versus synthetic reference"
+    These options intentionally map onto ``MarketReportOptions`` so the demo can
+    exercise the same report layout that production kdb-backed runs will use.
+    """
+
+    title: str = "Japanese Market Microstructure Monitor — Mock Data Demo"
+    brand_name: str = "mmsr mock data sample"
+    generated_at_text: str = "deterministic mock data sample"
+    summary_page_title: str = "Market Summary"
+    detail_page_title: str = "Intraday Detail"
+    comparison_table_title: str = "Current versus reference"
     comparison_help_text: str = (
-        "Synthetic current observations compared with 30 historical trading-day "
+        "Mock current observations compared with 30 historical trading-day "
         "reference observations for the same metric, bucket, and group."
     )
     detail_help_text: str = (
-        "Offline fixture observations are already normalized and are used only "
-        "to demonstrate report assembly without a live kdb connection."
+        "Mock fixture observations are already normalized and use the same "
+        "report-boundary schema expected from production kdb-backed metric runs."
     )
     include_metric_definitions_appendix: bool = True
     max_metric_cards: int = 6
@@ -51,6 +50,8 @@ class OfflineDemoReportOptions:
     max_table_rows: int | None = None
     max_chart_points: int | None = None
     max_heatmap_cells: int | None = None
+    include_drilldown_page: bool = True
+    max_drilldown_rows: int | None = 20
 
     def __post_init__(self) -> None:
         _require_non_empty(self.title, "title")
@@ -66,6 +67,32 @@ class OfflineDemoReportOptions:
         _require_optional_non_negative(self.max_table_rows, "max_table_rows")
         _require_optional_non_negative(self.max_chart_points, "max_chart_points")
         _require_optional_non_negative(self.max_heatmap_cells, "max_heatmap_cells")
+        _require_optional_non_negative(self.max_drilldown_rows, "max_drilldown_rows")
+
+    def to_market_report_options(self) -> MarketReportOptions:
+        """Return equivalent canonical report options for the mock-data demo."""
+
+        return MarketReportOptions(
+            title=self.title,
+            brand_name=self.brand_name,
+            generated_at_text=self.generated_at_text,
+            summary_page_title=self.summary_page_title,
+            detail_page_title=self.detail_page_title,
+            comparison_table_title=self.comparison_table_title,
+            comparison_help_text=self.comparison_help_text,
+            detail_help_text=self.detail_help_text,
+            summary_scope_label="mock data sample",
+            include_metric_definitions_appendix=(
+                self.include_metric_definitions_appendix
+            ),
+            max_metric_cards=self.max_metric_cards,
+            max_comments=self.max_comments,
+            max_table_rows=self.max_table_rows,
+            max_chart_points=self.max_chart_points,
+            max_heatmap_cells=self.max_heatmap_cells,
+            include_drilldown_page=self.include_drilldown_page,
+            max_drilldown_rows=self.max_drilldown_rows,
+        )
 
 
 def build_offline_demo_report(
@@ -73,130 +100,24 @@ def build_offline_demo_report(
     *,
     options: OfflineDemoReportOptions | None = None,
 ) -> ReportDocument:
-    """Build a deterministic report document from offline sample metrics.
+    """Build the production-format report document from mock fixture metrics.
 
-    The builder is a pure report assembly path. It consumes synthetic
-    ``MetricTimeSeries`` and precomputed ``MetricComparison`` objects, then
-    produces a ``ReportDocument`` with cards, a comparison table, deterministic
-    template commentary, chart/heatmap placeholders, and an optional metric
-    definitions appendix.
+    The builder is an adapter only: it creates ``MarketReportInput`` from
+    deterministic fixtures, then delegates to ``build_market_monitor_report``.
+    It does not maintain a separate offline-only report layout.
     """
 
     sample = sample_metrics or build_offline_sample_metrics()
     resolved_options = options or OfflineDemoReportOptions()
-    definitions = dict(sample.metric_definitions)
-
-    summary_page = _build_summary_page(
-        sample,
-        definitions,
-        options=resolved_options,
+    return build_market_monitor_report(
+        MarketReportInput(
+            metric_definitions=sample.metric_definitions,
+            current_series=sample.current_series,
+            comparisons=sample.comparisons,
+            symbol_series=sample.symbol_current_series,
+        ),
+        options=resolved_options.to_market_report_options(),
     )
-    detail_page = _build_detail_page(
-        sample.current_series,
-        definitions,
-        options=resolved_options,
-    )
-
-    document = ReportDocument(
-        title=resolved_options.title.strip(),
-        pages=[summary_page, detail_page],
-        branding=ReportBranding(brand_name=resolved_options.brand_name.strip()),
-        generated_at_text=resolved_options.generated_at_text.strip(),
-    )
-    if not resolved_options.include_metric_definitions_appendix:
-        return document
-    return append_metric_definitions_appendix(document)
-
-
-def _build_summary_page(
-    sample: OfflineSampleMetrics,
-    definitions: Mapping[str, MetricDefinition],
-    *,
-    options: OfflineDemoReportOptions,
-) -> ReportPage:
-    comparison_options = ComparisonSectionOptions(
-        max_metric_cards=options.max_metric_cards,
-        max_comments=options.max_comments,
-        section_summary_scope_label="offline synthetic sample",
-    )
-    base_page = build_comparison_report_page(
-        options.summary_page_title,
-        sample.comparisons,
-        definitions,
-        options=comparison_options,
-    )
-    comparison_table = build_comparison_metric_table(
-        options.comparison_table_title,
-        sample.comparisons,
-        definitions,
-        max_rows=options.max_table_rows,
-        help_text=options.comparison_help_text,
-    )
-    return ReportPage(
-        title=base_page.title,
-        metric_cards=base_page.metric_cards,
-        metric_tables=[comparison_table],
-        commentary_blocks=base_page.commentary_blocks,
-    )
-
-
-def _build_detail_page(
-    current_series: tuple[MetricTimeSeries, ...],
-    definitions: Mapping[str, MetricDefinition],
-    *,
-    options: OfflineDemoReportOptions,
-) -> ReportPage:
-    charts = []
-    heatmaps = []
-    for series in current_series:
-        definition = _require_definition(series.metric_name, definitions)
-        charts.append(
-            build_time_series_chart(
-                f"{definition.label} current observations",
-                series,
-                definition,
-                group_by=("market_cap_bucket",),
-                y_axis_label=_metric_axis_label(definition),
-                help_text=options.detail_help_text,
-                max_points=options.max_chart_points,
-            )
-        )
-        heatmaps.append(
-            build_heatmap(
-                f"{definition.label} bucket × market-cap view",
-                series,
-                definition,
-                group_by=("market_cap_bucket",),
-                y_axis_label="Market cap bucket",
-                help_text=options.detail_help_text,
-                max_cells=options.max_heatmap_cells,
-            )
-        )
-
-    return ReportPage(
-        title=options.detail_page_title.strip(),
-        time_series_charts=charts,
-        heatmaps=heatmaps,
-    )
-
-
-def _require_definition(
-    metric_name: str,
-    definitions: Mapping[str, MetricDefinition],
-) -> MetricDefinition:
-    try:
-        return definitions[metric_name]
-    except KeyError as exc:
-        raise ValueError(
-            "metric definition is required for offline demo report metric: "
-            f"{metric_name}"
-        ) from exc
-
-
-def _metric_axis_label(definition: MetricDefinition) -> str:
-    if definition.unit:
-        return f"{definition.label} ({definition.unit})"
-    return definition.label
 
 
 def _require_non_empty(value: str, field_name: str) -> None:

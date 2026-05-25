@@ -1,5 +1,9 @@
+{% from "partials/help_control.html.j2" import help_control %}
 <section class="metric-table">
-  <h3>{{ table.title }}{% if table.help_text %} <button class="metric-info" title="{{ table.help_text }}">ⓘ</button>{% endif %}</h3>
+  <div class="component-heading">
+    <h3>{{ table.title }}</h3>
+    {{ help_control(table.title, table.help_text, "Table help") }}
+  </div>
   {% if table.rows %}
     <table>
       <thead>
@@ -16,8 +20,10 @@
         {% for row in table.rows %}
           <tr class="metric-table__row metric-table__row--{{ row.status }}">
             <th scope="row">
-              {{ row.metric.label }}
-              <button class="metric-info" title="{{ row.help_text() }}">ⓘ</button>
+              <div class="metric-table__metric-cell">
+                <span>{{ row.metric.label }}</span>
+                {{ help_control(row.metric.label, row.help_text(), "Metric definition") }}
+              </div>
             </th>
             <td>{{ row.group_text if row.group_text else "—" }}</td>
             <td>{{ row.value_text }}</td>

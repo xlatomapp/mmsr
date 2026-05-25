@@ -35,7 +35,7 @@ def test_heatmap_renders_metric_help_and_bucket_group_context() -> None:
                 time_bucket_text="AMO",
                 group_text="venue=TSE",
                 value_text="12.4000 bps",
-                metadata_text="sample_size=120",
+                metadata_text="Sample size: 120",
             )
         ],
     )
@@ -53,8 +53,12 @@ def test_heatmap_renders_metric_help_and_bucket_group_context() -> None:
     assert "AMO" in html
     assert "venue=TSE" in html
     assert "12.4000 bps" in html
-    assert "sample_size=120" in html
-    assert "heatmap__placeholder" in html
+    assert "Sample size: 120" in html
+    assert "heatmap__visual" in html
+    assert "heatmap__svg" in html
+    assert "heatmap__cell" in html
+    assert "Backing data" in html
+    assert "heatmap__placeholder" not in html
 
 
 def test_build_heatmap_preserves_observation_order_bucket_and_group_context() -> None:
@@ -90,17 +94,21 @@ def test_build_heatmap_preserves_observation_order_bucket_and_group_context() ->
 
     assert heatmap.title == "Quoted Spread Heatmap"
     assert heatmap.metric == QUOTED_SPREAD_BPS
-    assert [cell.x_text for cell in heatmap.cells] == ["AMO", "09:05"]
-    assert [cell.y_text for cell in heatmap.cells] == ["venue=TSE", "venue=ODX"]
+    assert [cell.x_text for cell in heatmap.cells] == ["AM opening auction", "09:05"]
+    assert [cell.y_text for cell in heatmap.cells] == ["Venue: TSE", "Venue: ODX"]
     assert [cell.date_text for cell in heatmap.cells] == [
         "2026-05-22",
         "2026-05-22",
     ]
-    assert [cell.time_bucket_text for cell in heatmap.cells] == ["AMO", "09:05"]
-    assert [cell.group_text for cell in heatmap.cells] == ["venue=TSE", "venue=ODX"]
+    assert [cell.time_bucket_text for cell in heatmap.cells] == ["AM opening auction", "09:05"]
+    assert [cell.group_text for cell in heatmap.cells] == ["Venue: TSE", "Venue: ODX"]
     assert heatmap.cells[0].value_text == "12.4000 bps"
+    assert heatmap.cells[0].value == 12.4
+    assert heatmap.cells[0].numeric_value() == 12.4
     assert heatmap.cells[1].value_text == "not available"
-    assert heatmap.cells[0].metadata_text == "sample_size=120"
+    assert heatmap.cells[1].value is None
+    assert heatmap.cells[1].numeric_value() is None
+    assert heatmap.cells[0].metadata_text == "Sample size: 120"
 
 
 def test_report_renders_heatmaps_and_appendix_collects_definition() -> None:
@@ -159,6 +167,77 @@ def test_build_heatmap_validates_inputs() -> None:
 
     with pytest.raises(ValueError, match="help_text"):
         build_heatmap("Heatmap", series, QUOTED_SPREAD_BPS, help_text=" ")
+
+
+def test_heatmap_renders_deterministic_svg_matrix_and_backing_data() -> None:
+    heatmap = Heatmap(
+        title="Volume Heatmap",
+        metric=VOLUME,
+        x_axis_label="Intraday bucket",
+        y_axis_label="Segment",
+        cells=[
+            HeatmapCell(
+                x_text="AMO",
+                y_text="segment=Prime",
+                value_text="1,000",
+                value=1000,
+            ),
+            HeatmapCell(
+                x_text="09:05",
+                y_text="segment=Prime",
+                value_text="2,000",
+                value=2000,
+            ),
+            HeatmapCell(
+                x_text="AMO",
+                y_text="segment=Standard",
+                value_text="not available",
+            ),
+        ],
+    )
+
+    html = render_heatmap(heatmap)
+
+    assert heatmap.has_svg_matrix()
+    assert heatmap.svg_view_box() == "0 0 334.00 146.00"
+    assert [label.text for label in heatmap.svg_x_labels()] == ["AMO", "09:05"]
+    assert [label.text for label in heatmap.svg_y_labels()] == [
+        "segment=Prime",
+        "segment=Standard",
+    ]
+    svg_cells = heatmap.svg_cells()
+    assert len(svg_cells) == 3
+    assert svg_cells[0].opacity == "0.18"
+    assert svg_cells[1].opacity == "0.95"
+    assert svg_cells[2].css_class == "heatmap__cell heatmap__cell--missing"
+    assert "Volume Heatmap heatmap" in html
+    assert "Deterministic inline SVG heatmap" in html
+    assert "segment=Prime, AMO: 1,000" in html
+    assert "segment=Prime, 09:05: 2,000" in html
+    assert "segment=Standard, AMO: not available" in html
+    assert "heatmap__visual" in html
+    assert "heatmap__data" in html
+    assert "Backing data" in html
+    assert "heatmap__placeholder" not in html
+
+
+def test_heatmap_numeric_value_falls_back_to_display_text() -> None:
+    heatmap = Heatmap(
+        title="Hand-built Heatmap",
+        metric=QUOTED_SPREAD_BPS,
+        cells=[
+            HeatmapCell(
+                x_text="AMO",
+                y_text="venue=TSE",
+                value_text="12.4000 bps",
+            )
+        ],
+    )
+
+    assert heatmap.cells[0].numeric_value() == 12.4
+    assert heatmap.has_svg_matrix()
+    assert heatmap.svg_cells()[0].label == "12.4"
+
 
 
 def test_heatmap_models_validate_required_text() -> None:

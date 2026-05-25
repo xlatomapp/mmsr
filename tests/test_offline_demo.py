@@ -14,25 +14,53 @@ def test_build_offline_demo_report_assembles_document_with_appendix() -> None:
     document = build_offline_demo_report()
 
     assert isinstance(document, ReportDocument)
-    assert document.title == "Japanese Market Microstructure Monitor — Offline Demo"
-    assert document.branding.brand_name == "mmsr offline sample"
-    assert document.generated_at_text == "deterministic offline sample"
+    assert document.title == "Japanese Market Microstructure Monitor — Mock Data Demo"
+    assert document.branding.brand_name == "mmsr mock data sample"
+    assert document.generated_at_text == "deterministic mock data sample"
     assert [page.title for page in document.pages] == [
-        "Offline Market Summary",
-        "Offline Intraday Detail",
+        "Market Summary",
+        "Symbol Anomalies",
+        "Symbol 7203 Detail",
+        "Symbol 6758 Detail",
+        "Symbol 8306 Detail",
+        "Sector, Segment, and Market-Cap Drilldowns",
+        "Intraday Detail",
         "Metric Definitions Appendix",
     ]
 
     summary_page = document.pages[0]
-    detail_page = document.pages[1]
+    symbol_page = document.pages[1]
+    symbol_7203_page = document.pages[2]
+    drilldown_page = document.pages[5]
+    detail_page = document.pages[6]
 
+    assert len(summary_page.html_blocks) == 1
+    assert summary_page.html_blocks[0].title == "Executive Market Overview"
     assert len(summary_page.metric_cards) == 6
     assert len(summary_page.metric_tables) == 1
-    assert len(summary_page.metric_tables[0].rows) == 6
+    assert len(summary_page.metric_tables[0].rows) == 9
     assert len(summary_page.commentary_blocks) == 1
     assert summary_page.commentary_blocks[0].comments[0].startswith(
-        "Offline Market Summary headline:"
+        "Market Summary headline:"
     )
+    assert len(symbol_page.metric_tables) == 1
+    assert [row.group_text for row in symbol_page.metric_tables[0].rows] == [
+        "Date: 2026-05-22, Intraday bucket: AM opening auction, "
+        "Market cap bucket: Large cap, Market segment: Prime, Symbol: 7203",
+        "Date: 2026-05-22, Intraday bucket: 09:00–09:05, "
+        "Market cap bucket: Large cap, Market segment: Prime, Symbol: 6758",
+        "Date: 2026-05-22, Intraday bucket: 09:00–09:05, "
+        "Market cap bucket: Large cap, Market segment: Prime, Symbol: 8306",
+    ]
+    assert len(symbol_7203_page.time_series_charts) == 1
+    assert len(symbol_7203_page.heatmaps) == 1
+    assert (
+        symbol_7203_page.time_series_charts[0].title
+        == "Quoted Spread trend for symbol 7203"
+    )
+    assert len(symbol_7203_page.time_series_charts[0].points) == 3
+    assert len(drilldown_page.metric_tables) == 1
+    assert len(drilldown_page.metric_tables[0].rows) == 6
     assert len(detail_page.time_series_charts) == 3
     assert len(detail_page.heatmaps) == 3
 
@@ -47,17 +75,43 @@ def test_build_offline_demo_report_assembles_document_with_appendix() -> None:
 def test_offline_demo_report_renders_comparison_visuals_commentary_and_help() -> None:
     html = render_report(build_offline_demo_report())
 
-    assert "Offline Market Summary" in html
-    assert "Current versus synthetic reference" in html
-    assert "offline synthetic sample" in html
-    assert "time-series-chart__placeholder" in html
-    assert "heatmap__placeholder" in html
+    assert "Market Summary" in html
+    assert "Executive Market Overview" in html
+    assert html.index('<section class="html-block">') < html.index(
+        '<div class="metric-grid">'
+    )
+    assert "Overall status:" in html
+    assert "Current versus reference" in html
+    assert "Symbol Anomalies" in html
+    assert "Top symbol-level anomalies" in html
+    assert "Sector, Segment, and Market-Cap Drilldowns" in html
+    assert "Top group-level drilldowns" in html
+    assert "Symbol 7203 Detail" in html
+    assert "Quoted Spread trend for symbol 7203" in html
+    assert "Volume trend for symbol 8306" in html
+    assert "Top-of-Book Depth trend for symbol 6758" in html
+    assert "Symbol: 7203" in html
+    assert "Symbol: 6758" in html
+    assert "Symbol: 8306" in html
+    assert "symbol=7203" not in html
+    assert "mock data sample" in html
+    assert "time-series-chart__svg" in html
+    assert "Backing data" in html
+    assert "time-series-chart__placeholder" not in html
+    assert "heatmap__svg" in html
+    assert "heatmap__placeholder" not in html
+    assert "AM opening auction" in html
+    assert "Market cap bucket: Small cap" in html
+    assert "Reference observation unit: trading day" in html
+    assert "time_bucket=" not in html
+    assert "market_cap_bucket=" not in html
+    assert "reference_observation_unit" not in html
     assert "Metric Definitions Appendix" in html
     assert "Quoted Spread" in html
     assert "Top-of-Book Depth" in html
     assert "Volume" in html
     assert "Formula:" in html
-    assert "mmsr offline sample" in html
+    assert "mmsr mock data sample" in html
 
 
 def test_build_offline_demo_report_can_omit_appendix_and_limit_rows() -> None:
@@ -73,14 +127,22 @@ def test_build_offline_demo_report_can_omit_appendix_and_limit_rows() -> None:
     document = build_offline_demo_report(options=options)
 
     assert [page.title for page in document.pages] == [
-        "Offline Market Summary",
-        "Offline Intraday Detail",
+        "Market Summary",
+        "Symbol Anomalies",
+        "Symbol 7203 Detail",
+        "Symbol 6758 Detail",
+        "Symbol 8306 Detail",
+        "Sector, Segment, and Market-Cap Drilldowns",
+        "Intraday Detail",
     ]
     assert len(document.pages[0].metric_cards) == 2
     assert len(document.pages[0].metric_tables[0].rows) == 3
     assert len(document.pages[0].commentary_blocks[0].comments) == 2
-    assert all(len(chart.points) == 1 for chart in document.pages[1].time_series_charts)
-    assert all(len(heatmap.cells) == 1 for heatmap in document.pages[1].heatmaps)
+    assert all(len(chart.points) == 1 for chart in document.pages[2].time_series_charts)
+    assert all(len(heatmap.cells) == 1 for heatmap in document.pages[2].heatmaps)
+    assert len(document.pages[5].metric_tables[0].rows) == 6
+    assert all(len(chart.points) == 1 for chart in document.pages[6].time_series_charts)
+    assert all(len(heatmap.cells) == 1 for heatmap in document.pages[6].heatmaps)
 
 
 def test_build_offline_demo_report_accepts_supplied_sample_metrics() -> None:
@@ -91,7 +153,9 @@ def test_build_offline_demo_report_accepts_supplied_sample_metrics() -> None:
     assert len(document.pages[0].metric_tables[0].rows) == len(
         sample_metrics.comparisons
     )
-    assert len(document.pages[1].time_series_charts) == len(
+    assert len(document.pages[2].time_series_charts) == 1
+    assert len(document.pages[5].metric_tables[0].rows) == 6
+    assert len(document.pages[6].time_series_charts) == len(
         sample_metrics.current_series
     )
 
@@ -108,10 +172,41 @@ def test_build_offline_demo_report_requires_definitions_for_current_series() -> 
         current_series=sample_metrics.current_series,
         reference_series=sample_metrics.reference_series,
         comparisons=sample_metrics.comparisons,
+        symbol_current_series=sample_metrics.symbol_current_series,
     )
 
     with pytest.raises(ValueError, match="volume"):
         build_offline_demo_report(broken_sample)
+
+
+
+def test_build_offline_demo_report_can_disable_drilldown_page() -> None:
+    document = build_offline_demo_report(
+        options=OfflineDemoReportOptions(
+            include_metric_definitions_appendix=False,
+            include_drilldown_page=False,
+        )
+    )
+
+    assert "Sector, Segment, and Market-Cap Drilldowns" not in [
+        page.title for page in document.pages
+    ]
+
+
+def test_build_offline_demo_report_can_limit_drilldown_rows() -> None:
+    document = build_offline_demo_report(
+        options=OfflineDemoReportOptions(
+            include_metric_definitions_appendix=False,
+            max_drilldown_rows=2,
+        )
+    )
+
+    drilldown_page = next(
+        page
+        for page in document.pages
+        if page.title == "Sector, Segment, and Market-Cap Drilldowns"
+    )
+    assert len(drilldown_page.metric_tables[0].rows) == 2
 
 
 def test_offline_demo_report_options_validate_required_text_and_limits() -> None:
@@ -132,3 +227,6 @@ def test_offline_demo_report_options_validate_required_text_and_limits() -> None
 
     with pytest.raises(ValueError, match="max_heatmap_cells"):
         OfflineDemoReportOptions(max_heatmap_cells=-1)
+
+    with pytest.raises(ValueError, match="max_drilldown_rows"):
+        OfflineDemoReportOptions(max_drilldown_rows=-1)

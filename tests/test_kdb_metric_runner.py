@@ -90,6 +90,34 @@ def test_kdb_metric_runner_renders_activity_query_and_normalizes_column_result()
     assert "time within (12:30:00.000;15:30:00.000)" in query
 
 
+def test_kdb_metric_runner_can_bound_starter_query_to_single_symbol() -> None:
+    registry = build_default_registry()
+    client = FakeKdbClient(
+        {
+            "date": [date(2026, 5, 1)],
+            "time_bucket": ["09:00"],
+            "sym": ["7203"],
+            "turnover": [1000.0],
+            "volume": [100],
+            "trade_count": [3],
+        }
+    )
+    runner = KdbMetricRunner(client)  # type: ignore[arg-type]
+
+    series = runner.run(
+        MetricRunRequest(
+            metric=registry.get("turnover"),
+            period=_period(),
+            group_by=["sym"],
+            table_names={"trades": "trade"},
+            parameters={"symbol": "7203"},
+        )
+    )
+
+    assert series.observations[0].group == {"sym": "7203"}
+    assert 'sym = $"7203"' in client.queries[0]
+
+
 def test_kdb_metric_runner_renders_liquidity_query_without_group_columns() -> None:
     registry = build_default_registry()
     client = FakeKdbClient(
@@ -133,6 +161,7 @@ def test_kdb_metric_runner_renders_reversion_query_and_normalizes_venue_horizon(
             "notional": [250000000.0, 175000000.0],
             "positive_reversion_ratio": [0.54, 0.42],
             "valid_primary_quote_ratio": [0.99, 0.98],
+            "context_sort_order": [3, 3],
         }
     )
     runner = KdbMetricRunner(client)  # type: ignore[arg-type]
@@ -173,6 +202,7 @@ def test_kdb_metric_runner_renders_reversion_query_and_normalizes_venue_horizon(
         "notional": 250000000.0,
         "positive_reversion_ratio": 0.54,
         "valid_primary_quote_ratio": 0.99,
+        "context_sort_order": 3,
     }
     assert series.metadata["template"] == "toxicity_reversion.q"
     assert series.metadata["group_by"] == ("venue", "horizon", "sym")
@@ -192,6 +222,55 @@ def test_kdb_metric_runner_renders_reversion_query_and_normalizes_venue_horizon(
     assert ", sym" in query
 
 
+
+
+def test_activity_runner_validates_output_schema_before_normalization() -> None:
+    registry = build_default_registry()
+    client = FakeKdbClient(
+        {
+            "date": [date(2026, 5, 1)],
+            "time_bucket": ["09:00"],
+            "volume": [100],
+            "turnover": [1000.0],
+        }
+    )
+    runner = KdbMetricRunner(client)  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="trade_count"):
+        runner.run(
+            MetricRunRequest(
+                metric=registry.get("volume"),
+                period=_period(),
+                group_by=[],
+                table_names={"trades": "trade"},
+            )
+        )
+
+    assert len(client.queries) == 1
+
+
+def test_liquidity_runner_validates_output_schema_before_normalization() -> None:
+    registry = build_default_registry()
+    client = FakeKdbClient(
+        {
+            "date": [date(2026, 5, 1)],
+            "time_bucket": ["09:00"],
+            "quoted_spread_bps": [12.5],
+        }
+    )
+    runner = KdbMetricRunner(client)  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="top_of_book_depth"):
+        runner.run(
+            MetricRunRequest(
+                metric=registry.get("quoted_spread_bps"),
+                period=_period(),
+                group_by=[],
+                table_names={"quotes": "quote"},
+            )
+        )
+
+    assert len(client.queries) == 1
 
 
 def test_reversion_runner_validates_output_schema_before_normalization() -> None:
@@ -360,8 +439,3 @@ def test_normalize_metric_result_rejects_mismatched_column_lengths() -> None:
         )
 
 
-@pytest.mark.kdb_integration
-@pytest.mark.skip(reason="requires a live kdb+ process with production schemas")
-def test_live_kdb_metric_runner_integration_placeholder() -> None:
-    """Document the live-kdb integration boundary without requiring it offline."""
-    raise AssertionError("configured live kdb integration test should replace this placeholder")

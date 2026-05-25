@@ -28,4 +28,117 @@ def test_readme_documents_offline_demo_quickstart() -> None:
     assert "poetry run mmsr offline-demo --output reports/offline_demo.html" in text
     assert "synthetic normalized metrics" in text
     assert "without a live kdb+ connection, PyKX import, or LLM call" in text
+    assert "build_market_monitor_report()" in text
+    assert "only the data source changes" in text
     assert "does not query kdb+" in text
+
+
+def test_readme_documents_mock_kdb_demo_quickstart() -> None:
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert "poetry run mmsr mock-kdb-demo --output reports/mock_kdb_demo.html" in text
+    assert "executes rendered q templates" in text
+    assert "KdbMetricRunner" in text
+    assert "without a live\nkdb+ connection or PyKX import" in text
+
+
+def test_mkdocs_quickstart_documents_drilldown_demo_options() -> None:
+    doc = (ROOT / "docs" / "index.md").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    required_terms = [
+        "poetry run mmsr offline-demo --output reports/offline_demo.html",
+        "poetry run mmsr mock-kdb-demo --output reports/mock_kdb_demo.html",
+        "--max-drilldown-rows",
+        "--no-drilldown-page",
+        "sector, segment, and market-cap",
+        "does not query kdb+",
+        "without a live\nkdb+ connection or PyKX import",
+    ]
+
+    for term in required_terms:
+        assert term in doc
+        assert term in readme
+
+
+def test_roadmap_tracks_packaging_and_cli_backlog() -> None:
+    text = (ROOT / "_docs" / "ROADMAP.md").read_text(encoding="utf-8")
+
+    assert "ppw packaging parity and CLI ergonomics" in text
+    assert "`dev` and `doc` optional dependency support" in text
+    assert "Typer" in text
+    assert "Runtime install remains lean" in text
+
+
+def test_docs_document_live_kdb_integration_boundary() -> None:
+    doc = (ROOT / "docs" / "kdb_integration_testing.md").read_text(
+        encoding="utf-8"
+    )
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    roadmap = (ROOT / "_docs" / "ROADMAP.md").read_text(encoding="utf-8")
+    status = (ROOT / "_docs" / "MILESTONE_STATUS.md").read_text(encoding="utf-8")
+    mkdocs = (ROOT / "mkdocs.yml").read_text(encoding="utf-8")
+
+    required_terms = [
+        "MMSR_KDB_HOST",
+        "MMSR_KDB_PORT",
+        "MMSR_KDB_TRADES_TABLE",
+        "MMSR_KDB_QUOTES_TABLE",
+        "MMSR_KDB_CALENDAR_TABLE",
+        "MMSR_KDB_TEST_DATE",
+        "@pytest.mark.kdb_integration",
+        "skipped by default",
+        "toxicity_reversion.q",
+        "MetricTimeSeries",
+        "LiveKdbActivitySmokeConfig",
+        "LiveKdbLiquiditySmokeConfig",
+        "test_live_kdb_activity_smoke_validates_starter_output_schema",
+        "test_live_kdb_liquidity_smoke_validates_starter_output_schema",
+        "symbol_filter",
+    ]
+
+    for term in required_terms:
+        assert term in doc
+
+    assert "docs/kdb_integration_testing.md" in readme
+    assert "poetry run pytest -m kdb_integration" in readme
+    assert "LiveKdbActivitySmokeConfig" in readme
+    assert "mock-vs-live integration-test" in roadmap
+    assert "live-kdb integration-test guidance" in status
+    assert "kdb_integration_testing.md" in mkdocs
+
+
+def test_docs_document_production_readiness_checklist() -> None:
+    doc = (ROOT / "docs" / "production_readiness.md").read_text(
+        encoding="utf-8"
+    )
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    index = (ROOT / "docs" / "index.md").read_text(encoding="utf-8")
+    mkdocs = (ROOT / "mkdocs.yml").read_text(encoding="utf-8")
+    roadmap = (ROOT / "_docs" / "ROADMAP.md").read_text(encoding="utf-8")
+    status = (ROOT / "_docs" / "MILESTONE_STATUS.md").read_text(
+        encoding="utf-8"
+    )
+
+    required_terms = [
+        "Production readiness checklist",
+        "sector taxonomy",
+        "market-cap bucket",
+        "Symbol metadata / taxonomy table",
+        "Trading calendar table",
+        "Trades table for `activity.q`",
+        "Quotes table for `liquidity.q`",
+        "Venue trade table for `toxicity_reversion.q`",
+        "Primary quote table for `toxicity_reversion.q`",
+        "bounded validation slice",
+        "market-data owner",
+    ]
+
+    for term in required_terms:
+        assert term in doc
+
+    assert "docs/production_readiness.md" in readme
+    assert "production_readiness.md" in index
+    assert "Production readiness checklist: production_readiness.md" in mkdocs
+    assert "Production readiness requirements are documented" in status
+    assert "docs/production_readiness.md" in roadmap

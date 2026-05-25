@@ -25,6 +25,11 @@ from mmsr.report.components import (
     TimeSeriesChart,
     TimeSeriesChartPoint,
 )
+from mmsr.presentation.labels import (
+    format_comparison_scope_label,
+    format_group_label,
+    format_intraday_bucket_label,
+)
 
 
 @dataclass(frozen=True)
@@ -169,11 +174,12 @@ def build_time_series_chart(
     y_axis_label: str | None = None,
     help_text: str | None = None,
 ) -> TimeSeriesChart:
-    """Build a deterministic time-series chart placeholder.
+    """Build a deterministic time-series chart.
 
-    The builder only formats already-normalized ``MetricTimeSeries`` observations
-    for report rendering. It preserves observation order, date, time-bucket, and
-    group context; it does not calculate metrics or draw backend-specific charts.
+    The builder formats already-normalized ``MetricTimeSeries`` observations for
+    report rendering. It preserves observation order, date, time-bucket, group
+    context, and numeric values for deterministic inline SVG rendering; it does
+    not calculate metrics or invoke an external charting backend.
     """
 
     chart_title = title.strip()
@@ -224,12 +230,12 @@ def build_heatmap(
     y_axis_label: str = "Group",
     help_text: str | None = None,
 ) -> Heatmap:
-    """Build a deterministic heatmap placeholder.
+    """Build a deterministic heatmap visual.
 
     The builder formats already-normalized ``MetricTimeSeries`` observations
     into cells for report rendering. It preserves report date, intraday/auction
-    bucket, group, and metadata context; it does not calculate metrics or draw
-    backend-specific visualisations.
+    bucket, group, metadata context, and numeric values; it does not calculate
+    metrics or use backend-specific visualisation dependencies.
     """
 
     heatmap_title = title.strip()
@@ -346,6 +352,7 @@ def _time_series_chart_point_from_observation(
         series_text=_format_series_text(observation.group, group_by=group_by),
         value_text=_format_metric_value(observation.value, definition.unit),
         metadata_text=_format_metadata_text(observation.metadata),
+        value=observation.value,
     )
 
 
@@ -366,6 +373,7 @@ def _heatmap_cell_from_observation(
         group_text=group_text,
         value_text=_format_metric_value(observation.value, definition.unit),
         metadata_text=_format_metadata_text(observation.metadata),
+        value=observation.value,
     )
 
 
@@ -382,11 +390,7 @@ def _format_chart_x_text(date_text: str, bucket_text: str | None) -> str:
 
 
 def _format_bucket_text(bucket: object | None) -> str | None:
-    if bucket is None:
-        return None
-    if hasattr(bucket, "strftime"):
-        return bucket.strftime("%H:%M")  # type: ignore[no-any-return, attr-defined]
-    return str(bucket)
+    return format_intraday_bucket_label(bucket)
 
 
 def _format_series_text(
@@ -394,18 +398,14 @@ def _format_series_text(
     *,
     group_by: Sequence[str] | None,
 ) -> str | None:
-    if not group:
-        return None
-    keys = tuple(sorted(group)) if group_by is None else tuple(group_by)
-    parts = [f"{key}={group[key]}" for key in keys if key in group]
-    return ", ".join(parts) if parts else None
+    return format_group_label(
+        group,
+        group_by=None if group_by is None else tuple(group_by),
+    )
 
 
 def _format_metadata_text(metadata: Mapping[str, object]) -> str | None:
-    if not metadata:
-        return None
-    parts = [f"{key}={metadata[key]}" for key in sorted(metadata)]
-    return ", ".join(parts) if parts else None
+    return format_group_label(metadata)
 
 
 def _metric_definition_map(
@@ -453,13 +453,11 @@ def _comparison_sort_key(
 
 
 def _format_comparison_scope(comparison: MetricComparison) -> str | None:
-    parts: list[str] = []
-    if comparison.date is not None:
-        parts.append(f"date={comparison.date.isoformat()}")
-    if comparison.time_bucket is not None:
-        parts.append(f"time_bucket={comparison.time_bucket}")
-    parts.extend(f"{key}={value}" for key, value in sorted(comparison.group.items()))
-    return ", ".join(parts) if parts else None
+    return format_comparison_scope_label(
+        observation_date=comparison.date,
+        time_bucket=comparison.time_bucket,
+        group=comparison.group,
+    )
 
 
 def _format_metric_value(value: float | int | None, unit: str) -> str:

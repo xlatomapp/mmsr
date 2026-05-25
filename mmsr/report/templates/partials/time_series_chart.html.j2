@@ -1,16 +1,54 @@
+{% from "partials/help_control.html.j2" import help_control %}
 <section class="time-series-chart">
-  <h3>
-    {{ chart.title }}
-    <button class="metric-info" title="{{ chart.metric_help_text() }}">ⓘ</button>
-    {% if chart.help_text %}<button class="metric-info" title="{{ chart.help_text }}">?</button>{% endif %}
-  </h3>
+  <div class="component-heading">
+    <h3>{{ chart.title }}</h3>
+    <div class="component-heading__help">
+      {{ help_control(chart.metric.label, chart.metric_help_text(), "Metric definition") }}
+      {{ help_control(chart.title, chart.help_text, "Chart help") }}
+    </div>
+  </div>
   <div class="time-series-chart__meta">
     <span>X-axis: {{ chart.x_axis_label }}</span>
     <span>Y-axis: {{ chart.resolved_y_axis_label() }}</span>
     <span>Metric: {{ chart.metric.label }}</span>
   </div>
   {% if chart.points %}
-    <div class="time-series-chart__placeholder" role="img" aria-label="{{ chart.title }} placeholder">
+    {% if chart.has_svg_plot() %}
+      <div class="time-series-chart__visual" role="img" aria-label="{{ chart.title }} line chart">
+        <svg class="time-series-chart__svg" viewBox="{{ chart.svg_view_box() }}" aria-labelledby="{{ chart.title | replace(' ', '-') }}-svg-title">
+          <title id="{{ chart.title | replace(' ', '-') }}-svg-title">{{ chart.title }} line chart</title>
+          <desc>Deterministic inline SVG trend chart. The backing data table below preserves every rendered point for auditability.</desc>
+          <line class="time-series-chart__axis" x1="58.00" y1="200.00" x2="696.00" y2="200.00"></line>
+          <line class="time-series-chart__axis" x1="58.00" y1="20.00" x2="58.00" y2="200.00"></line>
+          {% for tick in chart.svg_y_ticks() %}
+            <line class="time-series-chart__gridline" x1="58.00" y1="{{ tick.y }}" x2="696.00" y2="{{ tick.y }}"></line>
+            <text class="time-series-chart__tick-label time-series-chart__tick-label--y" x="{{ tick.x }}" y="{{ tick.y }}">{{ tick.label }}</text>
+          {% endfor %}
+          {% for series in chart.svg_series() %}
+            <polyline class="time-series-chart__series {{ series.css_class }}" points="{{ series.polyline_points }}"></polyline>
+            {% for marker in series.markers %}
+              <circle class="time-series-chart__marker {{ series.css_class }}" cx="{{ marker.cx }}" cy="{{ marker.cy }}" r="3.50">
+                <title>{{ marker.title }}</title>
+              </circle>
+            {% endfor %}
+          {% endfor %}
+          {% for tick in chart.svg_x_ticks() %}
+            <text class="time-series-chart__tick-label time-series-chart__tick-label--x" x="{{ tick.x }}" y="{{ tick.y }}">{{ tick.label }}</text>
+          {% endfor %}
+        </svg>
+        {% if chart.svg_legend_labels() | length > 1 %}
+          <ul class="time-series-chart__legend" aria-label="Chart series">
+            {% for label in chart.svg_legend_labels() %}
+              <li>{{ label }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </div>
+    {% else %}
+      <p class="time-series-chart__empty">No numeric values were supplied for the trend visual; backing data is shown below.</p>
+    {% endif %}
+    <details class="time-series-chart__data" open>
+      <summary>Backing data</summary>
       <table>
         <thead>
           <tr>
@@ -35,7 +73,7 @@
           {% endfor %}
         </tbody>
       </table>
-    </div>
+    </details>
   {% else %}
     <p class="time-series-chart__empty">No time-series points were supplied for this chart.</p>
   {% endif %}

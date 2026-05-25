@@ -100,7 +100,7 @@ def test_build_comparison_report_page_accepts_precomputed_commentary_facts() -> 
 
     assert page.commentary_blocks[0].title == "Deterministic Commentary"
     assert page.commentary_blocks[0].comments == [
-        "Volume comparison for sector=Banks: current 1,000 shares versus "
+        "Volume comparison for Sector: Banks: current 1,000 shares versus "
         "reference 900 shares (change +100 shares +11.1%); statistical score "
         "not shown."
     ]

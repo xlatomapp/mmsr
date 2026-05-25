@@ -1,0 +1,371 @@
+"""Deterministic executive market overview builder."""
+
+from __future__ import annotations
+
+from collections import Counter
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
+from html import escape
+from math import isfinite
+
+from mmsr.metrics.base import MetricDefinition
+from mmsr.metrics.results import MetricComparison
+from mmsr.presentation.labels import format_comparison_scope_label
+from mmsr.report.components import HtmlBlock
+
+
+_STATUS_PRIORITY: dict[str, int] = {
+    "alert": 0,
+    "watch": 1,
+    "comparison_only": 2,
+    "normal": 3,
+}
+
+_STATUS_LABELS: dict[str, str] = {
+    "alert": "Alert",
+    "watch": "Watch",
+    "comparison_only": "Comparison only",
+    "normal": "Normal",
+}
+
+
+@dataclass(frozen=True)
+class ExecutiveOverviewOptions:
+    """Presentation options for the deterministic executive overview."""
+
+    title: str = "Executive Market Overview"
+    help_text: str = (
+        "High-level deterministic summary of already-computed comparison "
+        "results across key metrics. This section does not calculate new market "
+        "metrics, query kdb+, or use an LLM."
+    )
+    max_metric_summaries: int = 5
+
+    def __post_init__(self) -> None:
+        if not self.title.strip():
+            raise ValueError("title must not be empty")
+        if not self.help_text.strip():
+            raise ValueError("help_text must not be empty")
+        if self.max_metric_summaries < 0:
+            raise ValueError("max_metric_summaries must be non-negative")
+
+
+@dataclass(frozen=True)
+class _MetricOverview:
+    metric_name: str
+    metric_label: str
+    status: str
+    comparison_count: int
+    alert_count: int
+    watch_count: int
+    normal_count: int
+    comparison_only_count: int
+    average_value: float | None
+    average_reference_value: float | None
+    average_change_abs: float | None
+    average_change_pct: float | None
+    most_severe_scope: str | None
+    unit: str
+
+
+def build_executive_market_overview_block(
+    comparisons: Sequence[MetricComparison],
+    metric_definitions: Mapping[str, MetricDefinition] | Iterable[MetricDefinition],
+    *,
+    options: ExecutiveOverviewOptions | None = None,
+) -> HtmlBlock:
+    """Build a deterministic high-level market overview HTML block.
+
+    The block summarizes already-computed comparison status and average current
+    versus reference values by metric. It is presentation-only glue: it does not
+    calculate new metrics, query kdb+, or call an LLM.
+    """
+
+    resolved_options = options or ExecutiveOverviewOptions()
+    definitions = _metric_definition_map(metric_definitions)
+    _require_metric_definitions(comparisons, definitions)
+
+    body_html = _overview_html(
+        tuple(comparisons),
+        definitions,
+        max_metric_summaries=resolved_options.max_metric_summaries,
+    )
+    return HtmlBlock(
+        title=resolved_options.title.strip(),
+        body_html=body_html,
+        help_text=resolved_options.help_text.strip(),
+    )
+
+
+def _overview_html(
+    comparisons: tuple[MetricComparison, ...],
+    definitions: Mapping[str, MetricDefinition],
+    *,
+    max_metric_summaries: int,
+) -> str:
+    if not comparisons:
+        return (
+            '<section class="executive-overview executive-overview--empty">'
+            '<p class="executive-overview__status">'
+            "<strong>Overall status:</strong> No comparison observations were "
+            "supplied for this report."
+            "</p>"
+            "</section>"
+        )
+
+    status_counts = Counter(comparison.status for comparison in comparisons)
+    overall_status = _overall_status(status_counts)
+    metric_summaries = _metric_overviews(comparisons, definitions)
+    selected_summaries = metric_summaries[:max_metric_summaries]
+    omitted_count = max(len(metric_summaries) - len(selected_summaries), 0)
+
+    status_text = _status_count_sentence(status_counts)
+    summary_items = "\n".join(
+        _metric_overview_item(summary) for summary in selected_summaries
+    )
+    omitted_html = (
+        ""
+        if omitted_count == 0
+        else (
+            '<p class="executive-overview__omitted">'
+            f"{omitted_count} additional metric summaries are available in the "
+            "diagnostic sections."
+            "</p>"
+        )
+    )
+
+    return (
+        f'<section class="executive-overview executive-overview--{escape(overall_status)}">\n'
+        '  <p class="executive-overview__status">'
+        f"<strong>Overall status:</strong> {_status_label(overall_status)} — "
+        f"{escape(status_text)} across {len(_unique_metric_names(comparisons))} "
+        f"key metrics and {len(comparisons)} comparisons."
+        "</p>\n"
+        '  <ul class="executive-overview__metrics">\n'
+        f"{summary_items}\n"
+        "  </ul>\n"
+        f"  {omitted_html}\n"
+        "</section>"
+    )
+
+
+def _metric_overviews(
+    comparisons: tuple[MetricComparison, ...],
+    definitions: Mapping[str, MetricDefinition],
+) -> tuple[_MetricOverview, ...]:
+    grouped: dict[str, list[MetricComparison]] = {}
+    for comparison in comparisons:
+        grouped.setdefault(comparison.metric_name, []).append(comparison)
+
+    overviews = [
+        _metric_overview(metric_name, metric_comparisons, definitions[metric_name])
+        for metric_name, metric_comparisons in grouped.items()
+    ]
+    return tuple(
+        sorted(
+            overviews,
+            key=lambda summary: (
+                _STATUS_PRIORITY.get(summary.status, 99),
+                -(summary.alert_count + summary.watch_count),
+                summary.metric_label.casefold(),
+                summary.metric_name,
+            ),
+        )
+    )
+
+
+def _metric_overview(
+    metric_name: str,
+    comparisons: Sequence[MetricComparison],
+    definition: MetricDefinition,
+) -> _MetricOverview:
+    status_counts = Counter(comparison.status for comparison in comparisons)
+    most_severe = min(
+        comparisons,
+        key=lambda comparison: (
+            _STATUS_PRIORITY.get(comparison.status, 99),
+            -abs(comparison.z_score or 0.0),
+            "" if comparison.date is None else comparison.date.isoformat(),
+            "" if comparison.time_bucket is None else str(comparison.time_bucket),
+            repr(sorted(comparison.group.items())),
+        ),
+    )
+
+    return _MetricOverview(
+        metric_name=metric_name,
+        metric_label=definition.label,
+        status=_overall_status(status_counts),
+        comparison_count=len(comparisons),
+        alert_count=status_counts.get("alert", 0),
+        watch_count=status_counts.get("watch", 0),
+        normal_count=status_counts.get("normal", 0),
+        comparison_only_count=status_counts.get("comparison_only", 0),
+        average_value=_average_numeric(comparison.value for comparison in comparisons),
+        average_reference_value=_average_numeric(
+            comparison.reference_value for comparison in comparisons
+        ),
+        average_change_abs=_average_numeric(
+            comparison.change_abs for comparison in comparisons
+        ),
+        average_change_pct=_average_numeric(
+            comparison.change_pct for comparison in comparisons
+        ),
+        most_severe_scope=_format_scope(most_severe),
+        unit=definition.unit,
+    )
+
+
+def _metric_overview_item(summary: _MetricOverview) -> str:
+    abnormal_count = summary.alert_count + summary.watch_count
+    current_text = _format_metric_value(summary.average_value, summary.unit)
+    reference_text = _format_metric_value(summary.average_reference_value, summary.unit)
+    change_text = _format_change(
+        summary.average_change_abs,
+        summary.average_change_pct,
+        summary.unit,
+    )
+    scope_text = summary.most_severe_scope or "selected universe"
+    abnormal_text = (
+        f"{abnormal_count} alert/watch observations"
+        if abnormal_count != 1
+        else "1 alert/watch observation"
+    )
+
+    return (
+        "    <li>"
+        f'<strong>{escape(summary.metric_label)}</strong>: '
+        f"{_status_label(summary.status).lower()} status across "
+        f"{summary.comparison_count} comparisons; {abnormal_text}; "
+        f"average current {escape(current_text)} versus reference "
+        f"{escape(reference_text)}{escape(change_text)}; leading scope "
+        f"{escape(scope_text)}."
+        "</li>"
+    )
+
+
+def _overall_status(status_counts: Counter[str]) -> str:
+    for status in ("alert", "watch", "comparison_only", "normal"):
+        if status_counts.get(status, 0):
+            return status
+    return "normal"
+
+
+def _status_count_sentence(status_counts: Counter[str]) -> str:
+    return (
+        f"{status_counts.get('alert', 0)} alerts, "
+        f"{status_counts.get('watch', 0)} watch items, "
+        f"{status_counts.get('comparison_only', 0)} comparison-only items, and "
+        f"{status_counts.get('normal', 0)} normal items"
+    )
+
+
+def _format_change(
+    change_abs: float | None,
+    change_pct: float | None,
+    unit: str,
+) -> str:
+    parts: list[str] = []
+    if change_abs is not None:
+        parts.append(f"change {_format_signed_metric_value(change_abs, unit)}")
+    if change_pct is not None:
+        parts.append(f"{change_pct:+.1%}")
+    if not parts:
+        return ""
+    return " (" + " ".join(parts) + ")"
+
+
+def _format_metric_value(value: float | int | None, unit: str) -> str:
+    if value is None:
+        return "not available"
+
+    numeric = float(value)
+    if not isfinite(numeric):
+        return "not available"
+
+    if unit == "ratio":
+        return f"{numeric:.4f}"
+    if unit == "count":
+        return f"{numeric:,.0f}"
+    if unit == "JPY":
+        return f"{numeric:,.0f} JPY"
+    if unit:
+        return f"{numeric:,.4f} {unit}"
+    return f"{numeric:,.4f}"
+
+
+def _format_signed_metric_value(value: float, unit: str) -> str:
+    if not isfinite(float(value)):
+        return "not available"
+    if unit == "ratio":
+        return f"{value:+.4f}"
+    if unit == "count":
+        return f"{value:+,.0f}"
+    if unit == "JPY":
+        return f"{value:+,.0f} JPY"
+    if unit:
+        return f"{value:+,.4f} {unit}"
+    return f"{value:+,.4f}"
+
+
+def _average_numeric(values: Iterable[float | int | None]) -> float | None:
+    numeric_values = [
+        float(value)
+        for value in values
+        if value is not None and isfinite(float(value))
+    ]
+    if not numeric_values:
+        return None
+    return sum(numeric_values) / len(numeric_values)
+
+
+def _format_scope(comparison: MetricComparison) -> str | None:
+    return format_comparison_scope_label(
+        observation_date=comparison.date,
+        time_bucket=comparison.time_bucket,
+        group=comparison.group,
+    )
+
+
+def _status_label(status: str) -> str:
+    return _STATUS_LABELS.get(status, status.replace("_", " ").title())
+
+
+def _unique_metric_names(comparisons: Iterable[MetricComparison]) -> tuple[str, ...]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for comparison in comparisons:
+        if comparison.metric_name in seen:
+            continue
+        seen.add(comparison.metric_name)
+        ordered.append(comparison.metric_name)
+    return tuple(ordered)
+
+
+def _metric_definition_map(
+    metric_definitions: Mapping[str, MetricDefinition] | Iterable[MetricDefinition],
+) -> dict[str, MetricDefinition]:
+    if isinstance(metric_definitions, Mapping):
+        return dict(metric_definitions)
+    return {definition.name: definition for definition in metric_definitions}
+
+
+def _require_metric_definitions(
+    comparisons: Sequence[MetricComparison],
+    definitions: Mapping[str, MetricDefinition],
+) -> None:
+    missing = sorted(
+        {comparison.metric_name for comparison in comparisons}
+        - set(definitions.keys())
+    )
+    if missing:
+        missing_text = ", ".join(missing)
+        raise ValueError(
+            "metric definitions are required for executive overview metrics: "
+            f"{missing_text}"
+        )
+
+
+__all__ = [
+    "ExecutiveOverviewOptions",
+    "build_executive_market_overview_block",
+]

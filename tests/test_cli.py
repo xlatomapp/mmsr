@@ -4,8 +4,12 @@ import sys
 
 import pytest
 
-from mmsr.cli import main, render_offline_demo_report_file
-from mmsr.examples import OfflineDemoReportOptions
+from mmsr.cli import (
+    main,
+    render_mock_kdb_demo_report_file,
+    render_offline_demo_report_file,
+)
+from mmsr.examples import MockKdbIntegrationDemoOptions, OfflineDemoReportOptions
 
 
 def test_render_offline_demo_report_file_writes_deterministic_html(tmp_path) -> None:
@@ -15,11 +19,19 @@ def test_render_offline_demo_report_file_writes_deterministic_html(tmp_path) -> 
 
     assert rendered_path == output_path
     html = output_path.read_text(encoding="utf-8")
-    assert "Japanese Market Microstructure Monitor — Offline Demo" in html
-    assert "Offline Market Summary" in html
+    assert "Japanese Market Microstructure Monitor — Mock Data Demo" in html
+    assert "Market Summary" in html
+    assert "Executive Market Overview" in html
     assert "Metric Definitions Appendix" in html
-    assert "time-series-chart__placeholder" in html
-    assert "heatmap__placeholder" in html
+    assert "time-series-chart__svg" in html
+    assert "Backing data" in html
+    assert "time-series-chart__placeholder" not in html
+    assert "heatmap__svg" in html
+    assert "heatmap__placeholder" not in html
+    assert "AM opening auction" in html
+    assert "Market cap bucket: Small cap" in html
+    assert "time_bucket=" not in html
+    assert "market_cap_bucket=" not in html
     assert "pykx" not in sys.modules
 
 
@@ -52,6 +64,8 @@ def test_main_offline_demo_renders_to_requested_path(tmp_path, capsys) -> None:
             "1",
             "--max-heatmap-cells",
             "1",
+            "--max-drilldown-rows",
+            "1",
         ]
     )
 
@@ -62,7 +76,7 @@ def test_main_offline_demo_renders_to_requested_path(tmp_path, capsys) -> None:
     assert "Custom Brand" in html
     assert "Generated: fixed timestamp" in html
     assert html.count("metric-card") >= 1
-    assert "Rendered offline demo report:" in capsys.readouterr().out
+    assert "Rendered mock-data production-format report:" in capsys.readouterr().out
 
 
 def test_main_offline_demo_can_omit_metric_definitions_appendix(tmp_path) -> None:
@@ -72,13 +86,115 @@ def test_main_offline_demo_can_omit_metric_definitions_appendix(tmp_path) -> Non
 
     assert exit_code == 0
     html = output_path.read_text(encoding="utf-8")
-    assert "Offline Market Summary" in html
+    assert "Market Summary" in html
+    assert "Executive Market Overview" in html
     assert "Metric Definitions Appendix" not in html
+
+
+
+def test_main_offline_demo_can_omit_drilldown_page(tmp_path) -> None:
+    output_path = tmp_path / "demo-no-drilldown.html"
+
+    exit_code = main(
+        ["offline-demo", "--output", str(output_path), "--no-drilldown-page"]
+    )
+
+    assert exit_code == 0
+    html = output_path.read_text(encoding="utf-8")
+    assert "Market Summary" in html
+    assert "Sector, Segment, and Market-Cap Drilldowns" not in html
+
+
+def test_render_mock_kdb_demo_report_file_writes_deterministic_html(tmp_path) -> None:
+    output_path = tmp_path / "reports" / "mock-kdb-demo.html"
+
+    rendered_path = render_mock_kdb_demo_report_file(output_path)
+
+    assert rendered_path == output_path
+    html = output_path.read_text(encoding="utf-8")
+    assert "Japanese Market Microstructure Monitor — Mock kdb Integration Demo" in html
+    assert "Market Summary" in html
+    assert "Executive Market Overview" in html
+    assert "Metric Definitions Appendix" in html
+    assert "time-series-chart__svg" in html
+    assert "heatmap__svg" in html
+    assert "Backing data" in html
+    assert "mock kdb integration" in html
+    assert "time-series-chart__placeholder" not in html
+    assert "heatmap__placeholder" not in html
+    assert "pykx" not in sys.modules
+
+
+def test_main_mock_kdb_demo_renders_to_requested_path(tmp_path, capsys) -> None:
+    output_path = tmp_path / "mock-kdb-demo.html"
+
+    exit_code = main(
+        [
+            "mock-kdb-demo",
+            "--output",
+            str(output_path),
+            "--title",
+            "Custom Mock Kdb Demo",
+            "--brand-name",
+            "Custom Kdb Brand",
+            "--generated-at-text",
+            "fixed kdb timestamp",
+            "--max-metric-cards",
+            "1",
+            "--max-comments",
+            "1",
+            "--max-table-rows",
+            "2",
+            "--max-chart-points",
+            "1",
+            "--max-heatmap-cells",
+            "1",
+            "--max-drilldown-rows",
+            "1",
+        ]
+    )
+
+    assert exit_code == 0
+    assert output_path.exists()
+    html = output_path.read_text(encoding="utf-8")
+    assert "Custom Mock Kdb Demo" in html
+    assert "Custom Kdb Brand" in html
+    assert "Generated: fixed kdb timestamp" in html
+    assert html.count("metric-card") >= 1
+    assert "Rendered mock-kdb integration report:" in capsys.readouterr().out
+
+
+def test_main_mock_kdb_demo_can_omit_metric_definitions_appendix(tmp_path) -> None:
+    output_path = tmp_path / "mock-kdb-no-appendix.html"
+
+    exit_code = main(["mock-kdb-demo", "--output", str(output_path), "--no-appendix"])
+
+    assert exit_code == 0
+    html = output_path.read_text(encoding="utf-8")
+    assert "Market Summary" in html
+    assert "Executive Market Overview" in html
+    assert "Metric Definitions Appendix" not in html
+
+
+
+def test_main_mock_kdb_demo_can_omit_drilldown_page(tmp_path) -> None:
+    output_path = tmp_path / "mock-kdb-no-drilldown.html"
+
+    exit_code = main(
+        ["mock-kdb-demo", "--output", str(output_path), "--no-drilldown-page"]
+    )
+
+    assert exit_code == 0
+    html = output_path.read_text(encoding="utf-8")
+    assert "Market Summary" in html
+    assert "Sector, Segment, and Market-Cap Drilldowns" not in html
 
 
 def test_main_without_command_prints_help(capsys) -> None:
     assert main([]) == 0
-    assert "offline-demo" in capsys.readouterr().out
+    help_text = capsys.readouterr().out
+    assert "offline-demo" in help_text
+    assert "mock-kdb-demo" in help_text
 
 
 def test_offline_demo_cli_surfaces_option_validation(tmp_path) -> None:
@@ -88,6 +204,14 @@ def test_offline_demo_cli_surfaces_option_validation(tmp_path) -> None:
         main(["offline-demo", "--output", str(output_path), "--max-metric-cards", "-1"])
 
 
+
+def test_offline_demo_cli_surfaces_drilldown_option_validation(tmp_path) -> None:
+    output_path = tmp_path / "bad-drilldown.html"
+
+    with pytest.raises(ValueError, match="max_drilldown_rows"):
+        main(["offline-demo", "--output", str(output_path), "--max-drilldown-rows", "-1"])
+
+
 def test_render_offline_demo_report_file_accepts_options(tmp_path) -> None:
     output_path = tmp_path / "custom.html"
     options = OfflineDemoReportOptions(
@@ -95,6 +219,7 @@ def test_render_offline_demo_report_file_accepts_options(tmp_path) -> None:
         include_metric_definitions_appendix=False,
         max_metric_cards=1,
         max_comments=1,
+        include_drilldown_page=False,
     )
 
     render_offline_demo_report_file(output_path, options=options)
@@ -102,3 +227,22 @@ def test_render_offline_demo_report_file_accepts_options(tmp_path) -> None:
     html = output_path.read_text(encoding="utf-8")
     assert "Programmatic Offline Demo" in html
     assert "Metric Definitions Appendix" not in html
+    assert "Sector, Segment, and Market-Cap Drilldowns" not in html
+
+
+def test_render_mock_kdb_demo_report_file_accepts_options(tmp_path) -> None:
+    output_path = tmp_path / "custom-mock-kdb.html"
+    options = MockKdbIntegrationDemoOptions(
+        title="Programmatic Mock Kdb Demo",
+        include_metric_definitions_appendix=False,
+        max_metric_cards=1,
+        max_comments=1,
+        include_drilldown_page=False,
+    )
+
+    render_mock_kdb_demo_report_file(output_path, options=options)
+
+    html = output_path.read_text(encoding="utf-8")
+    assert "Programmatic Mock Kdb Demo" in html
+    assert "Metric Definitions Appendix" not in html
+    assert "Sector, Segment, and Market-Cap Drilldowns" not in html
