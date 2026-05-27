@@ -16,6 +16,7 @@ def _input_from_mock_sample() -> MarketReportInput:
         metric_definitions=sample.metric_definitions,
         current_series=sample.current_series,
         comparisons=sample.comparisons,
+        reference_series=sample.reference_series,
     )
 
 
@@ -34,6 +35,7 @@ def test_market_monitor_report_is_canonical_production_format() -> None:
     assert document.branding.brand_name == "Example Securities"
     assert [page.title for page in document.pages] == [
         "Market Summary",
+        "Reference and Target Daily Trends",
         "Symbol Anomalies",
         "Sector, Segment, and Market-Cap Drilldowns",
         "Intraday Detail",
@@ -41,24 +43,36 @@ def test_market_monitor_report_is_canonical_production_format() -> None:
     ]
 
     summary_page = document.pages[0]
-    symbol_page = document.pages[1]
-    drilldown_page = document.pages[2]
-    detail_page = document.pages[3]
+    trend_page = document.pages[1]
+    symbol_page = document.pages[2]
+    drilldown_page = document.pages[3]
+    detail_page = document.pages[4]
 
     assert len(summary_page.html_blocks) == 1
     assert summary_page.html_blocks[0].title == "Executive Market Overview"
     assert "Overall status:</strong>" in summary_page.html_blocks[0].body_html
+    assert "<strong>Market activity:</strong>" in summary_page.html_blocks[0].body_html
+    assert (
+        "<strong>Displayed liquidity:</strong>"
+        in summary_page.html_blocks[0].body_html
+    )
     assert len(summary_page.metric_cards) == 6
     assert len(summary_page.metric_tables) == 1
     assert len(summary_page.commentary_blocks) == 1
     assert summary_page.commentary_blocks[0].comments[0].startswith(
         "Market Summary headline:"
     )
+    assert len(trend_page.time_series_charts) == 3
+    assert trend_page.time_series_charts[0].x_axis_label == "Trading day"
+    assert "reference" in trend_page.time_series_charts[0].points[0].metadata_text
+    assert "target" in trend_page.time_series_charts[0].points[-1].metadata_text
     assert len(symbol_page.metric_tables[0].rows) == 3
     assert len(drilldown_page.metric_tables[0].rows) == 6
     assert drilldown_page.metric_tables[0].help_text is not None
     assert len(detail_page.time_series_charts) == 3
-    assert len(detail_page.heatmaps) == 3
+    assert detail_page.time_series_charts[0].x_axis_label == "Intraday time bucket"
+    assert detail_page.time_series_charts[0].points[0].x_text == "AM opening auction"
+    assert len(detail_page.heatmaps) == 0
 
 
 def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> None:
@@ -76,6 +90,8 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert "Production Format Acceptance Report" in html
     assert "Market Summary" in html
     assert "Intraday Detail" in html
+    assert "Reference and Target Daily Trends" in html
+    assert "daily reference-to-target trend" in html
     assert "Symbol Anomalies" in html
     assert "Sector, Segment, and Market-Cap Drilldowns" in html
     assert "Top group-level drilldowns" in html
@@ -87,12 +103,14 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
         "Current versus reference"
     )
     assert "Overall status:" in html
+    assert "Market activity:" in html
+    assert "Displayed liquidity:" in html
     assert "key metrics" in html
     assert "Current versus reference" in html
     assert "time-series-chart__svg" in html
     assert "Backing data" in html
     assert "time-series-chart__placeholder" not in html
-    assert "heatmap__svg" in html
+    assert '<section class="heatmap">' not in html
     assert "heatmap__placeholder" not in html
     assert "AM opening auction" in html
     assert "Market cap bucket: Small cap" in html
@@ -116,6 +134,7 @@ def test_market_monitor_report_can_omit_appendix_and_limit_components() -> None:
 
     assert [page.title for page in document.pages] == [
         "Market Summary",
+        "Reference and Target Daily Trends",
         "Symbol Anomalies",
         "Sector, Segment, and Market-Cap Drilldowns",
         "Intraday Detail",
@@ -124,9 +143,10 @@ def test_market_monitor_report_can_omit_appendix_and_limit_components() -> None:
     assert len(document.pages[0].metric_cards) == 2
     assert len(document.pages[0].metric_tables[0].rows) == 3
     assert len(document.pages[0].commentary_blocks[0].comments) == 1
-    assert len(document.pages[2].metric_tables[0].rows) == 6
-    assert all(len(chart.points) == 1 for chart in document.pages[3].time_series_charts)
-    assert all(len(heatmap.cells) == 1 for heatmap in document.pages[3].heatmaps)
+    assert all(len(chart.points) == 1 for chart in document.pages[1].time_series_charts)
+    assert len(document.pages[3].metric_tables[0].rows) == 6
+    assert all(len(chart.points) == 1 for chart in document.pages[4].time_series_charts)
+    assert document.pages[4].heatmaps == []
 
 
 def test_market_monitor_report_can_disable_drilldown_page() -> None:
@@ -140,6 +160,7 @@ def test_market_monitor_report_can_disable_drilldown_page() -> None:
 
     assert [page.title for page in document.pages] == [
         "Market Summary",
+        "Reference and Target Daily Trends",
         "Symbol Anomalies",
         "Intraday Detail",
     ]
@@ -175,7 +196,7 @@ def test_market_monitor_report_passes_custom_drilldown_options() -> None:
         ),
     )
 
-    drilldown_page = document.pages[2]
+    drilldown_page = document.pages[3]
     assert drilldown_page.title == "Market-Cap Drilldowns"
     table = drilldown_page.metric_tables[0]
     assert table.title == "Market-cap rows"
@@ -184,6 +205,24 @@ def test_market_monitor_report_passes_custom_drilldown_options() -> None:
     assert all("Market cap bucket:" in row.group_text for row in table.rows)
     assert all("Market segment:" in row.group_text for row in table.rows)
 
+
+
+
+def test_market_monitor_report_can_opt_into_intraday_heatmaps() -> None:
+    document = build_market_monitor_report(
+        _input_from_mock_sample(),
+        options=MarketReportOptions(
+            include_metric_definitions_appendix=False,
+            include_intraday_heatmaps=True,
+        ),
+    )
+
+    detail_page = next(page for page in document.pages if page.title == "Intraday Detail")
+    symbol_detail_pages = [
+        page for page in document.pages if page.title.startswith("Symbol ") and page.title.endswith(" Detail")
+    ]
+    assert len(detail_page.heatmaps) == 3
+    assert all(page.heatmaps for page in symbol_detail_pages)
 
 def test_market_monitor_report_requires_metric_definitions_for_current_series() -> None:
     sample = build_offline_sample_metrics()
@@ -210,6 +249,12 @@ def test_market_report_options_validate_text_and_limits() -> None:
 
     with pytest.raises(ValueError, match="generated_at_text"):
         MarketReportOptions(generated_at_text=" ")
+
+    with pytest.raises(ValueError, match="daily_trend_page_title"):
+        MarketReportOptions(daily_trend_page_title=" ")
+
+    with pytest.raises(ValueError, match="daily_trend_help_text"):
+        MarketReportOptions(daily_trend_help_text=" ")
 
     with pytest.raises(ValueError, match="summary_scope_label"):
         MarketReportOptions(summary_scope_label=" ")

@@ -125,8 +125,8 @@ STARTER_METRICS: list[MetricDefinition] = [
         supports_intraday=True,
         supports_symbol_level=True,
         required_tables=["trades", "quotes"],
-        required_columns=["trade_price", "bid_price", "ask_price"],
-        caveats=["Requires correct trade-to-quote alignment."],
+        required_columns=["sym", "trade_price", "trade_size", "bid_price", "ask_price"],
+        caveats=["Requires correct same-symbol trade-to-quote alignment.", "Uses unsigned effective spread and does not require aggressor-side signing."],
     ),
     MetricDefinition(
         name="price_impact_30s_bps",
@@ -141,8 +141,18 @@ STARTER_METRICS: list[MetricDefinition] = [
         supports_intraday=True,
         supports_symbol_level=True,
         required_tables=["trades", "quotes"],
-        required_columns=["trade_price", "bid_price", "ask_price"],
-        caveats=["Requires trade signing and horizon-specific quote alignment."],
+        required_columns=[
+            "sym",
+            "trade_price",
+            "trade_size",
+            "aggressor_side",
+            "bid_price",
+            "ask_price",
+        ],
+        caveats=[
+            "Requires feed-provided trade signing with buy=1 and sell=-1.",
+            "Requires horizon-specific same-symbol quote alignment.",
+        ],
     ),
     MetricDefinition(
         name="signed_turnover",
@@ -156,9 +166,12 @@ STARTER_METRICS: list[MetricDefinition] = [
         default_aggregation="sum",
         supports_intraday=True,
         supports_symbol_level=True,
-        required_tables=["trades", "quotes"],
-        required_columns=["trade_price", "trade_size", "bid_price", "ask_price"],
-        caveats=["Depends on trade signing quality."],
+        required_tables=["trades"],
+        required_columns=["trade_price", "trade_size", "aggressor_side"],
+        caveats=[
+            "Depends on feed-provided trade signing quality.",
+            "Quote-based side inference is not used by the starter kdb template.",
+        ],
     ),
     MetricDefinition(
         name="trade_imbalance",
@@ -172,8 +185,8 @@ STARTER_METRICS: list[MetricDefinition] = [
         default_aggregation="custom",
         supports_intraday=True,
         supports_symbol_level=True,
-        required_tables=["trades", "quotes"],
-        required_columns=["trade_size", "trade_price", "bid_price", "ask_price"],
+        required_tables=["trades"],
+        required_columns=["trade_size", "aggressor_side"],
     ),
 ]
 
@@ -200,7 +213,7 @@ for horizon, label in PRIMARY_QUOTE_REVERSION_HORIZONS:
             ),
             formula=(
                 "side * 10000 * (primary_mid[t + horizon] - "
-                "primary_mid[t-]) / primary_mid[t-]"
+                "primary_mid[t-]) / primary_mid[t + horizon]"
             ),
             interpretation=(
                 "Positive values mean the primary mid moved in the aggressive "

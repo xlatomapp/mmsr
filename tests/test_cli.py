@@ -26,7 +26,7 @@ def test_render_offline_demo_report_file_writes_deterministic_html(tmp_path) -> 
     assert "time-series-chart__svg" in html
     assert "Backing data" in html
     assert "time-series-chart__placeholder" not in html
-    assert "heatmap__svg" in html
+    assert '<section class="heatmap">' not in html
     assert "heatmap__placeholder" not in html
     assert "AM opening auction" in html
     assert "Market cap bucket: Small cap" in html
@@ -91,6 +91,19 @@ def test_main_offline_demo_can_omit_metric_definitions_appendix(tmp_path) -> Non
     assert "Metric Definitions Appendix" not in html
 
 
+def test_main_offline_demo_can_include_intraday_heatmaps(tmp_path) -> None:
+    output_path = tmp_path / "demo-with-heatmaps.html"
+
+    exit_code = main(
+        ["offline-demo", "--output", str(output_path), "--include-intraday-heatmaps"]
+    )
+
+    assert exit_code == 0
+    html = output_path.read_text(encoding="utf-8")
+    assert "Intraday Detail" in html
+    assert '<section class="heatmap">' in html
+    assert "bucket × market-cap view" in html
+
 
 def test_main_offline_demo_can_omit_drilldown_page(tmp_path) -> None:
     output_path = tmp_path / "demo-no-drilldown.html"
@@ -117,7 +130,7 @@ def test_render_mock_kdb_demo_report_file_writes_deterministic_html(tmp_path) ->
     assert "Executive Market Overview" in html
     assert "Metric Definitions Appendix" in html
     assert "time-series-chart__svg" in html
-    assert "heatmap__svg" in html
+    assert '<section class="heatmap">' not in html
     assert "Backing data" in html
     assert "mock kdb integration" in html
     assert "time-series-chart__placeholder" not in html
@@ -176,6 +189,19 @@ def test_main_mock_kdb_demo_can_omit_metric_definitions_appendix(tmp_path) -> No
     assert "Metric Definitions Appendix" not in html
 
 
+def test_main_mock_kdb_demo_can_include_intraday_heatmaps(tmp_path) -> None:
+    output_path = tmp_path / "mock-kdb-with-heatmaps.html"
+
+    exit_code = main(
+        ["mock-kdb-demo", "--output", str(output_path), "--include-intraday-heatmaps"]
+    )
+
+    assert exit_code == 0
+    html = output_path.read_text(encoding="utf-8")
+    assert "Intraday Detail" in html
+    assert '<section class="heatmap">' in html
+    assert "bucket × market-cap view" in html
+
 
 def test_main_mock_kdb_demo_can_omit_drilldown_page(tmp_path) -> None:
     output_path = tmp_path / "mock-kdb-no-drilldown.html"
@@ -204,7 +230,6 @@ def test_offline_demo_cli_surfaces_option_validation(tmp_path) -> None:
         main(["offline-demo", "--output", str(output_path), "--max-metric-cards", "-1"])
 
 
-
 def test_offline_demo_cli_surfaces_drilldown_option_validation(tmp_path) -> None:
     output_path = tmp_path / "bad-drilldown.html"
 
@@ -219,6 +244,7 @@ def test_render_offline_demo_report_file_accepts_options(tmp_path) -> None:
         include_metric_definitions_appendix=False,
         max_metric_cards=1,
         max_comments=1,
+        include_intraday_heatmaps=True,
         include_drilldown_page=False,
     )
 
@@ -228,6 +254,7 @@ def test_render_offline_demo_report_file_accepts_options(tmp_path) -> None:
     assert "Programmatic Offline Demo" in html
     assert "Metric Definitions Appendix" not in html
     assert "Sector, Segment, and Market-Cap Drilldowns" not in html
+    assert '<section class="heatmap">' in html
 
 
 def test_render_mock_kdb_demo_report_file_accepts_options(tmp_path) -> None:
@@ -237,6 +264,7 @@ def test_render_mock_kdb_demo_report_file_accepts_options(tmp_path) -> None:
         include_metric_definitions_appendix=False,
         max_metric_cards=1,
         max_comments=1,
+        include_intraday_heatmaps=True,
         include_drilldown_page=False,
     )
 
@@ -246,3 +274,4 @@ def test_render_mock_kdb_demo_report_file_accepts_options(tmp_path) -> None:
     assert "Programmatic Mock Kdb Demo" in html
     assert "Metric Definitions Appendix" not in html
     assert "Sector, Segment, and Market-Cap Drilldowns" not in html
+    assert '<section class="heatmap">' in html

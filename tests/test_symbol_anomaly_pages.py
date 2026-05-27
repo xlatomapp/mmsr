@@ -229,16 +229,54 @@ def test_build_symbol_detail_pages_renders_existing_symbol_series_only() -> None
     assert [page.title for page in pages] == ["Symbol 7203 Detail"]
     page = pages[0]
     assert len(page.time_series_charts) == 1
-    assert len(page.heatmaps) == 1
-    assert page.time_series_charts[0].title == "Quoted Spread trend for symbol 7203"
+    assert len(page.heatmaps) == 0
+    assert (
+        page.time_series_charts[0].title
+        == "Quoted Spread intraday time-bucket trend for symbol 7203"
+    )
     assert page.time_series_charts[0].metric.name == "quoted_spread_bps"
+    assert page.time_series_charts[0].x_axis_label == "Intraday time bucket"
     assert [point.time_bucket_text for point in page.time_series_charts[0].points] == [
         "AM opening auction",
         "09:00–09:05",
     ]
+    assert all("symbol 7203" in component.title for component in page.time_series_charts)
+
+
+def test_build_symbol_detail_pages_can_opt_into_heatmaps() -> None:
+    definitions = build_default_registry()
+    comparisons = (
+        _comparison(
+            "quoted_spread_bps",
+            "7203",
+            status="alert",
+            z_score=2.9,
+            empirical_tail=0.01,
+        ),
+    )
+    current_series = (
+        _series(
+            "quoted_spread_bps",
+            (
+                _observation("quoted_spread_bps", "7203", "AMO", 17.8),
+                _observation("quoted_spread_bps", "7203", "09:00-09:05", 16.9),
+            ),
+        ),
+    )
+
+    pages = build_symbol_detail_pages(
+        comparisons,
+        current_series,
+        definitions.docs(),
+        options=SymbolDetailPageOptions(include_heatmaps=True),
+    )
+
+    assert [page.title for page in pages] == ["Symbol 7203 Detail"]
+    assert len(pages[0].time_series_charts) == 1
+    assert len(pages[0].heatmaps) == 1
     assert all(
         "symbol 7203" in component.title
-        for component in (*page.time_series_charts, *page.heatmaps)
+        for component in (*pages[0].time_series_charts, *pages[0].heatmaps)
     )
 
 

@@ -6,6 +6,30 @@ This roadmap defines the implementation milestones for `mmsr`.
 
 Create a Python package that generates market microstructure monitoring reports for Japanese market data using level 1 trade and quote data stored in kdb+. The package should run deterministically without an LLM and optionally support LLM-polished commentary.
 
+## Implementation scope gate
+
+Every future roadmap item must pass the scope guardrails in
+`docs/report_scope.md` before implementation. The default product is a Japanese
+market microstructure market-monitoring report, not transaction-cost analysis
+(TCA), execution quality, smart-order routing, venue ranking, or a generic
+validation framework / generic validation package.
+
+Roadmap work should prioritize:
+
+- market-wide, intraday, sector, segment, market-cap, venue, and symbol-level
+  report views;
+- activity, displayed liquidity, market-state volatility/quality, and
+  Cross-Venue Toxicity/Reversion;
+- deterministic commentary from normalized comparison facts;
+- kdb q templates and report components needed by the default market report.
+
+Do not add roadmap next steps for effective spread, implementation shortfall,
+slippage, price impact, order-routing analytics, or reusable validation
+frameworks unless the user explicitly changes the product scope. Existing
+execution-cost-style compatibility templates may remain tested but must not be
+promoted into default configs or report sections.
+
+
 ## Milestone 1: Project skeleton and governance
 
 **Goal:** Establish ppw-style package structure, governance docs, roadmap, journal, and minimal test setup.
@@ -56,25 +80,32 @@ Create a Python package that generates market microstructure monitoring reports 
 
 **Goal:** Implement central registry and first set of metric definitions.
 
-**Initial metrics:**
+**Default market-monitoring metrics:**
 
 - `turnover`
 - `volume`
 - `trade_count`
 - `quoted_spread_bps`
-- `quoted_spread_ticks`
 - `top_of_book_depth`
-- `realized_volatility`
-- `effective_spread_bps`
-- `price_impact_30s_bps`
-- `signed_turnover`
-- `trade_imbalance`
 - `primary_quote_reversion_10ms_bps`
 - `primary_quote_reversion_100ms_bps`
 - `primary_quote_reversion_500ms_bps`
 - `primary_quote_reversion_1s_bps`
 - `primary_quote_reversion_5s_bps`
 - `primary_quote_reversion_10s_bps`
+
+**Optional market-microstructure add-ons, not enabled by default:**
+
+- `quoted_spread_ticks`
+- `realized_volatility`
+- `signed_turnover`
+- `trade_imbalance`
+
+Transaction-cost metrics such as `effective_spread_bps` and
+`price_impact_30s_bps` are out of scope for the default market-monitoring
+report. Existing q-template support remains available for compatibility, but
+future report implementation should not add transaction-cost sections unless the
+product scope explicitly changes.
 
 **Exit criteria:**
 
@@ -84,7 +115,7 @@ Create a Python package that generates market microstructure monitoring reports 
 
 ## Milestone 4: kdb/PyKX infrastructure
 
-**Goal:** Implement kdb client abstraction, q template loading/rendering, and kdb-backed trading calendar access.
+**Goal:** Implement kdb client abstraction, q template loading/rendering, and kdb-backed trading calendar function access.
 
 **Exit criteria:**
 
@@ -92,7 +123,7 @@ Create a Python package that generates market microstructure monitoring reports 
 - `KdbClient` can be instantiated from config.
 - Query templates can be loaded from package resources.
 - Query rendering validates required parameters.
-- Trading calendar data is read from a dedicated kdb calendar table rather than weekday assumptions.
+- Trading calendar data is read from a dedicated user-owned kdb calendar function rather than weekday assumptions.
 - Offline tests do not require live kdb.
 
 ## Milestone 5: Metric execution interface
@@ -110,9 +141,20 @@ Create a Python package that generates market microstructure monitoring reports 
 
 - `KdbMetricQueryPlanner` now isolates q rendering from execution and returns a
   `RenderedMetricQuery` before any IO occurs.
-- Each rendered plan exposes required source-table contracts, required output
-  columns, and supported optional output columns so production users can manually
-  adjust q while preserving the Python report boundary.
+- Each rendered plan exposes required raw-source contracts, required output
+  columns, and supported optional output columns so production users can provide
+  client-specific q functions while preserving the Python report boundary.
+- Production plans can call user-defined raw-data functions such as
+  `.sb.mmsr.getTrade[date;syms]` and `.sb.mmsr.getQuote[date;syms]` instead of
+  querying physical trade/quote tables directly. Production planning can also
+  call user-owned calendar, symbol-universe, and reference-data functions such as
+  `.sb.mmsr.getTradingCalendar[start;end]`, `.sb.mmsr.getSymbols[date]`, and
+  `.sb.mmsr.getRef[date;syms]` so operators control trading days, the analysis
+  universe, TOPIX/cap/lot-size reference data, and taxonomy outside MMSR code.
+  Trade and quote source rows carry per-tick `session`/`auction` state instead
+  of relying on static configured session times. The rendered q installs MMSR
+  calculations into the configured namespace, for example `.desk.mmsr`, rather
+  than calculating in the global namespace.
 - `KdbMetricRunner.run()` uses the same query plan internally and validates the
   kdb result schema before normalizing to `MetricTimeSeries`.
 - Activity, liquidity, and reversion templates share the same centralized
@@ -129,7 +171,7 @@ Create a Python package that generates market microstructure monitoring reports 
 - Section name: `Cross-Venue Toxicity`.
 - Metric label convention: `+10ms Reversion`, `+100ms Reversion`, `+500ms Reversion`, `+1s Reversion`, `+5s Reversion`, `+10s Reversion`.
 - Benchmark quote: primary exchange quote, default `TSE`.
-- Formula: `side * 10000 * (primary_mid[t + horizon] - primary_mid[t-]) / primary_mid[t-]`.
+- Formula: `side * 10000 * (primary_mid[t + horizon] - primary_mid[t-]) / primary_mid[t + horizon]`.
 - Positive value: primary mid moved in the aggressive trade direction, indicating greater adverse selection/toxicity.
 - Negative value: primary mid moved against the aggressive trade direction, indicating reversion.
 
@@ -258,8 +300,10 @@ before wiring it to a live or mock kdb connection.
   layouts.
 - The mock-data demo is a format acceptance harness, not a separate example for
   arbitrary customization.
-- Time-series data should render as real charts, such as line plots for trends,
-  while preserving accessible tabular backing data.
+- Time-series data should render as real charts, such as daily line plots across
+  reference and target periods, while preserving accessible tabular backing data.
+- Dense intraday bucket grids should default to bucket-on-x-axis line charts;
+  heatmaps should remain an explicit opt-in when matrix diagnostics are wanted.
 - Deterministic commentary must use human-friendly labels such as "opening
   auction" and "daily observation" instead of internal labels such as
   `time_bucket=AMO` or `unit=trading_day`.
@@ -277,9 +321,9 @@ before wiring it to a live or mock kdb connection.
 - Roadmap/status docs state that demo and production share the same template and
   report assembly path.
 - Time-series trend visuals render as real chart components rather than
-  placeholder-only tables.
-- Heatmap/intraday diagnostics render with visual encodings rather than
-  placeholder-only tables.
+  placeholder-only tables, including daily reference-to-target plots.
+- Intraday diagnostics render dense time-bucket line charts by default, with
+  heatmaps preserved as an explicit opt-in rather than the default view.
 - Deterministic commentary uses display labels for metrics, buckets, groups,
   and observation units.
 - Executive market overview section summarizes high-level market trends before
@@ -288,6 +332,92 @@ before wiring it to a live or mock kdb connection.
   accessible metric/help controls.
 - Tests prove mock-data reports and production-format reports use the same
   builder/template path.
+
+## Milestone 9B: production kdb source-function boundary
+
+**Goal:** Make the live production data boundary function-based and bounded, so
+users define raw trade/quote access while MMSR owns metric q calculations.
+
+**Direction from user feedback:**
+
+- Do not require direct table queries such as `trade` or `quote` for production
+  report logic.
+- User-defined raw functions, for example `.sb.mmsr.getTrade` and
+  `.sb.mmsr.getQuote`, should provide canonical raw rows and may internally
+  handle cleansing, symbol routing, HDB/RDB dispatch, and permissions.
+- MMSR-owned calculation q should be pushed into kdb under a configured
+  namespace and should not write intermediate calculations into the global
+  namespace.
+- Production orchestration must be date/chunk bounded. A full-market reference
+  period must not request multi-day raw trade/quote data at once.
+- After iteration 61 user feedback, stop expanding report-local validation
+  utilities. Keep `mmsr plan` and `mmsr preflight` as optional operator helpers;
+  future reusable validation should be designed above `mmsr` after multiple
+  reports exist.
+- Prioritize report implementation and runnable metric coverage over additional
+  validation harnesses.
+
+**Current implementation status:**
+
+- `ReportConfig` exposes kdb namespace, user raw-data functions, daily-scope
+  enforcement, and optional symbol chunk sizing.
+- `KdbMetricQueryPlanner` renders raw source-function calls and installs MMSR
+  calculation functions inside the configured q namespace.
+- `KdbProductionExecutionPlanner` builds one-day `MetricRunRequest` objects from
+  the trading calendar and optional symbol chunks.
+- `KdbProductionExecutor` executes those bounded requests through
+  `KdbMetricRunner` and combines normalized observations by metric.
+- `mmsr render` is the production CLI entrypoint. It loads YAML config, connects
+  through the PyKX-backed client, uses the kdb-backed trading calendar, executes
+  bounded target and reference runs, builds current-vs-reference comparisons,
+  and renders the canonical HTML report.
+- `mmsr plan` summarizes the production render scope without metric q
+  execution: target/reference trading days, metric count, symbol chunk count,
+  total metric steps, calculation namespace, source functions, and q-template
+  schema contracts.
+- `mmsr preflight` validates the same production config and kdb endpoint before
+  a full render by checking the configured q names, querying the calendar,
+  planning one bounded metric step, executing that one step, and validating its
+  result schema. Operators can pass `--metric` to validate one configured
+  activity, liquidity, or reversion metric family at a time.
+- `config/report.production_minimal.yaml` provides a first live-kdb config scoped
+  to the default market-monitoring metrics only: activity, displayed liquidity,
+  and cross-venue primary-quote reversion.
+- Optional market-microstructure add-ons have checked-in q-template support but
+  are intentionally not enabled in the minimal/default report config:
+  `quoted_spread_ticks` uses `liquidity_ticks.q`, `realized_volatility` uses
+  quote-mid `realized_volatility.q`, and `signed_turnover` / `trade_imbalance`
+  share feed-signed `flow.q`.
+- Transaction-cost templates (`effective_spread.q` and `price_impact.q`) are
+  kept outside the default market-monitoring report scope. Future work should
+  focus on market structure, liquidity, activity, volatility, and reversion
+  unless the report scope explicitly expands.
+
+**Exit criteria:**
+
+- `ReportConfig` exposes kdb namespace and raw-data function settings.
+- `MetricRunRequest` supports user-defined raw source functions for trades,
+  quotes, venue trades, and primary quotes.
+- `KdbMetricQueryPlanner` renders raw source-function calls and wraps MMSR
+  calculations inside the configured q namespace.
+- Input contracts describe the canonical columns returned by raw functions.
+- Tests prove invalid namespaces/functions fail before execution and source
+  functions render without direct table access.
+- `KdbProductionExecutionPlanner` and `KdbProductionExecutor` loop by trading
+  date and optional symbol chunk before running metric queries, so production
+  raw source functions are never asked for a multi-day full-market raw window.
+- A production `render` command loads config/period inputs, runs bounded target
+  and reference executor paths against the configured live kdb endpoint, and
+  renders current-vs-reference comparisons.
+- A production `plan` command prints the target/reference run scope and rendered
+  source/output schema contracts without executing metric q.
+- A production `preflight` command runs one bounded default or selected metric
+  step against the configured endpoint and validates the result schema before
+  full rendering.
+- Production reference execution derives the previous
+  `reference.lookback_days` trading days from the same kdb calendar, runs them
+  through the daily/chunk executor, and wires comparisons plus reference-target
+  trend charts into `mmsr render`.
 
 ## Milestone 10: kdb integration demo
 
@@ -300,9 +430,12 @@ before wiring it to a live or mock kdb connection.
 - The mock-kdb result is normalized into canonical `MetricTimeSeries` objects,
   compared with deterministic reference observations, and rendered through the
   same `build_market_monitor_report()` path as production-format reports.
-- Starter-template output schema contracts now cover `activity.q` and
-  `liquidity.q`, and `KdbMetricRunner` validates those contracts before
-  normalizing q results into report-boundary time series.
+- Starter-template output schema contracts now cover the default
+  market-monitoring templates (`activity.q`, `liquidity.q`, and
+  `toxicity_reversion.q`) plus optional market-microstructure add-ons
+  (`liquidity_ticks.q`, quote-mid `realized_volatility.q`, and feed-signed
+  `flow.q`). Existing transaction-cost templates remain tested for compatibility
+  but are not part of the default market report.
 - The mock-vs-live integration-test boundary remains explicit, and live-kdb
   execution remains environment-gated: `mmsr.kdb.live_smoke` now builds bounded
   `activity.q` and `liquidity.q` smoke requests from documented `MMSR_KDB_*`
@@ -362,9 +495,10 @@ without calculating metrics in the report layer or requiring live kdb access.
   key order through both the anomaly and detail page builders, allowing
   client-specific group keys such as `client_symbol`, `issue_code`, or
   `local_code` without report-layer code changes.
-- `mmsr offline-demo` now includes deterministic symbol detail series so the
-  rendered report shows per-symbol trend charts and intraday heatmaps without
-  live kdb+, PyKX, real market data, or LLM access.
+- `mmsr offline-demo` now includes deterministic reference and symbol detail
+  series so the rendered report shows reference-to-target daily trend charts and
+  dense-bucket intraday time-bucket line charts without live kdb+, PyKX, real
+  market data, or LLM access; heatmaps remain available as an explicit opt-in.
 - `build_symbol_detail_index_block()` and
   `MarketReportOptions.include_symbol_detail_index` add a compact navigation
   table on the `Symbol Anomalies` page with deterministic links to emitted
@@ -461,20 +595,21 @@ installs.
   `--max-drilldown-rows` and `--no-drilldown-page`.
 - Tox and CI include a documentation build path using `poetry install --with doc`
   and `mkdocs build --strict`.
-- CLI behavior snapshots now preserve the current argparse command surface for
+- CLI behavior snapshots preserve the Typer command surface for
   `offline-demo` and `mock-kdb-demo`: top-level help, command defaults,
   override parsing, option presence, and offline/mock-kdb safety language.
+- Both demo commands expose `--include-intraday-heatmaps` as an explicit opt-in
+  while keeping dense time-bucket line charts as the default intraday view.
+- The CLI now uses Typer as an explicit runtime dependency because the project
+  owner requested Typer ergonomics for the installed `mmsr` command.
 
 **Remaining backlog items:**
 
-- CLI implementation decision for this phase is to keep argparse. The existing
-  command surface is small, covered by behavior snapshots, and avoids adding a
-  new runtime or developer dependency solely for CLI help text.
-- Revisit Typer only if additional production commands make argparse materially
-  harder to maintain; if it is adopted later, migrate one command at a time while
-  keeping the behavior snapshots and existing render-path tests green.
-- Revisit README and MkDocs quickstart instructions after any future CLI
-  implementation change.
+- Revisit README and MkDocs quickstart instructions whenever additional
+  production commands are added.
+- Consider relocating synthetic demo entry points out of the installed package
+  after production report construction and kdb schema-contract tests fully cover
+  the same deterministic paths.
 
 **Exit criteria:**
 

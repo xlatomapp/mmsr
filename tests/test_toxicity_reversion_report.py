@@ -91,6 +91,71 @@ def test_toxicity_reversion_page_builds_horizon_curve_by_venue() -> None:
     assert page.commentary_blocks
 
 
+def test_toxicity_reversion_page_adds_reversion_comparison_table() -> None:
+    registry = build_default_registry()
+    definitions = {definition.name: definition for definition in registry.docs()}
+    series = (
+        _reversion_series(
+            "primary_quote_reversion_10ms_bps",
+            "10ms",
+            {"TSE": 0.40},
+        ),
+    )
+    comparisons = (
+        MetricComparison(
+            metric_name="primary_quote_reversion_10ms_bps",
+            value=0.40,
+            reference_value=0.15,
+            change_abs=0.25,
+            change_pct=1.6666666667,
+            z_score=2.1,
+            percentile=0.97,
+            status="alert",
+            date=date(2026, 5, 25),
+            time_bucket="09:00-09:05",
+            group={"venue": "TSE", "horizon": "10ms", "sector": "Autos"},
+            reference_sample_size=30,
+            comparison_confidence="normal",
+            comparison_method="robust",
+        ),
+        MetricComparison(
+            metric_name="turnover",
+            value=1_000_000,
+            reference_value=900_000,
+            change_abs=100_000,
+            change_pct=0.1111111111,
+            z_score=None,
+            percentile=None,
+            status="normal",
+            date=date(2026, 5, 25),
+            time_bucket="09:00-09:05",
+            group={},
+        ),
+    )
+
+    page = build_toxicity_reversion_page(
+        series,
+        definitions,
+        comparisons=comparisons,
+        options=ToxicityReversionPageOptions(max_comparison_rows=1),
+    )
+
+    assert page is not None
+    assert len(page.metric_tables) == 1
+    table = page.metric_tables[0]
+    assert table.title == "Reversion current versus reference"
+    assert "future-mid denominator convention" in (table.help_text or "")
+    assert len(table.rows) == 1
+    row = table.rows[0]
+    assert row.metric.name == "primary_quote_reversion_10ms_bps"
+    assert row.status == "alert"
+    assert row.value_text == "0.4000 bps"
+    assert row.reference_text == "0.1500 bps"
+    assert "change +0.2500 bps" in (row.change_text or "")
+    assert "Venue: TSE" in (row.group_text or "")
+    assert "Horizon: 10ms" in (row.group_text or "")
+
+
 def test_toxicity_reversion_page_returns_none_without_reversion_series() -> None:
     registry = build_default_registry()
     series = MetricTimeSeries.from_observations(
@@ -318,6 +383,10 @@ def test_market_report_inserts_toxicity_reversion_page_from_current_series() -> 
         "Intraday Detail",
     ]
     assert document.pages[1].time_series_charts[0].x_axis_label == "Horizon"
+    assert len(document.pages[1].metric_tables) == 1
+    assert document.pages[1].metric_tables[0].rows[0].metric.name == (
+        "primary_quote_reversion_10ms_bps"
+    )
     assert document.pages[2].time_series_charts == []
     assert document.pages[2].heatmaps == []
 

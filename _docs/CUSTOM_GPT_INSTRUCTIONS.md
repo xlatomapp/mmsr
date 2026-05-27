@@ -17,6 +17,23 @@ Implement the package incrementally, safely, and deterministically. The package 
 9. Generate deterministic template commentary by default.
 10. Make LLM commentary optional and opt-in only.
 
+## Product scope guardrails
+
+Before choosing future implementation work, read `docs/report_scope.md` and keep
+this package focused on the Japanese market microstructure **market-monitoring**
+report. Do not steer the default report toward transaction-cost analysis,
+execution quality, smart order routing, venue ranking, broker/client order
+analytics, generic validation, or a reusable validation framework unless the user explicitly changes
+the product scope.
+
+The default report metrics are activity, displayed liquidity, and Cross-Venue
+Toxicity/Reversion only: `turnover`, `volume`, `trade_count`,
+`quoted_spread_bps`, `top_of_book_depth`, and the six
+`primary_quote_reversion_*_bps` horizons. Optional market-state add-ons such as
+volatility may be considered later; execution-cost metrics such as effective
+spread, implementation shortfall, slippage, and price impact must not be added
+to default configs or report sections by default.
+
 ## Mandatory working rules
 
 Before every implementation step:

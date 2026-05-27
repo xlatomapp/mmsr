@@ -8,6 +8,13 @@ from typing import Any
 
 
 _DURATION_RE = re.compile(r"^[1-9][0-9]*(?:ms|s|m|h)$")
+_Q_NAMESPACE_RE = re.compile(
+    r"^\.[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$"
+)
+_Q_FUNCTION_RE = re.compile(
+    r"^(?:\.[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*|"
+    r"[A-Za-z_][A-Za-z0-9_]*)$"
+)
 _REVERSION_METRIC_RE = re.compile(
     r"^primary_quote_reversion_(?:[1-9][0-9]*(?:ms|s|m|h))_bps$"
 )
@@ -18,6 +25,28 @@ def _validate_duration(value: str, field_name: str) -> None:
         raise ValueError(
             f"{field_name} must be a duration such as '10ms', '100ms', or '1s'"
         )
+
+
+def _validate_q_namespace(value: str, field_name: str) -> None:
+    if not isinstance(value, str) or _Q_NAMESPACE_RE.fullmatch(value) is None:
+        raise ValueError(
+            f"{field_name} must be a q namespace such as '.mmsr' or '.sb.mmsr'"
+        )
+
+
+def _validate_q_function(value: str, field_name: str) -> None:
+    if not isinstance(value, str) or _Q_FUNCTION_RE.fullmatch(value) is None:
+        raise ValueError(
+            f"{field_name} must be a q function name such as 'getTrade' "
+            "or '.sb.mmsr.getTrade'"
+        )
+
+
+def _qualified_q_function(namespace: str, function_name: str, field_name: str) -> str:
+    _validate_q_function(function_name, field_name)
+    if function_name.startswith("."):
+        return function_name
+    return f"{namespace}.{function_name}"
 
 
 def _as_non_empty_tuple(
@@ -58,17 +87,193 @@ class HtmlTemplateConfig:
 
 @dataclass(frozen=True)
 class CalendarConfig:
-    """Trading calendar configuration.
+    """Trading calendar function configuration.
 
-    Production report runs should use the kdb-backed calendar source so holidays,
-    half days, emergency closures, and exchange-specific sessions come from a
-    controlled data source instead of weekday assumptions.
+    Production report runs should use a user-owned kdb calendar function so
+    holidays, half days, emergency closures, and exchange-specific sessions come
+    from a controlled data source instead of weekday assumptions.
     """
 
     source: str = "kdb"
-    table: str = "trading_calendar"
+    namespace: str = ".mmsr"
+    function: str = "getTradingCalendar"
     date_column: str = "date"
-    is_trading_day_column: str = "is_trading_day"
+
+    def __post_init__(self) -> None:
+        _validate_q_namespace(self.namespace, "calendar.namespace")
+        _validate_q_function(self.function, "calendar.function")
+        if not isinstance(self.date_column, str) or not self.date_column:
+            raise ValueError("calendar.date_column must be a non-empty string")
+
+    def qualified_function(self) -> str:
+        """Return the configured calendar function as a fully-qualified q name."""
+
+        return _qualified_q_function(
+            self.namespace,
+            self.function,
+            "calendar.function",
+        )
+
+
+@dataclass(frozen=True)
+class SymbolUniverseConfig:
+    """Symbol-universe function configuration.
+
+    Production report runs should use a user-owned kdb function to decide which
+    symbols are in scope for each trading day. The raw trade/quote functions then
+    receive only ``date`` and the selected ``syms`` vector.
+    """
+
+    source: str = "kdb"
+    namespace: str = ".mmsr"
+    function: str = "getSymbols"
+    symbol_column: str = "sym"
+
+    def __post_init__(self) -> None:
+        _validate_q_namespace(self.namespace, "symbols.namespace")
+        _validate_q_function(self.function, "symbols.function")
+        if not isinstance(self.symbol_column, str) or not self.symbol_column:
+            raise ValueError("symbols.symbol_column must be a non-empty string")
+
+    def qualified_function(self) -> str:
+        """Return the configured symbol-universe function as a qualified q name."""
+
+        return _qualified_q_function(
+            self.namespace,
+            self.function,
+            "symbols.function",
+        )
+
+
+@dataclass(frozen=True)
+class ReferenceDataConfig:
+    """Reference-data function configuration.
+
+    The user-owned reference function returns day-specific symbol metadata such
+    as TOPIX grouping, market-cap bucket, and lot size. MMSR q templates join
+    this table to raw trade/quote rows inside kdb before calculating grouped
+    metrics.
+    """
+
+    source: str = "kdb"
+    namespace: str = ".mmsr"
+    function: str = "getRef"
+    symbol_column: str = "sym"
+
+    def __post_init__(self) -> None:
+        _validate_q_namespace(self.namespace, "reference_data.namespace")
+        _validate_q_function(self.function, "reference_data.function")
+        if not isinstance(self.symbol_column, str) or not self.symbol_column:
+            raise ValueError("reference_data.symbol_column must be a non-empty string")
+
+    def qualified_function(self) -> str:
+        """Return the configured reference-data function as a qualified q name."""
+
+        return _qualified_q_function(
+            self.namespace,
+            self.function,
+            "reference_data.function",
+        )
+
+
+@dataclass(frozen=True)
+class KdbRawDataFunctionsConfig:
+    """User-defined raw data functions called by MMSR q calculations.
+
+    These functions are the production data-access boundary. Each function must
+    accept ``date`` and ``syms`` positional arguments and return a canonical raw
+    table for at most the requested day/symbol slice; MMSR-owned q templates then
+    calculate metrics inside the configured calculation namespace.
+    """
+
+    namespace: str = ".mmsr"
+    trade: str = "getTrade"
+    quote: str = "getQuote"
+    venue_trade: str | None = None
+    primary_quote: str | None = None
+    reference_data: str = "getRef"
+
+    def __post_init__(self) -> None:
+        _validate_q_namespace(self.namespace, "raw_data_functions.namespace")
+        _validate_q_function(self.trade, "raw_data_functions.trade")
+        _validate_q_function(self.quote, "raw_data_functions.quote")
+        if self.venue_trade is not None:
+            _validate_q_function(
+                self.venue_trade,
+                "raw_data_functions.venue_trade",
+            )
+        if self.primary_quote is not None:
+            _validate_q_function(
+                self.primary_quote,
+                "raw_data_functions.primary_quote",
+            )
+        _validate_q_function(
+            self.reference_data,
+            "raw_data_functions.reference_data",
+        )
+
+    def to_source_functions(self) -> dict[str, str]:
+        """Return source-function names keyed by logical template source role."""
+
+        venue_trade = self.trade if self.venue_trade is None else self.venue_trade
+        primary_quote = self.quote if self.primary_quote is None else self.primary_quote
+        return {
+            "trades": _qualified_q_function(
+                self.namespace,
+                self.trade,
+                "raw_data_functions.trade",
+            ),
+            "quotes": _qualified_q_function(
+                self.namespace,
+                self.quote,
+                "raw_data_functions.quote",
+            ),
+            "venue_trades": _qualified_q_function(
+                self.namespace,
+                venue_trade,
+                "raw_data_functions.venue_trade",
+            ),
+            "primary_quotes": _qualified_q_function(
+                self.namespace,
+                primary_quote,
+                "raw_data_functions.primary_quote",
+            ),
+            "reference_data": _qualified_q_function(
+                self.namespace,
+                self.reference_data,
+                "raw_data_functions.reference_data",
+            ),
+        }
+
+
+@dataclass(frozen=True)
+class KdbExecutionConfig:
+    """kdb execution namespace and raw source-function configuration.
+
+    Production execution is date-bounded by default. Optional symbol chunking can
+    further limit the ``syms`` vector passed to user-defined source functions
+    while MMSR-owned q calculations still run inside ``calculation_namespace``.
+    """
+
+    calculation_namespace: str = ".mmsr"
+    raw_data_functions: KdbRawDataFunctionsConfig = field(
+        default_factory=KdbRawDataFunctionsConfig
+    )
+    enforce_daily_raw_scope: bool = True
+    symbol_chunk_size: int | None = None
+
+    def __post_init__(self) -> None:
+        _validate_q_namespace(
+            self.calculation_namespace,
+            "kdb.calculation_namespace",
+        )
+        if self.symbol_chunk_size is not None and self.symbol_chunk_size < 1:
+            raise ValueError("kdb.symbol_chunk_size must be positive when provided")
+
+    def source_functions(self) -> dict[str, str]:
+        """Return the configured raw data source-function mapping."""
+
+        return self.raw_data_functions.to_source_functions()
 
 
 @dataclass(frozen=True)
@@ -256,11 +461,14 @@ class ReportConfig:
     commentary_mode: str = "template"
     html: HtmlTemplateConfig = field(default_factory=HtmlTemplateConfig)
     calendar: CalendarConfig = field(default_factory=CalendarConfig)
+    symbols: SymbolUniverseConfig = field(default_factory=SymbolUniverseConfig)
+    reference_data: ReferenceDataConfig = field(default_factory=ReferenceDataConfig)
     intraday: IntradayConfig = field(default_factory=IntradayConfig)
     reference: ReferenceComparisonConfig = field(
         default_factory=ReferenceComparisonConfig
     )
     toxicity: ToxicityConfig = field(default_factory=ToxicityConfig)
+    kdb: KdbExecutionConfig = field(default_factory=KdbExecutionConfig)
 
     def metric_parameters_for(self, metric_name: str) -> dict[str, Any]:
         """Return metric-family parameters for a configured metric run."""

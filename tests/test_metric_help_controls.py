@@ -1,10 +1,14 @@
-from mmsr.examples import build_offline_demo_report
+from mmsr.examples import OfflineDemoReportOptions, build_offline_demo_report
 from mmsr.report.components import HtmlBlock, ReportDocument, ReportPage
 from mmsr.report.render_html import render_report
 
 
 def test_report_metric_help_controls_are_expandable_not_title_only_buttons() -> None:
-    html = render_report(build_offline_demo_report())
+    html = render_report(
+        build_offline_demo_report(
+            options=OfflineDemoReportOptions(include_intraday_heatmaps=True)
+        )
+    )
 
     assert '<details class="metric-help">' in html
     assert '<summary class="metric-help__summary metric-info"' in html

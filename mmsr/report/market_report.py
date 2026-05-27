@@ -30,7 +30,8 @@ from mmsr.report.sections import (
     build_comparison_metric_table,
     build_comparison_report_page,
     build_heatmap,
-    build_time_series_chart,
+    build_intraday_time_bucket_chart,
+    build_reference_target_trend_chart,
 )
 from mmsr.report.symbols import (
     DEFAULT_SYMBOL_GROUP_KEYS,
@@ -65,6 +66,7 @@ class MarketReportInput:
     metric_definitions: Mapping[str, MetricDefinition]
     current_series: tuple[MetricTimeSeries, ...]
     comparisons: tuple[MetricComparison, ...]
+    reference_series: tuple[MetricTimeSeries, ...] = ()
     symbol_series: tuple[MetricTimeSeries, ...] = ()
 
 
@@ -92,6 +94,15 @@ class MarketReportOptions:
         "Production runs source these rows from kdb-backed metric output; mock "
         "demo runs use deterministic fixture rows with the same schema."
     )
+    daily_trend_page_title: str = "Reference and Target Daily Trends"
+    daily_trend_help_text: str = (
+        "Daily line plots built from already-normalized reference observations "
+        "followed by target-period observations. The x-axis is trading day; "
+        "intraday bucket and configured group context are carried as chart "
+        "series so the trend runs through the reference and target periods."
+    )
+    include_daily_trend_page: bool = True
+    include_intraday_heatmaps: bool = False
     summary_scope_label: str = "report scope"
     include_metric_definitions_appendix: bool = True
     max_metric_cards: int = 6
@@ -169,6 +180,8 @@ class MarketReportOptions:
         )
         _require_non_empty(self.comparison_help_text, "comparison_help_text")
         _require_non_empty(self.detail_help_text, "detail_help_text")
+        _require_non_empty(self.daily_trend_page_title, "daily_trend_page_title")
+        _require_non_empty(self.daily_trend_help_text, "daily_trend_help_text")
         _require_non_empty(self.summary_scope_label, "summary_scope_label")
         _require_non_empty(self.symbol_anomaly_page_title, "symbol_anomaly_page_title")
         _require_non_empty(
@@ -255,6 +268,13 @@ def build_market_monitor_report(
     )
 
     pages = [summary_page]
+    daily_trend_page = _build_daily_trend_page(
+        report_input,
+        definitions,
+        options=resolved_options,
+    )
+    if daily_trend_page is not None:
+        pages.append(daily_trend_page)
     toxicity_reversion_page = _build_toxicity_reversion_page(
         report_input,
         definitions,
@@ -358,6 +378,46 @@ def _build_summary_page(
     )
 
 
+def _build_daily_trend_page(
+    report_input: MarketReportInput,
+    definitions: Mapping[str, MetricDefinition],
+    *,
+    options: MarketReportOptions,
+) -> ReportPage | None:
+    if not options.include_daily_trend_page or not report_input.reference_series:
+        return None
+
+    reference_by_metric = {
+        series.metric_name: series for series in report_input.reference_series
+    }
+    charts = []
+    for target_series in report_input.current_series:
+        if _is_toxicity_reversion_metric(target_series.metric_name):
+            continue
+        definition = _require_definition(target_series.metric_name, definitions)
+        charts.append(
+            build_reference_target_trend_chart(
+                f"{definition.label} daily reference-to-target trend",
+                reference_series=reference_by_metric.get(target_series.metric_name),
+                target_series=target_series,
+                metric_definition=definition,
+                group_by=("market_cap_bucket",),
+                y_axis_label=_metric_axis_label(definition),
+                help_text=options.daily_trend_help_text,
+                max_points=options.max_chart_points,
+                x_axis_label="Trading day",
+            )
+        )
+
+    if not charts:
+        return None
+
+    return ReportPage(
+        title=options.daily_trend_page_title.strip(),
+        time_series_charts=charts,
+    )
+
+
 def _build_toxicity_reversion_page(
     report_input: MarketReportInput,
     definitions: Mapping[str, MetricDefinition],
@@ -369,6 +429,7 @@ def _build_toxicity_reversion_page(
     return build_toxicity_reversion_page(
         report_input.current_series,
         definitions,
+        comparisons=report_input.comparisons,
         options=ToxicityReversionPageOptions(
             title=options.toxicity_reversion_page_title,
             help_text=options.toxicity_reversion_help_text,
@@ -449,6 +510,7 @@ def _build_symbol_detail_pages(
             symbol_group_keys=options.symbol_group_keys,
             max_chart_points=options.max_chart_points,
             max_heatmap_cells=options.max_heatmap_cells,
+            include_heatmaps=options.include_intraday_heatmaps,
         ),
     )
 
@@ -506,8 +568,8 @@ def _build_detail_page(
     for series in current_series:
         definition = _require_definition(series.metric_name, definitions)
         charts.append(
-            build_time_series_chart(
-                f"{definition.label} current observations",
+            build_intraday_time_bucket_chart(
+                f"{definition.label} intraday time-bucket trend",
                 series,
                 definition,
                 group_by=("market_cap_bucket",),
@@ -516,17 +578,18 @@ def _build_detail_page(
                 max_points=options.max_chart_points,
             )
         )
-        heatmaps.append(
-            build_heatmap(
-                f"{definition.label} bucket × market-cap view",
-                series,
-                definition,
-                group_by=("market_cap_bucket",),
-                y_axis_label="Market cap bucket",
-                help_text=options.detail_help_text,
-                max_cells=options.max_heatmap_cells,
+        if options.include_intraday_heatmaps:
+            heatmaps.append(
+                build_heatmap(
+                    f"{definition.label} bucket × market-cap view",
+                    series,
+                    definition,
+                    group_by=("market_cap_bucket",),
+                    y_axis_label="Market cap bucket",
+                    help_text=options.detail_help_text,
+                    max_cells=options.max_heatmap_cells,
+                )
             )
-        )
 
     return ReportPage(
         title=options.detail_page_title.strip(),

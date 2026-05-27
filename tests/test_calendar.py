@@ -14,15 +14,17 @@ class FakeKdbClient:
         return {"date": [date(2026, 5, 1), date(2026, 5, 7)]}
 
 
-def test_kdb_trading_calendar_source_queries_dedicated_calendar_table() -> None:
+def test_kdb_trading_calendar_source_calls_configured_calendar_function() -> None:
     client = FakeKdbClient()
-    source = KdbTradingCalendarSource(client=client)
+    source = KdbTradingCalendarSource(
+        client=client,
+        function=".sb.mmsr.getTradingCalendar",
+    )
 
     result = source.trading_days(date(2026, 5, 1), date(2026, 5, 10))
 
     assert result == [date(2026, 5, 1), date(2026, 5, 7)]
-    assert "from trading_calendar" in client.query
-    assert "is_trading_day" in client.query
+    assert ".sb.mmsr.getTradingCalendar[start;end]" in client.query
     assert client.args == (date(2026, 5, 1), date(2026, 5, 10))
 
 

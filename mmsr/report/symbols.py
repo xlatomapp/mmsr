@@ -19,7 +19,7 @@ from mmsr.metrics.base import MetricDefinition
 from mmsr.metrics.results import MetricComparison, MetricObservation, MetricTimeSeries
 from mmsr.presentation.labels import format_comparison_scope_label
 from mmsr.report.components import HtmlBlock, MetricTable, MetricTableRow, ReportPage
-from mmsr.report.sections import build_heatmap, build_time_series_chart
+from mmsr.report.sections import build_heatmap, build_intraday_time_bucket_chart
 
 
 DEFAULT_SYMBOL_GROUP_KEYS: tuple[str, ...] = (
@@ -76,6 +76,7 @@ class SymbolDetailPageOptions:
     heatmap_group_by: tuple[str, ...] = ("market_cap_bucket",)
     max_chart_points: int | None = None
     max_heatmap_cells: int | None = None
+    include_heatmaps: bool = False
 
     def __post_init__(self) -> None:
         if not self.title_template.strip():
@@ -249,8 +250,8 @@ def build_symbol_detail_pages(
         for series in symbol_series:
             definition = definitions[series.metric_name]
             charts.append(
-                build_time_series_chart(
-                    f"{definition.label} trend for symbol {symbol}",
+                build_intraday_time_bucket_chart(
+                    f"{definition.label} intraday time-bucket trend for symbol {symbol}",
                     series,
                     definition,
                     group_by=resolved_options.chart_group_by,
@@ -259,17 +260,18 @@ def build_symbol_detail_pages(
                     max_points=resolved_options.max_chart_points,
                 )
             )
-            heatmaps.append(
-                build_heatmap(
-                    f"{definition.label} intraday diagnostics for symbol {symbol}",
-                    series,
-                    definition,
-                    group_by=resolved_options.heatmap_group_by,
-                    y_axis_label="Group",
-                    help_text=resolved_options.help_text,
-                    max_cells=resolved_options.max_heatmap_cells,
+            if resolved_options.include_heatmaps:
+                heatmaps.append(
+                    build_heatmap(
+                        f"{definition.label} intraday diagnostics for symbol {symbol}",
+                        series,
+                        definition,
+                        group_by=resolved_options.heatmap_group_by,
+                        y_axis_label="Group",
+                        help_text=resolved_options.help_text,
+                        max_cells=resolved_options.max_heatmap_cells,
+                    )
                 )
-            )
 
         pages.append(
             ReportPage(

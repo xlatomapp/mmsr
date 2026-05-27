@@ -16,7 +16,7 @@ from mmsr.report.metric_docs import (
     collect_metric_definitions_from_pages,
 )
 from mmsr.report.render_html import render_report, render_time_series_chart
-from mmsr.report.sections import build_time_series_chart
+from mmsr.report.sections import build_intraday_time_bucket_chart, build_reference_target_trend_chart, build_time_series_chart
 
 
 QUOTED_SPREAD_BPS = next(
@@ -112,6 +112,99 @@ def test_build_time_series_chart_preserves_observation_order_and_bucket_context(
     assert chart.points[0].value == 12.4
     assert chart.points[1].value is None
 
+
+
+
+def test_build_intraday_time_bucket_chart_uses_bucket_only_x_axis() -> None:
+    series = MetricTimeSeries(
+        metric_name="quoted_spread_bps",
+        observations=(
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 22),
+                time_bucket="AMO",
+                group={"market_cap_bucket": "Large"},
+                value=11.2,
+                metadata={"sample_size": 160},
+            ),
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 22),
+                time_bucket="09:00-09:01",
+                group={"market_cap_bucket": "Large"},
+                value=12.1,
+            ),
+        ),
+    )
+
+    chart = build_intraday_time_bucket_chart(
+        "Quoted Spread intraday time-bucket trend",
+        series,
+        QUOTED_SPREAD_BPS,
+        group_by=["market_cap_bucket"],
+    )
+
+    assert chart.x_axis_label == "Intraday time bucket"
+    assert [point.x_text for point in chart.points] == [
+        "AM opening auction",
+        "09:00–09:01",
+    ]
+    assert [point.date_text for point in chart.points] == [
+        "2026-05-22",
+        "2026-05-22",
+    ]
+    assert chart.points[0].series_text == "Market cap bucket: Large cap"
+    assert chart.points[0].metadata_text == "Sample size: 160"
+
+
+def test_build_reference_target_trend_chart_spans_reference_and_target_dates() -> None:
+    reference_series = MetricTimeSeries(
+        metric_name="quoted_spread_bps",
+        observations=(
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 20),
+                time_bucket="AMO",
+                group={"market_cap_bucket": "Large"},
+                value=10.5,
+            ),
+        ),
+    )
+    target_series = MetricTimeSeries(
+        metric_name="quoted_spread_bps",
+        observations=(
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 22),
+                time_bucket="AMO",
+                group={"market_cap_bucket": "Large"},
+                value=11.2,
+            ),
+        ),
+    )
+
+    chart = build_reference_target_trend_chart(
+        "Quoted Spread daily reference-to-target trend",
+        reference_series=reference_series,
+        target_series=target_series,
+        metric_definition=QUOTED_SPREAD_BPS,
+        group_by=["market_cap_bucket"],
+    )
+
+    assert chart.x_axis_label == "Trading day"
+    assert [point.x_text for point in chart.points] == [
+        "2026-05-20",
+        "2026-05-22",
+    ]
+    assert [point.time_bucket_text for point in chart.points] == [
+        "AM opening auction",
+        "AM opening auction",
+    ]
+    assert chart.points[0].series_text == (
+        "Market cap bucket: Large cap, Intraday bucket: AM opening auction"
+    )
+    assert "Period: reference" in chart.points[0].metadata_text
+    assert "Period: target" in chart.points[1].metadata_text
 
 def test_report_renders_time_series_charts_and_appendix_collects_definition() -> None:
     document = ReportDocument(

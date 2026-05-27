@@ -17,8 +17,8 @@ def _valid_activity_env() -> dict[str, str]:
     return {
         "MMSR_KDB_HOST": "localhost",
         "MMSR_KDB_PORT": "5000",
-        "MMSR_KDB_TRADES_TABLE": "trade",
-        "MMSR_KDB_CALENDAR_TABLE": "trading_calendar",
+        "MMSR_KDB_TRADE_FUNCTION": ".sb.mmsr.getTrade",
+        "MMSR_KDB_CALENDAR_FUNCTION": ".sb.mmsr.getTradingCalendar",
         "MMSR_KDB_TEST_DATE": "2026-05-01",
     }
 
@@ -27,8 +27,8 @@ def _valid_liquidity_env() -> dict[str, str]:
     return {
         "MMSR_KDB_HOST": "localhost",
         "MMSR_KDB_PORT": "5000",
-        "MMSR_KDB_QUOTES_TABLE": "quote",
-        "MMSR_KDB_CALENDAR_TABLE": "trading_calendar",
+        "MMSR_KDB_QUOTE_FUNCTION": ".sb.mmsr.getQuote",
+        "MMSR_KDB_CALENDAR_FUNCTION": ".sb.mmsr.getTradingCalendar",
         "MMSR_KDB_TEST_DATE": "2026-05-01",
     }
 
@@ -57,8 +57,8 @@ def test_live_activity_smoke_config_parses_env_and_optional_credentials() -> Non
 
     assert config.host == "localhost"
     assert config.port == 5000
-    assert config.trades_table == "trade"
-    assert config.calendar_table == "trading_calendar"
+    assert config.trade_function == ".sb.mmsr.getTrade"
+    assert config.calendar_function == ".sb.mmsr.getTradingCalendar"
     assert config.test_date == date(2026, 5, 1)
     assert config.username == "user"
     assert config.password == "secret"
@@ -78,8 +78,8 @@ def test_live_liquidity_smoke_config_parses_env_and_optional_credentials() -> No
 
     assert config.host == "localhost"
     assert config.port == 5000
-    assert config.quotes_table == "quote"
-    assert config.calendar_table == "trading_calendar"
+    assert config.quote_function == ".sb.mmsr.getQuote"
+    assert config.calendar_function == ".sb.mmsr.getTradingCalendar"
     assert config.test_date == date(2026, 5, 1)
     assert config.username == "user"
     assert config.password == "secret"
@@ -124,7 +124,10 @@ def test_live_activity_smoke_config_builds_bounded_activity_request() -> None:
     assert request.period.end_date == date(2026, 5, 1)
     assert request.period.bucket.value == "5m"
     assert request.group_by == ["sym"]
-    assert request.table_names == {"trades": "trade"}
+    assert request.source_functions == {
+        "trades": ".sb.mmsr.getTrade",
+        "reference_data": ".sb.mmsr.getRef",
+    }
     assert request.parameters == {"symbol": "7203"}
 
 
@@ -139,7 +142,10 @@ def test_live_liquidity_smoke_config_builds_bounded_liquidity_request() -> None:
     assert request.period.end_date == date(2026, 5, 1)
     assert request.period.bucket.value == "5m"
     assert request.group_by == ["sym"]
-    assert request.table_names == {"quotes": "quote"}
+    assert request.source_functions == {
+        "quotes": ".sb.mmsr.getQuote",
+        "reference_data": ".sb.mmsr.getRef",
+    }
     assert request.parameters == {"symbol": "7203"}
 
 

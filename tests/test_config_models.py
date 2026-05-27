@@ -3,8 +3,11 @@ from mmsr.config.models import (
     CalendarConfig,
     HtmlTemplateConfig,
     IntradayConfig,
+    KdbExecutionConfig,
+    KdbRawDataFunctionsConfig,
     ReferenceComparisonConfig,
     ReportConfig,
+    SymbolUniverseConfig,
     ToxicityConfig,
     ToxicityEventClusteringConfig,
     ToxicityFiltersConfig,
@@ -35,6 +38,7 @@ def test_report_config_defaults_to_kdb_calendar_and_auction_buckets() -> None:
 
     assert isinstance(config.calendar, CalendarConfig)
     assert config.calendar.source == "kdb"
+    assert config.calendar.qualified_function() == ".mmsr.getTradingCalendar"
     assert isinstance(config.intraday, IntradayConfig)
     assert config.intraday.auction_buckets.enabled is True
     assert config.intraday.auction_buckets.morning_open == "AMO"
@@ -166,3 +170,71 @@ def test_toxicity_config_populates_metric_run_parameters() -> None:
         "primary_quote_reversion_1s_bps",
     )
     assert config.metric_parameters_for("turnover") == {}
+
+
+def test_kdb_config_defaults_to_namespace_scoped_raw_data_functions() -> None:
+    config = ReportConfig(title="Daily Monitor", metrics=["turnover"])
+
+    assert isinstance(config.kdb, KdbExecutionConfig)
+    assert config.kdb.calculation_namespace == ".mmsr"
+    assert config.kdb.enforce_daily_raw_scope is True
+    assert config.kdb.symbol_chunk_size is None
+    assert config.kdb.source_functions() == {
+        "trades": ".mmsr.getTrade",
+        "quotes": ".mmsr.getQuote",
+        "reference_data": ".mmsr.getRef",
+        "venue_trades": ".mmsr.getTrade",
+        "primary_quotes": ".mmsr.getQuote",
+    }
+    assert isinstance(config.symbols, SymbolUniverseConfig)
+    assert config.symbols.qualified_function() == ".mmsr.getSymbols"
+
+
+def test_kdb_raw_data_functions_allow_user_namespace_and_role_overrides() -> None:
+    config = KdbExecutionConfig(
+        calculation_namespace=".sb.mmsrCalc",
+        raw_data_functions=KdbRawDataFunctionsConfig(
+            namespace=".sb.mmsr",
+            trade="getCleanTrade",
+            quote="getCleanQuote",
+            venue_trade=".feed.route.getVenueTrade",
+            primary_quote="getPrimaryQuote",
+        ),
+    )
+
+    assert config.source_functions() == {
+        "trades": ".sb.mmsr.getCleanTrade",
+        "quotes": ".sb.mmsr.getCleanQuote",
+        "reference_data": ".sb.mmsr.getRef",
+        "venue_trades": ".feed.route.getVenueTrade",
+        "primary_quotes": ".sb.mmsr.getPrimaryQuote",
+    }
+
+
+def test_kdb_namespace_config_rejects_global_or_invalid_names() -> None:
+    for factory, expected in [
+        (lambda: CalendarConfig(namespace="mmsr"), "calendar.namespace"),
+        (
+            lambda: CalendarConfig(namespace=".sb.mmsr", function="bad-name"),
+            "calendar.function",
+        ),
+        (lambda: KdbExecutionConfig(calculation_namespace="mmsr"), "calculation_namespace"),
+        (
+            lambda: KdbExecutionConfig(symbol_chunk_size=0),
+            "kdb.symbol_chunk_size",
+        ),
+        (
+            lambda: KdbRawDataFunctionsConfig(namespace="mmsr"),
+            "raw_data_functions.namespace",
+        ),
+        (
+            lambda: KdbRawDataFunctionsConfig(namespace=".sb.mmsr", trade="bad-name"),
+            "raw_data_functions.trade",
+        ),
+    ]:
+        try:
+            factory()
+        except ValueError as exc:
+            assert expected in str(exc)
+        else:
+            raise AssertionError(f"Expected invalid kdb namespace config for {expected}")

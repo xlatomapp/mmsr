@@ -44,6 +44,14 @@ class OfflineDemoReportOptions:
         "Mock fixture observations are already normalized and use the same "
         "report-boundary schema expected from production kdb-backed metric runs."
     )
+    daily_trend_page_title: str = "Reference and Target Daily Trends"
+    daily_trend_help_text: str = (
+        "Mock reference observations followed by the target report date. The "
+        "line visual keeps the trading day on the x-axis and carries bucket and "
+        "market-cap context as series."
+    )
+    include_daily_trend_page: bool = True
+    include_intraday_heatmaps: bool = False
     include_metric_definitions_appendix: bool = True
     max_metric_cards: int = 6
     max_comments: int = 5
@@ -62,6 +70,8 @@ class OfflineDemoReportOptions:
         _require_non_empty(self.comparison_table_title, "comparison_table_title")
         _require_non_empty(self.comparison_help_text, "comparison_help_text")
         _require_non_empty(self.detail_help_text, "detail_help_text")
+        _require_non_empty(self.daily_trend_page_title, "daily_trend_page_title")
+        _require_non_empty(self.daily_trend_help_text, "daily_trend_help_text")
         _require_non_negative(self.max_metric_cards, "max_metric_cards")
         _require_non_negative(self.max_comments, "max_comments")
         _require_optional_non_negative(self.max_table_rows, "max_table_rows")
@@ -81,6 +91,10 @@ class OfflineDemoReportOptions:
             comparison_table_title=self.comparison_table_title,
             comparison_help_text=self.comparison_help_text,
             detail_help_text=self.detail_help_text,
+            daily_trend_page_title=self.daily_trend_page_title,
+            daily_trend_help_text=self.daily_trend_help_text,
+            include_daily_trend_page=self.include_daily_trend_page,
+            include_intraday_heatmaps=self.include_intraday_heatmaps,
             summary_scope_label="mock data sample",
             include_metric_definitions_appendix=(
                 self.include_metric_definitions_appendix
@@ -114,6 +128,7 @@ def build_offline_demo_report(
             metric_definitions=sample.metric_definitions,
             current_series=sample.current_series,
             comparisons=sample.comparisons,
+            reference_series=sample.reference_series,
             symbol_series=sample.symbol_current_series,
         ),
         options=resolved_options.to_market_report_options(),

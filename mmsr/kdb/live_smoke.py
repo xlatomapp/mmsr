@@ -10,28 +10,28 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import date, time
+from datetime import date
 import os
 
 from mmsr.kdb.client import KdbClient, KdbConfig
 from mmsr.kdb.runner import KdbMetricRunner, MetricRunRequest
 from mmsr.metrics import build_default_registry
 from mmsr.metrics.results import MetricTimeSeries
-from mmsr.periods import IntradayBucketSpec, ReportPeriod, TradingSession
+from mmsr.periods import IntradayBucketSpec, ReportPeriod
 
 
 REQUIRED_LIVE_ACTIVITY_SMOKE_ENV_VARS: tuple[str, ...] = (
     "MMSR_KDB_HOST",
     "MMSR_KDB_PORT",
-    "MMSR_KDB_TRADES_TABLE",
-    "MMSR_KDB_CALENDAR_TABLE",
+    "MMSR_KDB_TRADE_FUNCTION",
+    "MMSR_KDB_CALENDAR_FUNCTION",
     "MMSR_KDB_TEST_DATE",
 )
 REQUIRED_LIVE_LIQUIDITY_SMOKE_ENV_VARS: tuple[str, ...] = (
     "MMSR_KDB_HOST",
     "MMSR_KDB_PORT",
-    "MMSR_KDB_QUOTES_TABLE",
-    "MMSR_KDB_CALENDAR_TABLE",
+    "MMSR_KDB_QUOTE_FUNCTION",
+    "MMSR_KDB_CALENDAR_FUNCTION",
     "MMSR_KDB_TEST_DATE",
 )
 
@@ -40,16 +40,18 @@ REQUIRED_LIVE_LIQUIDITY_SMOKE_ENV_VARS: tuple[str, ...] = (
 class LiveKdbActivitySmokeConfig:
     """Configuration for the smallest live ``activity.q`` smoke test.
 
-    ``calendar_table`` is retained even though the first smoke request does not
-    query it directly. Requiring the variable keeps the harness aligned with the
-    documented production boundary: report dates must come from a dedicated kdb
-    calendar source before a live environment is considered ready.
+    ``calendar_function`` is retained even though the first smoke request does
+    not query it directly. Requiring the variable keeps the harness aligned with
+    the documented production boundary: report dates must come from a dedicated
+    user-owned kdb calendar function before a live environment is considered
+    ready.
     """
 
     host: str
     port: int
-    trades_table: str
-    calendar_table: str
+    trade_function: str
+    calendar_function: str
+    reference_function: str
     test_date: date
     username: str | None = None
     password: str | None = None
@@ -86,8 +88,10 @@ class LiveKdbActivitySmokeConfig:
         return cls(
             host=_required_env_value(source, "MMSR_KDB_HOST"),
             port=_parse_port(_required_env_value(source, "MMSR_KDB_PORT")),
-            trades_table=_required_env_value(source, "MMSR_KDB_TRADES_TABLE"),
-            calendar_table=_required_env_value(source, "MMSR_KDB_CALENDAR_TABLE"),
+            trade_function=_required_env_value(source, "MMSR_KDB_TRADE_FUNCTION"),
+            calendar_function=_required_env_value(source, "MMSR_KDB_CALENDAR_FUNCTION"),
+            reference_function=_optional_env_value(source, "MMSR_KDB_REF_FUNCTION")
+            or ".sb.mmsr.getRef",
             test_date=_parse_test_date(
                 _required_env_value(source, "MMSR_KDB_TEST_DATE")
             ),
@@ -121,7 +125,10 @@ class LiveKdbActivitySmokeConfig:
             metric=registry.get("turnover"),
             period=_single_day_period(self.test_date, self.bucket_size),
             group_by=group_by,
-            table_names={"trades": self.trades_table},
+            source_functions={
+                "trades": self.trade_function,
+                "reference_data": self.reference_function,
+            },
             parameters=parameters,
         )
 
@@ -131,14 +138,15 @@ class LiveKdbLiquiditySmokeConfig:
     """Configuration for the smallest live ``liquidity.q`` smoke test.
 
     The liquidity smoke mirrors the activity smoke, but it reads the documented
-    quotes table and requests ``quoted_spread_bps`` so live validation covers the
-    starter quote template and its output schema contract.
+    quote function and requests ``quoted_spread_bps`` so live validation covers
+    the starter quote template and its output schema contract.
     """
 
     host: str
     port: int
-    quotes_table: str
-    calendar_table: str
+    quote_function: str
+    calendar_function: str
+    reference_function: str
     test_date: date
     username: str | None = None
     password: str | None = None
@@ -175,8 +183,10 @@ class LiveKdbLiquiditySmokeConfig:
         return cls(
             host=_required_env_value(source, "MMSR_KDB_HOST"),
             port=_parse_port(_required_env_value(source, "MMSR_KDB_PORT")),
-            quotes_table=_required_env_value(source, "MMSR_KDB_QUOTES_TABLE"),
-            calendar_table=_required_env_value(source, "MMSR_KDB_CALENDAR_TABLE"),
+            quote_function=_required_env_value(source, "MMSR_KDB_QUOTE_FUNCTION"),
+            calendar_function=_required_env_value(source, "MMSR_KDB_CALENDAR_FUNCTION"),
+            reference_function=_optional_env_value(source, "MMSR_KDB_REF_FUNCTION")
+            or ".sb.mmsr.getRef",
             test_date=_parse_test_date(
                 _required_env_value(source, "MMSR_KDB_TEST_DATE")
             ),
@@ -205,7 +215,10 @@ class LiveKdbLiquiditySmokeConfig:
             metric=registry.get("quoted_spread_bps"),
             period=_single_day_period(self.test_date, self.bucket_size),
             group_by=group_by,
-            table_names={"quotes": self.quotes_table},
+            source_functions={
+                "quotes": self.quote_function,
+                "reference_data": self.reference_function,
+            },
             parameters=parameters,
         )
 
@@ -240,10 +253,6 @@ def _single_day_period(test_date: date, bucket_size: str) -> ReportPeriod:
     return ReportPeriod(
         start_date=test_date,
         end_date=test_date,
-        sessions=[
-            TradingSession(start=time(9, 0), end=time(11, 30), name="AM"),
-            TradingSession(start=time(12, 30), end=time(15, 30), name="PM"),
-        ],
         bucket=IntradayBucketSpec(bucket_size),
     )
 

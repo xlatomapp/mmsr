@@ -1,9 +1,14 @@
 # Production readiness checklist
 
 Use this checklist before adding richer sector-specific offline fixtures or
-running live production validation. The deterministic offline and mock-kdb demos
-prove report shape only; they do not confirm client taxonomy, live table names,
-permissions, data freshness, or production schema compatibility.
+running live production checks. The deterministic offline and mock-kdb demos
+prove report shape only; they do not confirm client taxonomy, live raw-data
+functions, permissions, data freshness, or production schema compatibility.
+
+Validation utilities inside `mmsr` should remain small and report-specific. A
+common validation framework should be designed later, above this package, after
+several reports expose repeated source, calendar, entitlement, and freshness
+checks.
 
 ## Decision gate
 
@@ -12,20 +17,59 @@ an agreed source of truth, and a small bounded validation slice. The default
 validation slice should be one known-good trading date and, where practical, one
 liquid test symbol.
 
+Before a full `mmsr render` run, prefer
+`config/report.production_minimal.yaml` for the first live-kdb attempt because it
+contains only the default market-monitoring metrics for this report: activity,
+displayed liquidity, and cross-venue primary-quote reversion. Execute
+`mmsr plan` against the same config and kdb endpoint when operators need a
+no-metric-IO review of target/reference trading days, metric count, symbol chunk
+count, and source-function contracts. `mmsr preflight` remains an optional
+bounded sample check; do not expand it into a general validation framework inside
+this report package. A full render executes both the target period and the
+`reference.lookback_days` trading-day window through the same daily/chunk
+executor before building current-vs-reference comparison facts. Transaction-cost
+metrics such as effective spread and price impact are intentionally not part of
+the default market report.
+
+## Report scope gate
+
+Before adding a production checklist item, q template, config metric, or report
+section, review [report scope guardrails](report_scope.md) (`docs/report_scope.md`).
+The default package output is a market-monitoring report. transaction-cost analysis, execution quality, implementation shortfall,
+slippage, price impact, smart-order-routing, and venue-ranking features are out
+of scope for default production readiness. generic validation and reusable
+validation frameworks should also remain outside this package until
+several reports expose repeated validation needs.
+
+
 ## kdb query and schema boundary
 
 Before manually changing a q template for production, render a
-`KdbMetricQueryPlanner` plan for the target metric, period, grouping, table
-names, and metric parameters. Treat the plan as the source of truth for the
-Python-facing kdb boundary.
+`KdbMetricQueryPlanner` plan for the target metric, period, grouping, raw-data
+source functions, calculation namespace, and metric parameters. Treat the plan
+as the source of truth for the Python-facing kdb boundary. Production plans
+should call user-owned functions with MMSR's fixed positional arguments, such as
+`.sb.mmsr.getTrade[date;syms]`, `.sb.mmsr.getQuote[date;syms]`,
+`.sb.mmsr.getRef[date;syms]`, `.sb.mmsr.getSymbols[date]`, and
+`.sb.mmsr.getTradingCalendar[start;end]`; those functions may internally query
+physical tables, cleanse rows, route between HDB/RDB, or map client taxonomy.
+Production configs should not hard-code static session times. Trade and quote
+rows must carry per-tick `session` and `auction` columns so MMSR can derive
+continuous intraday buckets and auction buckets inside kdb.
 
 | Requirement | Why it matters | Minimum evidence |
 | --- | --- | --- |
-| Source-table contract reviewed | Manual q edits can use client-specific table names, but required source columns must still be available before filtering, joining, or grouping. | `RenderedMetricQuery.input_contracts` reviewed against `meta table` or equivalent schema evidence. |
+| Raw source-function contract reviewed | User-owned source functions can use client-specific table names internally, but required canonical columns must still be returned before MMSR filtering, joining, or grouping. The default report requires activity, displayed-liquidity, and primary-quote reversion fields. Trade and quote rows must include `session` and `auction`; reversion trades require `aggressor_side` with buy=1 and sell=-1. | `RenderedMetricQuery.input_contracts` reviewed against `meta .sb.mmsr.getTrade[date;syms]`, `meta .sb.mmsr.getQuote[date;syms]`, or equivalent schema evidence. |
+| Symbol-universe function confirmed | Operators should control the report universe without editing MMSR code or raw source functions. | Configured `.sb.mmsr.getSymbols[date]` returns the intended liquid/security universe for each target and reference trading day. | 
+| Reference-data function confirmed | TOPIX bucket, market-cap group, lot size, and any configured grouping taxonomy should come from a user-owned source of truth. | Configured `.sb.mmsr.getRef[date;syms]` returns `date`, `sym`, `topix_bucket`, `market_cap_bucket`, `lot_size`, and any additional configured grouping columns. |
+| Daily execution scope confirmed | Full-market target and reference periods must not request multi-day raw trade/quote windows. | `KdbProductionExecutor` or `KdbProductionExecutionPlanner` shows one `MetricRunRequest` per trading day for both `run()` and `run_reference()`; each raw request is scoped to one `date` and one `syms` vector. |
+| Plan summary reviewed | Operators should know live run scope before metric q calls are made. | `mmsr plan` or `KdbProductionExecutor.build_plan_summary()` reports target/reference trading days, metric count, symbol chunk count, total metric steps, calculation namespace, symbol-universe function, source functions, and schema contracts. |
+| Reference lookback confirmed | Reference comparisons need a calendar-derived trading-day window, not a weekday or raw calendar-day approximation. | `KdbProductionReferenceWindow.trading_days` contains the previous `reference.lookback_days` available trading days and `MetricComparison.reference_sample_size` reflects daily reference observation units. |
+| Symbol chunking policy confirmed | Some one-day full-market slices may still be too large without client-side or server-side partitioning. | Configured `kdb.symbol_chunk_size` splits the `syms` vector returned by the symbol-universe function before raw source calls. |
 | Output schema preserved | The report path normalizes only after required output columns are present. | `RenderedMetricQuery.required_output_columns` match the columns returned by the final q select. |
 | Optional diagnostics documented | Optional columns can improve report ranking/auditability but must not become hidden requirements. | `RenderedMetricQuery.optional_output_columns` reviewed; for reversion this currently includes `context_sort_order`. |
 | Result validation run before report rendering | Schema mismatches should fail at the kdb boundary, not inside report components. | `RenderedMetricQuery.validate_result_schema(result)` or `KdbMetricRunner.run()` succeeds on a bounded slice. |
-| Grouping semantics confirmed | Requested `group_by` columns become source-table requirements for starter activity/liquidity queries and output requirements for all templates. | One bounded validation slice for every production grouping used by the report. |
+| Grouping semantics confirmed | Requested `group_by` columns become raw source-function result requirements for starter activity/liquidity queries and output requirements for all templates. | One bounded validation slice for every production grouping used by the report. |
 
 ## Sector, segment, and market-cap taxonomy
 
@@ -45,43 +89,44 @@ versioned.
 
 ## Required kdb+ source fields
 
-The table names can vary by deployment. The fields below are the minimum schema
-contract required before live validation. Extra production columns are allowed.
+The function names can vary by deployment. The fields below are the minimum
+schema contract required before live validation. Extra production columns are allowed.
 
-### Trading calendar table
+### Trading calendar function
 
-The calendar must come from a dedicated kdb+ data source. Weekday-only calendar
-assumptions are not production ready.
+The calendar must come from a dedicated user-owned kdb+ function. Weekday-only
+calendar assumptions are not production ready.
 
-| Required field | Purpose |
+| Required function contract | Purpose |
 | --- | --- |
-| `date` | Trading date used to select current and reference observations. |
-| `is_trading_day` or equivalent | Excludes weekends, exchange holidays, and unscheduled closures. |
-| Session metadata or equivalent | Confirms AM/PM sessions, lunch break, and auction boundaries used by bucket grids. |
+| `.sb.mmsr.getTradingCalendar[start;end]` or configured equivalent | Returns a date vector or table/dict with `date` rows for trading days between `start` and `end`, inclusive. |
+| Session metadata or equivalent, if used upstream | Confirms AM/PM sessions, lunch break, and auction boundaries used by bucket grids. |
 
-### Trades table for `activity.q`
-
-| Required field | Purpose |
-| --- | --- |
-| `date` | Report-period filtering and reference comparison grouping. |
-| `time` | Intraday bucket assignment. |
-| `sym` | Symbol-level and metadata joins. |
-| `price` | Turnover and trade-value calculations. |
-| `size` | Volume and turnover calculations. |
-
-### Quotes table for `liquidity.q`
+### Trade raw-data function for `activity.q` and optional `flow.q`
 
 | Required field | Purpose |
 | --- | --- |
 | `date` | Report-period filtering and reference comparison grouping. |
 | `time` | Intraday bucket assignment. |
 | `sym` | Symbol-level and metadata joins. |
-| `bid_price` | Quoted spread and top-of-book metrics. |
-| `ask_price` | Quoted spread and top-of-book metrics. |
+| `trade_price` | Turnover and optional signed-turnover calculations. |
+| `trade_size` | Volume, turnover, and optional imbalance calculations. |
+| `aggressor_side` | Required only for `signed_turnover` and `trade_imbalance` / `flow.q`; convention must be `buy=1`, `sell=-1`. |
+
+### Quote raw-data function for `liquidity.q` and optional liquidity/volatility add-ons
+
+| Required field | Purpose |
+| --- | --- |
+| `date` | Report-period filtering and reference comparison grouping. |
+| `time` | Intraday bucket assignment and quote-return ordering. |
+| `sym` | Symbol-level and metadata joins; required for optional `realized_volatility.q` so adjacent mid-price returns are calculated within each symbol. |
+| `bid_price` | Quoted spread, top-of-book, primary-mid reversion, and optional quote-mid realized-volatility metrics. |
+| `ask_price` | Quoted spread, top-of-book, primary-mid reversion, and optional quote-mid realized-volatility metrics. |
 | `bid_size` | Top-of-book depth metrics. |
 | `ask_size` | Top-of-book depth metrics. |
+| `tick_size` | Required only for `quoted_spread_ticks` / `liquidity_ticks.q`; may be supplied by a symbol-metadata or tick-ladder join inside the user quote function. |
 
-### Venue trade table for `toxicity_reversion.q`
+### Venue trade raw-data function for `toxicity_reversion.q`
 
 | Required field | Purpose |
 | --- | --- |
@@ -91,9 +136,9 @@ assumptions are not production ready.
 | `venue` | Cross-venue series grouping. |
 | `trade_price` | Reversion denominator and execution anchor. |
 | `trade_size` | Sample-size and notional diagnostics. |
-| `aggressor_side` | Signed reversion direction; convention must be `buy=1`, `sell=-1`. |
+| `aggressor_side` | Signed reversion direction; convention must be `buy=1`, `sell=-1`; reversion uses `aggressor_side * (future_mid - mid_at_trade) / future_mid * 10000`. |
 
-### Primary quote table for `toxicity_reversion.q`
+### Primary quote raw-data function for `toxicity_reversion.q`
 
 | Required field | Purpose |
 | --- | --- |
@@ -121,21 +166,25 @@ be joined to normalized metric rows before comparison facts are built.
 ## Validation sequence
 
 1. Confirm taxonomy ownership, labels, effective-date behavior, and null handling.
-2. Confirm live table names and required fields with the market-data owner.
+2. Confirm live function names, positional arguments, and required fields with the market-data owner.
 3. Run the default offline and mock-kdb test suite to confirm report shape.
-4. Run environment-gated live smoke tests with one known-good trading date and
-   optionally one liquid symbol.
+4. Run `mmsr plan` and, when useful, one bounded `mmsr preflight --metric`
+   check with one known-good trading date and optionally one liquid symbol.
 5. Compare row counts, time buckets, group labels, and sample-size diagnostics
    against the market-data owner expectations.
-6. Only then add richer production-specific offline fixtures or enable broader
-   live validation.
+6. Only then add richer production-specific offline fixtures or move repeated
+   validation requirements into a shared framework above report packages.
 
 ## Not production-ready until
 
-- The source calendar is a dedicated kdb+ calendar table.
+- The source calendar is a dedicated user-owned kdb+ calendar function.
 - Trade and quote schemas have been validated against the required columns.
 - Sector, segment, and market-cap taxonomy labels are confirmed and versioned.
 - Symbol metadata joins are effective-dated or have an approved as-of rule.
-- Live smoke tests pass on a bounded date/symbol slice.
+- The minimal production config has been reviewed against the configured raw
+  source functions for activity, displayed liquidity, and cross-venue
+  primary-quote reversion. Optional add-ons such as tick-normalized spread,
+  quote-mid realized volatility, or feed-signed order-flow imbalance should be
+  enabled only after the required extra source fields are confirmed.
 - No credentials, client host names, or private market-data extracts are
   committed to the repository.

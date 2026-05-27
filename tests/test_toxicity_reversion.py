@@ -51,6 +51,7 @@ def test_primary_quote_reversion_metrics_are_registered() -> None:
     assert metric.label == "+10ms Reversion"
     assert metric.category == "Toxicity"
     assert "primary_mid" in metric.formula
+    assert "/ primary_mid[t + horizon]" in metric.formula
     assert "reversion" in metric.help_text().lower()
 
 

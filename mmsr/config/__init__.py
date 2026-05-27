@@ -1,13 +1,18 @@
 """Report configuration model APIs."""
 
+from mmsr.config.loading import ConfigLoadError, load_report_config_file
 from mmsr.config.models import (
     AuctionBucketConfig,
     BrandingConfig,
     CalendarConfig,
     HtmlTemplateConfig,
     IntradayConfig,
+    KdbExecutionConfig,
+    KdbRawDataFunctionsConfig,
     ReferenceComparisonConfig,
+    ReferenceDataConfig,
     ReportConfig,
+    SymbolUniverseConfig,
     ToxicityConfig,
     ToxicityConfidenceConfig,
     ToxicityEventClusteringConfig,
@@ -16,13 +21,19 @@ from mmsr.config.models import (
 )
 
 __all__ = [
+    "ConfigLoadError",
+    "load_report_config_file",
     "AuctionBucketConfig",
     "BrandingConfig",
     "CalendarConfig",
     "HtmlTemplateConfig",
     "IntradayConfig",
+    "KdbExecutionConfig",
+    "KdbRawDataFunctionsConfig",
     "ReferenceComparisonConfig",
+    "ReferenceDataConfig",
     "ReportConfig",
+    "SymbolUniverseConfig",
     "ToxicityConfig",
     "ToxicityConfidenceConfig",
     "ToxicityEventClusteringConfig",

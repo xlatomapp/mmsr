@@ -28,6 +28,11 @@ _STATUS_LABELS: dict[str, str] = {
     "normal": "Normal",
 }
 
+_MARKET_SUMMARY_FAMILIES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("Market activity", ("turnover", "volume", "trade_count")),
+    ("Displayed liquidity", ("quoted_spread_bps", "top_of_book_depth")),
+)
+
 
 @dataclass(frozen=True)
 class ExecutiveOverviewOptions:
@@ -66,6 +71,19 @@ class _MetricOverview:
     average_change_pct: float | None
     most_severe_scope: str | None
     unit: str
+
+
+@dataclass(frozen=True)
+class _MetricFamilyOverview:
+    family_label: str
+    status: str
+    comparison_count: int
+    observed_metric_labels: tuple[str, ...]
+    alert_count: int
+    watch_count: int
+    normal_count: int
+    comparison_only_count: int
+    leading_metric: _MetricOverview
 
 
 def build_executive_market_overview_block(
@@ -120,6 +138,7 @@ def _overview_html(
     omitted_count = max(len(metric_summaries) - len(selected_summaries), 0)
 
     status_text = _status_count_sentence(status_counts)
+    family_html = _metric_family_overview_html(comparisons, tuple(selected_summaries))
     summary_items = "\n".join(
         _metric_overview_item(summary) for summary in selected_summaries
     )
@@ -141,6 +160,7 @@ def _overview_html(
         f"{escape(status_text)} across {len(_unique_metric_names(comparisons))} "
         f"key metrics and {len(comparisons)} comparisons."
         "</p>\n"
+        f"{family_html}"
         '  <ul class="executive-overview__metrics">\n'
         f"{summary_items}\n"
         "  </ul>\n"
@@ -212,6 +232,116 @@ def _metric_overview(
         ),
         most_severe_scope=_format_scope(most_severe),
         unit=definition.unit,
+    )
+
+
+def _metric_family_overview_html(
+    comparisons: tuple[MetricComparison, ...],
+    metric_summaries: tuple[_MetricOverview, ...],
+) -> str:
+    family_summaries = _metric_family_overviews(comparisons, metric_summaries)
+    if not family_summaries:
+        return ""
+
+    items = "\n".join(
+        _metric_family_overview_item(summary) for summary in family_summaries
+    )
+    return (
+        '  <div class="executive-overview__families" '
+        'aria-label="Market activity and displayed liquidity summary">\n'
+        f"{items}\n"
+        "  </div>\n"
+    )
+
+
+def _metric_family_overviews(
+    comparisons: tuple[MetricComparison, ...],
+    metric_summaries: tuple[_MetricOverview, ...],
+) -> tuple[_MetricFamilyOverview, ...]:
+    metric_summary_by_name = {
+        summary.metric_name: summary for summary in metric_summaries
+    }
+    selected_metric_names = set(metric_summary_by_name)
+    family_overviews: list[_MetricFamilyOverview] = []
+    for family_label, metric_names in _MARKET_SUMMARY_FAMILIES:
+        family_comparisons = tuple(
+            comparison
+            for comparison in comparisons
+            if comparison.metric_name in metric_names
+            and comparison.metric_name in selected_metric_names
+        )
+        if not family_comparisons:
+            continue
+
+        status_counts = Counter(
+            comparison.status for comparison in family_comparisons
+        )
+        observed_summaries = tuple(
+            metric_summary_by_name[metric_name]
+            for metric_name in metric_names
+            if metric_name in metric_summary_by_name
+        )
+        leading_metric = min(
+            observed_summaries,
+            key=lambda summary: (
+                _STATUS_PRIORITY.get(summary.status, 99),
+                -(summary.alert_count + summary.watch_count),
+                summary.metric_label.casefold(),
+                summary.metric_name,
+            ),
+        )
+        family_overviews.append(
+            _MetricFamilyOverview(
+                family_label=family_label,
+                status=_overall_status(status_counts),
+                comparison_count=len(family_comparisons),
+                observed_metric_labels=tuple(
+                    summary.metric_label for summary in observed_summaries
+                ),
+                alert_count=status_counts.get("alert", 0),
+                watch_count=status_counts.get("watch", 0),
+                normal_count=status_counts.get("normal", 0),
+                comparison_only_count=status_counts.get("comparison_only", 0),
+                leading_metric=leading_metric,
+            )
+        )
+    return tuple(family_overviews)
+
+
+def _metric_family_overview_item(summary: _MetricFamilyOverview) -> str:
+    observed_metrics = ", ".join(summary.observed_metric_labels)
+    leading = summary.leading_metric
+    leading_current = _format_metric_value(leading.average_value, leading.unit)
+    leading_reference = _format_metric_value(
+        leading.average_reference_value,
+        leading.unit,
+    )
+    leading_change = _format_change(
+        leading.average_change_abs,
+        leading.average_change_pct,
+        leading.unit,
+    )
+    status_counts = Counter(
+        {
+            "alert": summary.alert_count,
+            "watch": summary.watch_count,
+            "comparison_only": summary.comparison_only_count,
+            "normal": summary.normal_count,
+        }
+    )
+
+    return (
+        '    <p class="executive-overview__family">'
+        f"<strong>{escape(summary.family_label)}:</strong> "
+        f"{_status_label(summary.status)} — "
+        f"{escape(_status_count_sentence(status_counts))} across "
+        f"{summary.comparison_count} comparison rows from "
+        f"{len(summary.observed_metric_labels)} observed metrics "
+        f"({escape(observed_metrics)}). Leading signal: "
+        f"{escape(leading.metric_label)} average current "
+        f"{escape(leading_current)} versus reference "
+        f"{escape(leading_reference)}{escape(leading_change)}."
+        "</p>"
     )
 
 

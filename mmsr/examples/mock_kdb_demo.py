@@ -60,6 +60,14 @@ class MockKdbIntegrationDemoOptions:
         "templates and a deterministic mock kdb client, then normalized into the "
         "same report-boundary schema expected from production kdb-backed runs."
     )
+    daily_trend_page_title: str = "Reference and Target Daily Trends"
+    daily_trend_help_text: str = (
+        "Mock-kdb reference observations followed by target-period observations. "
+        "The line visual keeps the trading day on the x-axis and carries bucket "
+        "and market-cap context as series."
+    )
+    include_daily_trend_page: bool = True
+    include_intraday_heatmaps: bool = False
     include_metric_definitions_appendix: bool = True
     max_metric_cards: int = 6
     max_comments: int = 5
@@ -79,6 +87,8 @@ class MockKdbIntegrationDemoOptions:
         _require_non_empty(self.comparison_table_title, "comparison_table_title")
         _require_non_empty(self.comparison_help_text, "comparison_help_text")
         _require_non_empty(self.detail_help_text, "detail_help_text")
+        _require_non_empty(self.daily_trend_page_title, "daily_trend_page_title")
+        _require_non_empty(self.daily_trend_help_text, "daily_trend_help_text")
         _require_non_negative(self.max_metric_cards, "max_metric_cards")
         _require_non_negative(self.max_comments, "max_comments")
         _require_optional_non_negative(self.max_table_rows, "max_table_rows")
@@ -99,6 +109,10 @@ class MockKdbIntegrationDemoOptions:
             comparison_table_title=self.comparison_table_title,
             comparison_help_text=self.comparison_help_text,
             detail_help_text=self.detail_help_text,
+            daily_trend_page_title=self.daily_trend_page_title,
+            daily_trend_help_text=self.daily_trend_help_text,
+            include_daily_trend_page=self.include_daily_trend_page,
+            include_intraday_heatmaps=self.include_intraday_heatmaps,
             summary_scope_label="mock kdb integration",
             include_metric_definitions_appendix=self.include_metric_definitions_appendix,
             max_metric_cards=self.max_metric_cards,
@@ -177,6 +191,7 @@ def build_mock_kdb_integration_demo_result(
             metric_definitions=definitions,
             current_series=current_series,
             comparisons=comparisons,
+            reference_series=reference_series,
         ),
         options=resolved_options.to_market_report_options(),
     )
@@ -279,9 +294,9 @@ def _japan_cash_sessions() -> list[TradingSession]:
 
 def _mock_rows_for_query(query: str) -> list[dict[str, Any]]:
     role = _query_role(query)
-    if "from mock_trade" in query:
+    if "mock_trade" in query:
         return _activity_rows(role)
-    if "from mock_quote" in query:
+    if "mock_quote" in query:
         return _liquidity_rows(role)
     raise ValueError("mock kdb client received an unsupported query")
 

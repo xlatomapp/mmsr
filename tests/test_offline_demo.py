@@ -19,6 +19,7 @@ def test_build_offline_demo_report_assembles_document_with_appendix() -> None:
     assert document.generated_at_text == "deterministic mock data sample"
     assert [page.title for page in document.pages] == [
         "Market Summary",
+        "Reference and Target Daily Trends",
         "Symbol Anomalies",
         "Symbol 7203 Detail",
         "Symbol 6758 Detail",
@@ -29,10 +30,11 @@ def test_build_offline_demo_report_assembles_document_with_appendix() -> None:
     ]
 
     summary_page = document.pages[0]
-    symbol_page = document.pages[1]
-    symbol_7203_page = document.pages[2]
-    drilldown_page = document.pages[5]
-    detail_page = document.pages[6]
+    trend_page = document.pages[1]
+    symbol_page = document.pages[2]
+    symbol_7203_page = document.pages[3]
+    drilldown_page = document.pages[6]
+    detail_page = document.pages[7]
 
     assert len(summary_page.html_blocks) == 1
     assert summary_page.html_blocks[0].title == "Executive Market Overview"
@@ -43,6 +45,8 @@ def test_build_offline_demo_report_assembles_document_with_appendix() -> None:
     assert summary_page.commentary_blocks[0].comments[0].startswith(
         "Market Summary headline:"
     )
+    assert len(trend_page.time_series_charts) == 3
+    assert trend_page.time_series_charts[0].x_axis_label == "Trading day"
     assert len(symbol_page.metric_tables) == 1
     assert [row.group_text for row in symbol_page.metric_tables[0].rows] == [
         "Date: 2026-05-22, Intraday bucket: AM opening auction, "
@@ -53,16 +57,17 @@ def test_build_offline_demo_report_assembles_document_with_appendix() -> None:
         "Market cap bucket: Large cap, Market segment: Prime, Symbol: 8306",
     ]
     assert len(symbol_7203_page.time_series_charts) == 1
-    assert len(symbol_7203_page.heatmaps) == 1
+    assert len(symbol_7203_page.heatmaps) == 0
     assert (
         symbol_7203_page.time_series_charts[0].title
-        == "Quoted Spread trend for symbol 7203"
+        == "Quoted Spread intraday time-bucket trend for symbol 7203"
     )
     assert len(symbol_7203_page.time_series_charts[0].points) == 3
     assert len(drilldown_page.metric_tables) == 1
     assert len(drilldown_page.metric_tables[0].rows) == 6
     assert len(detail_page.time_series_charts) == 3
-    assert len(detail_page.heatmaps) == 3
+    assert detail_page.time_series_charts[0].x_axis_label == "Intraday time bucket"
+    assert len(detail_page.heatmaps) == 0
 
     definitions = collect_metric_definitions_from_pages(document.pages)
     assert [definition.name for definition in definitions] == [
@@ -82,14 +87,16 @@ def test_offline_demo_report_renders_comparison_visuals_commentary_and_help() ->
     )
     assert "Overall status:" in html
     assert "Current versus reference" in html
+    assert "Reference and Target Daily Trends" in html
+    assert "daily reference-to-target trend" in html
     assert "Symbol Anomalies" in html
     assert "Top symbol-level anomalies" in html
     assert "Sector, Segment, and Market-Cap Drilldowns" in html
     assert "Top group-level drilldowns" in html
     assert "Symbol 7203 Detail" in html
-    assert "Quoted Spread trend for symbol 7203" in html
-    assert "Volume trend for symbol 8306" in html
-    assert "Top-of-Book Depth trend for symbol 6758" in html
+    assert "Quoted Spread intraday time-bucket trend for symbol 7203" in html
+    assert "Volume intraday time-bucket trend for symbol 8306" in html
+    assert "Top-of-Book Depth intraday time-bucket trend for symbol 6758" in html
     assert "Symbol: 7203" in html
     assert "Symbol: 6758" in html
     assert "Symbol: 8306" in html
@@ -98,7 +105,7 @@ def test_offline_demo_report_renders_comparison_visuals_commentary_and_help() ->
     assert "time-series-chart__svg" in html
     assert "Backing data" in html
     assert "time-series-chart__placeholder" not in html
-    assert "heatmap__svg" in html
+    assert '<section class="heatmap">' not in html
     assert "heatmap__placeholder" not in html
     assert "AM opening auction" in html
     assert "Market cap bucket: Small cap" in html
@@ -128,6 +135,7 @@ def test_build_offline_demo_report_can_omit_appendix_and_limit_rows() -> None:
 
     assert [page.title for page in document.pages] == [
         "Market Summary",
+        "Reference and Target Daily Trends",
         "Symbol Anomalies",
         "Symbol 7203 Detail",
         "Symbol 6758 Detail",
@@ -138,11 +146,12 @@ def test_build_offline_demo_report_can_omit_appendix_and_limit_rows() -> None:
     assert len(document.pages[0].metric_cards) == 2
     assert len(document.pages[0].metric_tables[0].rows) == 3
     assert len(document.pages[0].commentary_blocks[0].comments) == 2
-    assert all(len(chart.points) == 1 for chart in document.pages[2].time_series_charts)
-    assert all(len(heatmap.cells) == 1 for heatmap in document.pages[2].heatmaps)
-    assert len(document.pages[5].metric_tables[0].rows) == 6
-    assert all(len(chart.points) == 1 for chart in document.pages[6].time_series_charts)
-    assert all(len(heatmap.cells) == 1 for heatmap in document.pages[6].heatmaps)
+    assert all(len(chart.points) == 1 for chart in document.pages[1].time_series_charts)
+    assert all(len(chart.points) == 1 for chart in document.pages[3].time_series_charts)
+    assert document.pages[3].heatmaps == []
+    assert len(document.pages[6].metric_tables[0].rows) == 6
+    assert all(len(chart.points) == 1 for chart in document.pages[7].time_series_charts)
+    assert document.pages[7].heatmaps == []
 
 
 def test_build_offline_demo_report_accepts_supplied_sample_metrics() -> None:
@@ -153,9 +162,12 @@ def test_build_offline_demo_report_accepts_supplied_sample_metrics() -> None:
     assert len(document.pages[0].metric_tables[0].rows) == len(
         sample_metrics.comparisons
     )
-    assert len(document.pages[2].time_series_charts) == 1
-    assert len(document.pages[5].metric_tables[0].rows) == 6
-    assert len(document.pages[6].time_series_charts) == len(
+    assert len(document.pages[1].time_series_charts) == len(
+        sample_metrics.current_series
+    )
+    assert len(document.pages[3].time_series_charts) == 1
+    assert len(document.pages[6].metric_tables[0].rows) == 6
+    assert len(document.pages[7].time_series_charts) == len(
         sample_metrics.current_series
     )
 
@@ -212,6 +224,12 @@ def test_build_offline_demo_report_can_limit_drilldown_rows() -> None:
 def test_offline_demo_report_options_validate_required_text_and_limits() -> None:
     with pytest.raises(ValueError, match="title"):
         OfflineDemoReportOptions(title=" ")
+
+    with pytest.raises(ValueError, match="daily_trend_page_title"):
+        OfflineDemoReportOptions(daily_trend_page_title=" ")
+
+    with pytest.raises(ValueError, match="daily_trend_help_text"):
+        OfflineDemoReportOptions(daily_trend_help_text=" ")
 
     with pytest.raises(ValueError, match="max_metric_cards"):
         OfflineDemoReportOptions(max_metric_cards=-1)

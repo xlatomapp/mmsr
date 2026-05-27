@@ -4865,3 +4865,1937 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 - Should future production validation include q type checks in addition to column
   presence checks once live schema metadata is available?
+
+---
+
+## 2026-05-26 — Phase 10 iteration 52: migrate CLI to Typer
+
+### Implemented
+
+- Continued from `mmsr_phase10_iteration51.zip`.
+- Accepted user correction that the requested Typer CLI migration had not been
+  implemented yet.
+- Replaced the argparse command surface in `mmsr.cli` with a Typer application
+  while preserving the existing `offline-demo` and `mock-kdb-demo` commands.
+- Added `build_cli_app()` as the explicit Typer application factory and kept
+  `main(argv)` as the console-script/programmatic entry point that returns an
+  integer exit code.
+- Preserved command options, defaults, output messages, offline safety language,
+  render-file helper functions, and validation behavior.
+- Added `typer` as an explicit runtime dependency because the installed `mmsr`
+  command now uses Typer.
+- Updated CLI behavior snapshots, packaging metadata tests, README installation
+  wording, roadmap status, and milestone status to reflect the Typer migration.
+
+### Files changed
+
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `mmsr/cli.py`
+- `pyproject.toml`
+- `tests/test_cli_behavior_snapshots.py`
+- `tests/test_packaging_metadata.py`
+
+### Tests added or updated
+
+- Updated `tests/test_cli_behavior_snapshots.py` to inspect the Typer/Click
+  command surface instead of an argparse parser.
+- Updated packaging metadata tests to require the runtime `typer` dependency and
+  roadmap documentation of the migration.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_cli_behavior_snapshots.py tests/test_cli.py -q`:
+  passed.
+- Ran `python -m pytest tests/test_cli_behavior_snapshots.py tests/test_cli.py tests/test_packaging_metadata.py tests/test_docs_governance.py -q`:
+  passed.
+- Ran `python -m pytest -q -ra`: passed with 3 expected live-kdb/schema skips.
+- Ran `python -m pytest --collect-only -q`: passed and collected 293 tests.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest tests/test_docs_governance.py -q`: passed.
+- Ran `python -m black --check .`: could not run because Black is not installed
+  in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before
+  Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: ppw packaging parity and CLI ergonomics.
+
+### Current milestone progress
+
+- The requested Typer CLI migration is complete for the current command surface:
+  100% complete for this ergonomics slice.
+- Milestone 10 remains 98% because no live kdb+ endpoint or credentials are
+  available in this environment.
+
+### Remaining work before milestone completion
+
+- No further deterministic work remains for the current Typer migration slice.
+- Additional production commands can be added later on top of the Typer app.
+- The synthetic demo modules can be relocated or deleted later once direct
+  production report-builder and kdb schema-contract tests fully replace their
+  coverage.
+
+### Best next deterministic step
+
+- Add toxicity/reversion rows to the deterministic demo fixture so the
+  Cross-Venue Toxicity visual is visible in the default offline demo output.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 52.
+- Delivery archive name: `mmsr_phase10_iteration52.zip`.
+
+### Open questions
+
+- Should the CLI grow a production `render` command before or after quote-quality
+  metric families are added?
+
+---
+
+## 2026-05-26 — Phase 10 iteration 53: add daily trends and intraday line visuals
+
+### Implemented
+
+- Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, and `_docs/journal.md` before
+  modifying the report layer.
+- Added `MarketReportInput.reference_series` and a default `Reference and Target
+  Daily Trends` report page that plots reference observations followed by the
+  target/current period on a daily x-axis.
+- Added deterministic intraday time-bucket line charts for dense bucket grids so
+  the x-axis is the bucket label rather than an oversized matrix.
+- Changed market detail and symbol detail pages to use intraday time-bucket line
+  charts by default and made heatmaps an explicit opt-in through
+  `include_intraday_heatmaps=True`.
+- Updated offline and mock-kdb demos to pass reference series into the canonical
+  report builder and expose the new daily-trend and heatmap options.
+- Updated README, roadmap, and milestone-status wording to document
+  reference-to-target daily trends and heatmap opt-in behavior.
+
+### Files changed
+
+- `README.md`
+- `_docs/ROADMAP.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/journal.md`
+- `mmsr/report/sections.py`
+- `mmsr/report/market_report.py`
+- `mmsr/report/symbols.py`
+- `mmsr/examples/offline_demo.py`
+- `mmsr/examples/mock_kdb_demo.py`
+- `tests/test_time_series_charts.py`
+- `tests/test_market_report.py`
+- `tests/test_offline_demo.py`
+- `tests/test_mock_kdb_demo.py`
+- `tests/test_cli.py`
+- `tests/test_metric_help_controls.py`
+- `tests/test_symbol_anomaly_pages.py`
+
+### Tests added or updated
+
+- Added direct chart tests for intraday time-bucket line charts and
+  reference-to-target daily trend charts.
+- Updated production report, offline demo, mock-kdb demo, CLI, symbol detail, and
+  help-control tests for the new default line-chart behavior.
+- Added opt-in heatmap coverage so the heatmap visual and help controls remain
+  tested even though dense intraday pages no longer render heatmaps by default.
+
+### Validation performed
+
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest tests/test_metric_help_controls.py tests/test_symbol_anomaly_pages.py -q --tb=short`:
+  passed.
+- Ran `python -m pytest tests/test_docs_governance.py -q --tb=short`: passed.
+- Ran `python -m pytest -q -ra --tb=short`: passed with 3 expected live-kdb/schema
+  skips.
+- Ran `python -m black --check .`: could not run because Black is not installed
+  in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before
+  Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Phase 10 production-format report visual polish.
+
+### Current milestone progress
+
+- The requested visualization correction is complete for this report-polish
+  slice: 100% complete.
+- Milestone 10 remains 98% because no live kdb+ endpoint or credentials are
+  available in this environment.
+
+### Remaining work before milestone completion
+
+- No deterministic work remains for this visualization correction.
+- Live kdb+ validation remains deferred until credentials and production-like
+  schemas are available.
+- Future CLI work can expose a user-facing flag for `include_intraday_heatmaps`
+  if product owners want command-line opt-in rather than config/API opt-in only.
+
+### Best next deterministic step
+
+- Add a CLI option to explicitly opt into intraday heatmaps for offline and
+  mock-kdb demo reports, while keeping dense time-bucket line charts as the
+  default.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 53.
+- Delivery archive name: `mmsr_phase10_iteration53.zip`.
+
+### Open questions
+
+- Should intraday heatmap opt-in be exposed in the CLI immediately, or remain an
+  API/config-level option until a production user asks for it?
+
+
+---
+
+## 2026-05-26 — Phase 10 iteration 54: expose intraday heatmap CLI opt-in
+
+### Implemented
+
+- Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, and `_docs/journal.md` before
+  modifying the CLI and documentation.
+- Added `--include-intraday-heatmaps` to both Typer demo commands:
+  `offline-demo` and `mock-kdb-demo`.
+- Kept dense intraday time-bucket line charts as the default report behavior and
+  made heatmaps an explicit CLI opt-in for sample artifacts that need
+  bucket × group matrix diagnostics.
+- Wired the new CLI option through the command handlers and internal option
+  builders into `OfflineDemoReportOptions` and
+  `MockKdbIntegrationDemoOptions`.
+- Updated README and MkDocs quickstart examples to document heatmap opt-in
+  without changing the default line-chart guidance.
+- Updated roadmap and milestone-status wording to record that heatmaps are
+  available from the demo CLI only by explicit request.
+
+### Files changed
+
+- `README.md`
+- `_docs/ROADMAP.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/journal.md`
+- `docs/index.md`
+- `mmsr/cli.py`
+- `tests/test_cli.py`
+- `tests/test_cli_behavior_snapshots.py`
+- `tests/test_docs_governance.py`
+
+### Tests added or updated
+
+- Updated CLI behavior snapshots to include
+  `--include-intraday-heatmaps`, its default `False` value, and override parsing.
+- Added offline-demo and mock-kdb-demo CLI tests proving the opt-in renders
+  heatmap sections while the default render path remains heatmap-free.
+- Updated documentation-governance tests so README and MkDocs quickstarts must
+  document the explicit heatmap opt-in flag.
+
+### Validation performed
+
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest tests/test_cli_behavior_snapshots.py tests/test_cli.py tests/test_docs_governance.py -q --tb=short`:
+  passed.
+- Ran `python -m pytest -q -ra --tb=short`: passed with 3 expected live-kdb/schema
+  skips.
+- Ran `python -m black --check .`: could not run because Black is not installed
+  in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before
+  Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Phase 10 production-format report visual polish and CLI
+  ergonomics.
+
+### Current milestone progress
+
+- The requested heatmap opt-in CLI slice is complete: 100% complete.
+- Milestone 10 remains 98% because no live kdb+ endpoint or credentials are
+  available in this environment.
+
+### Remaining work before milestone completion
+
+- No deterministic work remains for the intraday visualization/CLI opt-in slice.
+- Live kdb+ validation remains deferred until credentials and production-like
+  schemas are available.
+- Future production feedback may request a config-driven production `render`
+  command, but the current offline and mock-kdb demo command surfaces are covered.
+
+### Best next deterministic step
+
+- Keep live kdb+ execution deferred until a real endpoint, credentials, and
+  production-like schemas are available; if local-only work continues, add a
+  narrow config-driven production `render` command skeleton that validates inputs
+  without contacting kdb+ by default.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 54.
+- Delivery archive name: `mmsr_phase10_iteration54.zip`.
+
+### Open questions
+
+- Should the future production `render` command expose every report-layout option
+  directly, or should it only load a versioned report configuration file?
+
+---
+
+## 2026-05-27 — Phase 10 iteration 55: add production kdb source-function boundary
+
+### Implemented
+
+- Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, and `_docs/journal.md` before
+  modifying the kdb planning boundary.
+- Updated the roadmap and milestone status to add the production kdb
+  source-function boundary: user-defined raw trade/quote functions provide
+  canonical rows, while MMSR-owned q templates perform metric calculations.
+- Added `KdbRawDataFunctionsConfig` and `KdbExecutionConfig` to `ReportConfig`
+  so production config can specify a calculation namespace and raw-data functions
+  such as `.sb.mmsr.getTrade` and `.sb.mmsr.getQuote`.
+- Extended `MetricRunRequest` and `KdbMetricQueryPlanner` to support
+  `source_functions` for trades, quotes, venue trades, and primary quotes while
+  keeping direct `table_names` as a legacy/mock fallback.
+- Rendered raw source-function calls with a canonical request dictionary
+  containing start/end dates, session start/end times, bucket size, symbol
+  filters, and venue filters.
+- Wrapped `activity.q`, `liquidity.q`, and `toxicity_reversion.q` calculations
+  in a configured q namespace such as `.desk.mmsr`, avoiding intermediate
+  calculations in the global namespace.
+- Added planner metadata for rendered source functions and calculation namespace
+  so normalized `MetricTimeSeries` results preserve the kdb execution boundary.
+- Updated README, example config, production-readiness docs, and kdb integration
+  docs to describe the function-based production boundary and the date/chunk
+  scaling constraint.
+
+### Files changed
+
+- `README.md`
+- `_docs/ROADMAP.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/journal.md`
+- `config/report.example.yaml`
+- `docs/kdb_integration_testing.md`
+- `docs/production_readiness.md`
+- `mmsr/config/models.py`
+- `mmsr/kdb/query_plan.py`
+- `mmsr/kdb/runner.py`
+- `mmsr/kdb/schema_contracts.py`
+- `mmsr/kdb/q_templates/activity.q`
+- `mmsr/kdb/q_templates/liquidity.q`
+- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `tests/test_config_models.py`
+- `tests/test_docs_governance.py`
+- `tests/test_kdb_metric_runner.py`
+- `tests/test_kdb_query_loader.py`
+- `tests/test_kdb_query_plan.py`
+
+### Tests added or updated
+
+- Added config tests for default and custom kdb calculation namespaces and
+  raw-data source function mappings.
+- Added planner tests proving activity, liquidity, and reversion queries can call
+  user-defined source functions and install calculations in a configured
+  namespace.
+- Added validation tests for invalid source function names and calculation
+  namespaces.
+- Updated q-template parameter tests for the new `calculation_namespace`
+  placeholder.
+- Updated documentation-governance tests for raw-data function production
+  readiness wording.
+
+### Validation performed
+
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest tests/test_kdb_schema_contracts.py tests/test_kdb_query_plan.py tests/test_config_models.py -q --tb=short`:
+  passed with 1 expected live-kdb/schema skip.
+- Ran `python -m pytest -q -ra --tb=short`: passed with 3 expected live-kdb/schema
+  skips.
+- Ran `python -m black --check .`: could not run because Black is not installed
+  in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before
+  Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Phase 10 / Milestone 9B production kdb source-function
+  boundary.
+
+### Current milestone progress
+
+- The source-function query planning and namespace-scoped q calculation slice is
+  complete: 100% complete.
+- Milestone 9B is approximately 65% complete because date/chunk orchestration is
+  still pending.
+- Milestone 10 remains 98% because no live kdb+ endpoint or credentials are
+  available in this environment.
+
+### Remaining work before milestone completion
+
+- Add a production driver that loops over the kdb-backed trading calendar one
+  date at a time and optionally chunks symbols before building reference and
+  target `MetricTimeSeries`.
+- Decide how raw source functions should receive symbol chunks beyond the current
+  single-symbol smoke request shape.
+- Add live-kdb smoke configuration for source-function based validation once a
+  production-like endpoint is available.
+
+### Best next deterministic step
+
+- Add a local-only production daily execution planner that expands a report
+  period into one-day `MetricRunRequest` objects using configured
+  `source_functions` and `calculation_namespace`, without connecting to kdb+.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 55.
+- Delivery archive name: `mmsr_phase10_iteration55.zip`.
+
+### Open questions
+
+- Should the production source-function request use `syms` only, or should MMSR
+  also pass an explicit `symbolChunkId` / `chunkCount` pair for server-side
+  chunking?
+- Should live smoke tests keep the legacy direct-table environment variables as a
+  fallback, or should they switch entirely to source-function environment
+  variables?
+
+---
+
+## 2026-05-27 — Phase 10 iteration 56: add production daily/chunk execution path
+
+### Implemented
+
+- Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, and `_docs/journal.md` before
+  changing the production kdb execution boundary.
+- Added `KdbProductionExecutionPlanner`, `KdbProductionExecutor`,
+  `KdbProductionRunPlan`, and `ProductionMetricRunStep` to build and run the
+  production path as one trading date, one metric, and one optional symbol chunk
+  at a time.
+- Added `KdbExecutionConfig.enforce_daily_raw_scope` and
+  `KdbExecutionConfig.symbol_chunk_size` to document and configure the bounded
+  production raw-data contract.
+- Extended raw source-function request rendering to include `date`,
+  `symbolChunkId`, and `symbolChunkCount` while preserving existing
+  `startDate`, `endDate`, `syms`, and `venues` request keys.
+- Extended query planning to support production `symbols` vectors in addition to
+  the legacy single-symbol smoke-test `symbol` parameter.
+- Exported the production execution classes through `mmsr.kdb`.
+- Updated README, example config, kdb integration docs, production readiness
+  checklist, roadmap, and milestone status to describe the production execution
+  path rather than a local-only placeholder.
+
+### Files changed
+
+- `README.md`
+- `_docs/ROADMAP.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/journal.md`
+- `config/report.example.yaml`
+- `docs/kdb_integration_testing.md`
+- `docs/production_readiness.md`
+- `mmsr/config/models.py`
+- `mmsr/kdb/__init__.py`
+- `mmsr/kdb/production.py`
+- `mmsr/kdb/query_plan.py`
+- `tests/test_config_models.py`
+- `tests/test_kdb_production_execution.py`
+- `tests/test_kdb_query_plan.py`
+
+### Tests added or updated
+
+- Added `tests/test_kdb_production_execution.py` covering date-bounded planning,
+  symbol chunk expansion, rendered source-function request metadata, calendar
+  bounds validation, and production executor series combination.
+- Updated config tests for daily raw-scope and symbol chunk settings.
+- Updated query-plan tests for the expanded raw request dictionary.
+
+### Validation performed
+
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest tests/test_kdb_production_execution.py tests/test_kdb_query_plan.py tests/test_config_models.py tests/test_docs_governance.py -q --tb=short`:
+  passed.
+- Ran `python -m pytest -q -ra --tb=short`: passed with 3 expected live-kdb/schema
+  skips.
+- Ran `python -m black --check .`: could not run because Black is not installed
+  in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before
+  Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Phase 10 / Milestone 9B production kdb source-function
+  boundary.
+
+### Current milestone progress
+
+- The production date/chunk orchestration slice is complete: 100% complete.
+- Milestone 9B is approximately 85% complete because the production executor now
+  exists and is tested, but live source-function execution against a real kdb+
+  endpoint remains unavailable.
+- Milestone 10 remains 98% because no live kdb+ endpoint or credentials are
+  available in this environment.
+
+### Remaining work before milestone completion
+
+- Add a production `render` command that wires config loading, period parsing,
+  kdb connection setup, `KdbProductionExecutor`, comparison, and report rendering.
+- Add live-kdb smoke configuration for source-function based validation once a
+  production-like endpoint is available.
+- Decide whether server-side raw functions should honor `symbolChunkId` and
+  `symbolChunkCount` even when `syms` is empty, for venues/universes managed
+  entirely inside kdb.
+
+### Best next deterministic step
+
+- Add a production `render` command skeleton that uses `KdbProductionExecutor`
+  and requires explicit config/period inputs, while keeping actual live
+  execution guarded by connection settings and existing kdb integration skips.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 56.
+- Delivery archive name: `mmsr_phase10_iteration56.zip`.
+
+### Open questions
+
+- Should `symbol_chunk_id` be passed as a zero-based or one-based value to match
+  existing internal kdb conventions? This implementation uses one-based IDs for
+  user readability.
+- Should full-universe runs with no explicit `syms` use server-side chunk IDs in
+  the raw functions, or should MMSR require an explicit symbol universe before
+  enabling `symbol_chunk_size`?
+
+
+---
+
+## 2026-05-27 — Production render command wired to bounded kdb executor
+
+### Implemented
+
+- Added YAML config loading helpers that build typed `ReportConfig` and `ReportPeriod` objects from the repository config shape.
+- Added the production `mmsr render` CLI command.
+- Wired `mmsr render` to the live production execution path: PyKX-backed `KdbClient`, kdb-backed trading calendar, `KdbMetricRunner`, `KdbProductionExecutor`, and canonical HTML rendering.
+- Kept production raw data access behind configured user-defined functions while MMSR-owned q templates run inside the configured calculation namespace.
+- Added production CLI tests with a fake kdb client to validate the real command/executor path without requiring credentials.
+
+### Files changed
+
+- `mmsr/cli.py`
+- `mmsr/config/__init__.py`
+- `mmsr/config/loading.py`
+- `tests/test_production_cli.py`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+
+### Tests added or updated
+
+- Added `tests/test_production_cli.py` covering `render_production_report_file`, `mmsr render`, and CLI help.
+- Existing CLI and production executor tests continue to cover offline demos and date/chunk planning.
+
+### Validation
+
+- `python -m compileall -q mmsr tests` passed.
+- `python -m pytest tests/test_production_cli.py -q --tb=short` passed.
+- `python -m pytest -q -ra --tb=short` passed with three expected live-kdb/schema skips.
+- `python -m black --check .` could not run because Black is not installed in this environment.
+
+### Current milestone
+
+- Phase 10 / Milestone 9B: production kdb source-function boundary.
+
+### Estimated milestone completion
+
+- 92%
+
+### Remaining work before milestone completion
+
+- Add explicit schema preflight checks for configured raw source functions and canonical result output before full report execution.
+- Add live-kdb smoke coverage once a real kdb endpoint, namespace, and user raw source functions are available.
+- Add production reference-period execution/comparison wiring beyond current-period rendering.
+
+### Best next deterministic step
+
+- Add a production preflight command that validates configured function names, calculation namespace, calendar access, and one small metric result schema before running the full report.
+
+### Open questions
+
+- What exact canonical raw result columns should `.sb.mmsr.getTrade` and `.sb.mmsr.getQuote` expose for each metric family in production?
+- Should production `mmsr render` accept separate target and reference periods in CLI/config, or derive reference dates only from `reference.lookback_days` and the calendar source?
+
+---
+
+## 2026-05-27 — Phase 10 iteration 58: add production preflight command
+
+### Implemented
+
+- Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, and `_docs/journal.md` before changing the production kdb boundary.
+- Added `KdbProductionPreflight`, `KdbProductionPreflightResult`, and `KdbProductionPreflightCheck` to run a bounded live-kdb preflight through the same calendar, planner, query-rendering, runner, and schema-validation path used by production rendering.
+- Added the production `mmsr preflight` CLI command and `preflight_production_report()` helper.
+- The preflight loads YAML config, validates configured q namespace/source-function names through typed config/query planning, queries the configured kdb calendar, plans the first trading-day/chunk/metric step, executes only that sample step, and validates the returned metric result schema.
+- Documented the preflight command in README, kdb integration testing guidance, production readiness guidance, roadmap, and milestone status.
+
+### Files changed
+
+- `README.md`
+- `_docs/ROADMAP.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/journal.md`
+- `docs/kdb_integration_testing.md`
+- `docs/production_readiness.md`
+- `mmsr/cli.py`
+- `mmsr/kdb/__init__.py`
+- `mmsr/kdb/production.py`
+- `tests/test_production_cli.py`
+
+### Tests added or updated
+
+- Added production CLI tests covering `preflight_production_report()`.
+- Added CLI command tests proving `mmsr preflight` prints deterministic diagnostics.
+- Updated CLI help tests to include the new production preflight command.
+
+### Validation performed
+
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest tests/test_production_cli.py tests/test_kdb_production_execution.py -q --tb=short`: passed.
+- Ran `python -m pytest tests/test_production_cli.py tests/test_kdb_production_execution.py tests/test_docs_governance.py tests/test_cli_behavior_snapshots.py -q --tb=short`: passed.
+- Ran `python -m pytest -q -ra --tb=short`: passed with 3 expected live-kdb/schema skips.
+- Ran `python -m black --check .`: could not run because Black is not installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Phase 10 / Milestone 9B production kdb source-function boundary.
+
+### Current milestone progress
+
+- The production preflight command slice is complete: 100% complete.
+- Milestone 9B is approximately 96% complete because config loading, daily/chunk execution planning, production rendering, and bounded preflight validation now exist and are tested offline.
+- Milestone 10 remains 98% because no live kdb+ endpoint or credentials are available in this environment.
+
+### Remaining work before milestone completion
+
+- Add production reference-period execution/comparison wiring beyond current-period rendering.
+- Add live-kdb smoke coverage for source-function based validation once a production-like endpoint is available.
+- Confirm canonical raw function output columns with the market-data owner before treating live preflight as production-certified.
+
+### Best next deterministic step
+
+- Add production reference-period execution planning that derives reference trading days from `reference.lookback_days`, runs the same bounded executor path for reference observations, and wires current-vs-reference comparisons into `mmsr render`.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 58.
+- Delivery archive name: `mmsr_phase10_iteration58.zip`.
+
+### Open questions
+
+- Should production `mmsr render` accept explicit reference-period start/end dates, or continue deriving reference observations from `reference.lookback_days` and the kdb-backed calendar?
+- Should `mmsr preflight` support a dedicated `--metric` override for checking each metric family independently before a full render?
+
+---
+
+## 2026-05-27 — Phase 10 iteration 59: wire production reference execution into render
+
+### Implemented
+
+- Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, and `_docs/journal.md` before changing the production render boundary.
+- Added `KdbProductionReferenceWindow` and reference-window planning to derive the previous `reference.lookback_days` trading days from the configured kdb trading calendar.
+- Added `KdbProductionExecutor.build_reference_window()`, `build_reference_plan()`, and `run_reference()` so target and reference observations use the same one-trading-day, optional-symbol-chunk execution shape.
+- Updated production executor metadata to mark target vs reference series and preserve reference calendar bounds/lookback settings.
+- Updated `mmsr render` to execute reference observations, build `MetricComparison` facts with the configured reference policy, and pass reference series into the canonical report builder for current-vs-reference tables and trend charts.
+- Updated README, kdb integration testing guidance, production readiness guidance, roadmap, and milestone status to document bounded reference execution.
+
+### Files changed
+
+- `README.md`
+- `_docs/ROADMAP.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/journal.md`
+- `docs/kdb_integration_testing.md`
+- `docs/production_readiness.md`
+- `mmsr/cli.py`
+- `mmsr/kdb/__init__.py`
+- `mmsr/kdb/production.py`
+- `tests/test_kdb_production_execution.py`
+- `tests/test_production_cli.py`
+
+### Tests added or updated
+
+- Added production executor tests for reference-window derivation, reference plan chunking, and reference-series metadata.
+- Updated production CLI render tests to prove `mmsr render` executes target and reference metric queries, emits current-vs-reference report content, and includes reference-target trend charts.
+
+### Validation performed
+
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest tests/test_kdb_production_execution.py tests/test_production_cli.py tests/test_docs_governance.py -q --tb=short`: passed.
+- Ran `python -m pytest -q -ra --tb=short`: passed with 3 expected live-kdb/schema skips.
+- Ran `python -m black --check .`: could not run because Black is not installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Phase 10 / Milestone 9B production kdb source-function boundary.
+
+### Current milestone progress
+
+- The production reference execution and render comparison wiring slice is complete: 100% complete.
+- Milestone 9B is approximately 98% complete because config loading, production rendering, bounded preflight validation, daily/chunk target execution, and daily/chunk reference execution are now implemented and tested offline.
+- Milestone 10 remains 98% because no live kdb+ endpoint or credentials are available in this environment.
+
+### Remaining work before milestone completion
+
+- Add live-kdb smoke coverage for source-function based validation once a production-like endpoint is available.
+- Confirm canonical raw function output columns with the market-data owner before treating live preflight/render as production-certified.
+- Decide whether production render should expose explicit reference start/end overrides in addition to the current `reference.lookback_days` calendar-derived default.
+
+### Best next deterministic step
+
+- Add a production render plan-summary helper that reports target/reference trading days, metric count, symbol chunk count, and source-function contracts before executing metric q, so operators can review the bounded execution plan ahead of a full live render.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 59.
+- Delivery archive name: `mmsr_phase10_iteration59.zip`.
+
+### Open questions
+
+- Should production `mmsr render` accept explicit reference-period start/end dates, or continue deriving reference observations from `reference.lookback_days` and the kdb-backed calendar?
+- Should a future live production smoke test validate all metric families in one command, or keep separate bounded checks for activity, liquidity, and reversion source functions?
+
+---
+
+## 2026-05-27 — Phase 10 iteration 60: add production render plan summary
+
+### Implemented
+
+- Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, and `_docs/journal.md` before changing the production kdb boundary.
+- Added `KdbProductionPlanSummary` and `KdbProductionMetricContract` to report bounded production render scope without executing metric q.
+- Added `KdbProductionExecutor.build_plan_summary()` so operators can review target trading days, reference trading days, metric count, symbol chunk count, total metric steps, calculation namespace, configured source functions, and q-template source/output contracts before a full live render.
+- Added `summarize_production_report_plan()` and the production `mmsr plan` CLI command. The command queries only the configured trading calendar and renders query contracts; it does not execute metric source functions.
+- Documented the plan-summary command and production readiness gate in README, kdb integration testing guidance, production readiness guidance, roadmap, and milestone status.
+
+### Files changed
+
+- `README.md`
+- `_docs/ROADMAP.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/journal.md`
+- `docs/kdb_integration_testing.md`
+- `docs/production_readiness.md`
+- `mmsr/cli.py`
+- `mmsr/kdb/__init__.py`
+- `mmsr/kdb/production.py`
+- `tests/test_kdb_production_execution.py`
+- `tests/test_production_cli.py`
+
+### Tests added or updated
+
+- Added production executor tests for plan-summary target/reference scope, chunk counts, total metric steps, rendered input contracts, output contracts, and no metric execution.
+- Added production CLI tests for `summarize_production_report_plan()` and `mmsr plan`, including proof that only calendar queries are sent through the fake kdb client.
+- Updated production CLI help assertions to include the new plan command.
+
+### Validation performed
+
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest tests/test_kdb_production_execution.py tests/test_production_cli.py -q --tb=short`: passed.
+- Ran `python -m pytest tests/test_kdb_production_execution.py tests/test_production_cli.py tests/test_docs_governance.py tests/test_cli_behavior_snapshots.py -q --tb=short`: passed.
+- Ran `python -m pytest -q -ra --tb=short`: passed with 3 expected live-kdb/schema skips.
+- Ran `python -m black --check .`: could not run because Black is not installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Phase 10 / Milestone 9B production kdb source-function boundary.
+
+### Current milestone progress
+
+- The production render plan-summary slice is complete: 100% complete.
+- Milestone 9B is approximately 99% complete because config loading, production plan review, bounded preflight validation, target/reference execution, and current-vs-reference rendering are now implemented and tested offline.
+- Milestone 10 remains 98% because no live kdb+ endpoint or credentials are available in this environment.
+
+### Remaining work before milestone completion
+
+- Add live-kdb smoke coverage for source-function based validation once a production-like endpoint is available.
+- Confirm canonical raw function output columns with the market-data owner before treating live preflight/render as production-certified.
+- Decide whether production render should expose explicit reference start/end overrides in addition to the current `reference.lookback_days` calendar-derived default.
+
+### Best next deterministic step
+
+- Add a metric-selectable production preflight option so operators can validate one metric family at a time, including activity, liquidity, and reversion contracts, before a broader live render.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 60.
+- Delivery archive name: `mmsr_phase10_iteration60.zip`.
+
+### Open questions
+
+- Should production `mmsr render` accept explicit reference-period start/end dates, or continue deriving reference observations from `reference.lookback_days` and the kdb-backed calendar?
+- Should full production render print the plan summary by default, or should operators continue to call `mmsr plan` explicitly before `mmsr render`?
+
+
+---
+
+## 2026-05-27 — Phase 10 iteration 61: add metric-selectable production preflight
+
+### Implemented
+
+- Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, and `_docs/journal.md` before changing the production kdb boundary.
+- Added `KdbProductionPreflight.run(..., metric_name=...)` so operators can validate a specific configured metric instead of always executing the first metric in the report config.
+- Added preflight metric-selection validation and a deterministic `metric_selection` check in preflight diagnostics.
+- Wired the production `mmsr preflight` CLI and `preflight_production_report()` helper to accept `--metric`, keeping the executed sample bounded to one trading day, one symbol chunk, and one selected metric.
+- Documented metric-selectable preflight usage for activity, liquidity, and reversion source-function contract checks.
+
+### Files changed
+
+- `README.md`
+- `_docs/ROADMAP.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/journal.md`
+- `docs/kdb_integration_testing.md`
+- `docs/production_readiness.md`
+- `mmsr/cli.py`
+- `mmsr/kdb/production.py`
+- `tests/test_kdb_production_execution.py`
+- `tests/test_production_cli.py`
+
+### Tests added or updated
+
+- Added production preflight tests proving selected activity, liquidity, and reversion metrics render the expected q-template/source-function contracts and execute only the selected sample step.
+- Added a production preflight validation test for rejecting a selected metric that is not configured in the report.
+- Added production CLI tests for `preflight_production_report(..., metric_name=...)` and `mmsr preflight --metric quoted_spread_bps`.
+
+### Validation performed
+
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest tests/test_kdb_production_execution.py tests/test_production_cli.py -q --tb=short`: passed.
+- Ran `python -m pytest tests/test_kdb_production_execution.py tests/test_production_cli.py tests/test_docs_governance.py tests/test_cli_behavior_snapshots.py -q --tb=short`: passed.
+- Ran `python -m pytest -q -ra --tb=short`: passed with 3 expected live-kdb/schema skips.
+- Ran `python -m black --check .`: could not run because Black is not installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Phase 10 / Milestone 9B production kdb source-function boundary.
+
+### Current milestone progress
+
+- The metric-selectable production preflight slice is complete: 100% complete.
+- Milestone 9B is approximately 99.5% complete because config loading, production plan review, bounded default/selected preflight validation, target/reference execution, and current-vs-reference rendering are now implemented and tested offline.
+- Milestone 10 remains 98% because no live kdb+ endpoint or credentials are available in this environment.
+
+### Remaining work before milestone completion
+
+- Add live-kdb smoke coverage for source-function based validation once a production-like endpoint is available.
+- Confirm canonical raw function output columns with the market-data owner before treating live preflight/render as production-certified.
+- Decide whether production render should expose explicit reference start/end overrides in addition to the current `reference.lookback_days` calendar-derived default.
+
+### Best next deterministic step
+
+- Add an environment-gated live production preflight smoke harness that can run `mmsr preflight --metric` for configured activity, liquidity, and reversion source-function checks when a production-like kdb endpoint is available.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 61.
+- Delivery archive name: `mmsr_phase10_iteration61.zip`.
+
+### Open questions
+
+- Should production `mmsr render` accept explicit reference-period start/end dates, or continue deriving reference observations from `reference.lookback_days` and the kdb-backed calendar?
+- Should full production render print the plan summary by default, or should operators continue to call `mmsr plan` explicitly before `mmsr render`?
+- Should a future convenience option select metric families by template name, such as `--metric-family activity`, or is explicit `--metric` safer for production checks?
+
+
+---
+
+## 2026-05-27 — Phase 10 iteration 62: pivot back to report metrics and add tick-spread q support
+
+### Implemented
+
+- Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, and `_docs/journal.md` before changing the roadmap and metric execution layer.
+- Incorporated user feedback to freeze additional report-local validation expansion. Roadmap and production docs now keep `mmsr plan` and `mmsr preflight` as optional operator helpers, while deferring any broader reusable validation framework until multiple reports exist.
+- Added `config/report.production_minimal.yaml` for first live-kdb runs. It includes only metrics that are currently backed by checked-in q templates and explicitly notes the `tick_size` requirement for `quoted_spread_ticks`.
+- Implemented production q-template support for `quoted_spread_ticks` through a dedicated `liquidity_ticks.q` template.
+- Added source and output schema contracts for `liquidity_ticks.q`, including the `tick_size` quote-source requirement.
+- Wired `quoted_spread_ticks` into `KdbMetricQueryPlanner`, `template_for_metric()`, source-function rendering, symbol filtering, and output-schema dispatch.
+
+### Files changed
+
+- `README.md`
+- `_docs/ROADMAP.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/journal.md`
+- `config/report.production_minimal.yaml`
+- `docs/kdb_integration_testing.md`
+- `docs/production_readiness.md`
+- `mmsr/kdb/q_templates/liquidity_ticks.q`
+- `mmsr/kdb/query_plan.py`
+- `mmsr/kdb/schema_contracts.py`
+- `tests/test_config_files.py`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_kdb_schema_contracts.py`
+
+### Tests added or updated
+
+- Added config-file coverage proving `config/report.production_minimal.yaml` loads and contains only metrics supported by checked-in kdb templates.
+- Added query-planner coverage for `quoted_spread_ticks`, including `liquidity_ticks.q`, `tick_size` source-contract requirements, symbol filtering, and user-defined quote source-function rendering.
+- Added schema-contract coverage for `liquidity_ticks.q` input and output contracts plus dispatch through `output_schema_contract_for_template()`.
+- Updated docs/governance expectations implicitly through existing governance tests.
+
+### Validation performed
+
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest tests/test_kdb_schema_contracts.py tests/test_kdb_query_plan.py tests/test_config_files.py -q --tb=short`: passed with 1 expected live-kdb/schema skip.
+- Ran `python -m pytest tests/test_docs_governance.py tests/test_kdb_schema_contracts.py tests/test_kdb_query_plan.py tests/test_config_files.py -q --tb=short`: passed with 1 expected live-kdb/schema skip.
+- Ran `python -m pytest -q -ra --tb=short`: passed with 3 expected live-kdb/schema skips.
+- Ran `python -m black --check .`: could not run because Black is not installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Phase 10 / Milestone 9B production kdb source-function boundary, now frozen at the current operator-helper scope per user feedback.
+- Report implementation focus resumes under Milestone 10 / runnable kdb metric coverage.
+
+### Current milestone progress
+
+- Milestone 9B is complete enough for this package phase: 100% complete for the bounded source-function boundary and optional operator helpers.
+- Milestone 10 is approximately 98.5% complete because `quoted_spread_ticks` now has a checked-in q template and minimal production config coverage, while several registered metrics remain roadmap definitions only.
+
+### Remaining work before milestone completion
+
+- Add q-template support for registered metrics that still lack production execution support: `realized_volatility`, `effective_spread_bps`, `price_impact_30s_bps`, `signed_turnover`, and `trade_imbalance`.
+- Improve report pages and deterministic commentary once those metrics are available as normalized `MetricTimeSeries` rows.
+- Keep broader validation framework work deferred until there are several reports with shared validation needs.
+
+### Best next deterministic step
+
+- Implement a checked-in q template for `trade_imbalance` and `signed_turnover` as a focused flow-metric slice, including source/output schema contracts, query-planner wiring, and tests.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 62.
+- Delivery archive name: `mmsr_phase10_iteration62.zip`.
+
+### Open questions
+
+- Should `quoted_spread_ticks` remain in the minimal production config by default, or should it move to an optional example when a client quote function does not yet join `tick_size`?
+- Should flow metrics use feed-provided `aggressor_side` first, with quote-based signing as a later fallback, to keep the next q-template slice simple and production-friendly?
+
+---
+
+## 2026-05-27 — Phase 10 iteration 63: add feed-signed flow metric q support
+
+### Implemented
+
+- Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, and `_docs/journal.md` before changing the report metric execution layer.
+- Implemented a focused `flow.q` production template for `signed_turnover` and `trade_imbalance`.
+- Kept the first flow slice deterministic by using feed-provided `aggressor_side` with buy=1 and sell=-1; quote-based trade signing remains a later explicit enhancement.
+- Added flow input and output schema contracts, including required trade-source columns and normalized output metadata (`signed_volume`, `volume`, and `trade_count`).
+- Wired flow metrics into `KdbMetricQueryPlanner`, `template_for_metric()`, source-function rendering, symbol filtering, and output-schema dispatch.
+- Updated starter metric definitions so flow metrics document the feed-side signing requirement.
+- Added `signed_turnover` and `trade_imbalance` to `config/report.production_minimal.yaml` with a removal note when `aggressor_side` is unavailable.
+- Updated production and kdb integration docs to reflect the new runnable flow metric coverage and the canonical trade-source requirement.
+
+### Files changed
+
+- `README.md`
+- `_docs/ROADMAP.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/journal.md`
+- `config/report.production_minimal.yaml`
+- `docs/kdb_integration_testing.md`
+- `docs/production_readiness.md`
+- `mmsr/kdb/q_templates/flow.q`
+- `mmsr/kdb/query_plan.py`
+- `mmsr/kdb/schema_contracts.py`
+- `mmsr/metrics/starter_definitions.py`
+- `tests/test_config_files.py`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_kdb_schema_contracts.py`
+
+### Tests added or updated
+
+- Added schema-contract tests for `flow.q` input requirements, output requirements, result validation, dispatch, and non-flow metric rejection.
+- Added query-planner tests for `signed_turnover` and `trade_imbalance`, including user-defined trade source-function rendering and `aggressor_side` requirements.
+- Updated production minimal config coverage to include the new flow q-template metrics.
+
+### Validation performed
+
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest tests/test_kdb_schema_contracts.py tests/test_kdb_query_plan.py tests/test_config_files.py tests/test_docs_governance.py -q --tb=short`: passed with 1 expected live-kdb/schema skip.
+- Ran `python -m pytest -q -ra --tb=short`: passed with 3 expected live-kdb/schema skips.
+- Ran `python -m black --check .`: could not run because Black is not installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Milestone 10 / runnable kdb metric coverage, with Milestone 9B validation utility expansion frozen per user feedback.
+
+### Current milestone progress
+
+- The feed-signed flow metric q-template slice is complete: 100% complete.
+- Milestone 10 is approximately 99% complete because activity, liquidity, tick-spread, flow, and reversion metric families now have checked-in q-template coverage, while some registered metrics remain roadmap definitions only.
+
+### Remaining work before milestone completion
+
+- Add q-template support for registered metrics that still lack production execution support: `realized_volatility`, `effective_spread_bps`, and `price_impact_30s_bps`.
+- Improve report pages and deterministic commentary once those metrics are available as normalized `MetricTimeSeries` rows.
+- Keep broader validation framework work deferred until there are several reports with shared validation needs.
+
+### Best next deterministic step
+
+- Implement a checked-in quote-only q template for `realized_volatility`, including source/output schema contracts, query-planner wiring, and tests, before tackling the more involved trade-to-quote transaction-cost metrics.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 63.
+- Delivery archive name: `mmsr_phase10_iteration63.zip`.
+
+### Open questions
+
+- Should a later flow enhancement add quote-based aggressor-side inference for venues that do not provide `aggressor_side`, or should MMSR continue requiring feed-side signing for production flow metrics?
+
+
+---
+
+## 2026-05-27 — Phase 10 iteration 64: add quote-mid realized-volatility q support
+
+### Implemented
+
+- Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, and `_docs/journal.md` before changing the runnable report-metric layer.
+- Implemented a focused `realized_volatility.q` production template for quote-mid realized volatility.
+- Kept the calculation quote-only and deterministic: valid quote mids are sorted by `date`, `sym`, and `time`, adjacent log-mid returns are calculated by `date × sym`, and bucket/group volatility is emitted in basis points.
+- Added realized-volatility input and output schema contracts, including the required `sym` quote-source column and normalized output metadata (`return_count`, `first_mid`, and `last_mid`).
+- Wired `realized_volatility` into `KdbMetricQueryPlanner`, `template_for_metric()`, source-function rendering, symbol filtering, output-schema dispatch, and runner support.
+- Added `realized_volatility` to `config/report.production_minimal.yaml` with a note that the canonical quote function must return `sym`.
+- Updated production and kdb integration docs to reflect the new runnable volatility metric coverage and quote-source requirement.
+- Updated roadmap and milestone status to keep validation utilities frozen and move the next work toward transaction-cost report metrics.
+
+### Files changed
+
+- `README.md`
+- `_docs/ROADMAP.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/journal.md`
+- `config/report.production_minimal.yaml`
+- `docs/kdb_integration_testing.md`
+- `docs/production_readiness.md`
+- `mmsr/kdb/q_templates/realized_volatility.q`
+- `mmsr/kdb/query_plan.py`
+- `mmsr/kdb/schema_contracts.py`
+- `tests/test_config_files.py`
+- `tests/test_kdb_metric_runner.py`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_kdb_schema_contracts.py`
+
+### Tests added or updated
+
+- Added schema-contract tests for `realized_volatility.q` input requirements, output metadata, result validation, dispatch, and non-volatility metric rejection.
+- Added query-planner coverage for `realized_volatility`, including the quote source contract, selected-symbol rendering, q-template dispatch, and required output columns.
+- Updated the unsupported-runner test to use `effective_spread_bps`, which remains a registered metric without production q-template support.
+- Updated production minimal config coverage to include the new volatility q-template metric.
+
+### Validation performed
+
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest tests/test_kdb_schema_contracts.py tests/test_kdb_query_plan.py tests/test_kdb_metric_runner.py tests/test_config_files.py tests/test_docs_governance.py -q --tb=short`: passed with 1 expected live-kdb/schema skip.
+- Ran `python -m pytest -q -ra --tb=short`: passed with 3 expected live-kdb/schema skips.
+- Ran `python -m black --check .`: could not run because Black is not installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Milestone 10 / runnable kdb metric coverage, with Milestone 9B validation utility expansion frozen per user feedback.
+
+### Current milestone progress
+
+- The quote-mid realized-volatility q-template slice is complete: 100% complete.
+- Milestone 10 is approximately 99.3% complete because activity, liquidity, tick-spread, volatility, flow, and reversion metric families now have checked-in q-template coverage, while the registered transaction-cost metrics remain roadmap definitions only.
+
+### Remaining work before milestone completion
+
+- Add q-template support for registered transaction-cost metrics that still lack production execution support: `effective_spread_bps` and `price_impact_30s_bps`.
+- Improve report pages and deterministic commentary once those metrics are available as normalized `MetricTimeSeries` rows.
+- Keep broader validation framework work deferred until there are several reports with shared validation needs.
+
+### Best next deterministic step
+
+- Implement the first trade-to-quote transaction-cost q template for `effective_spread_bps`, including source/output schema contracts, query-planner wiring, and tests, before adding horizon-specific `price_impact_30s_bps`.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 64.
+- Delivery archive name: `mmsr_phase10_iteration64.zip`.
+
+### Open questions
+
+- Should `realized_volatility` remain unannualized in basis points for intraday monitoring, or should a later report-output option add an explicitly labeled annualized view?
+
+---
+
+## 2026-05-27 — Phase 10 iteration 65: add effective-spread q support
+
+### Implemented
+
+- Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, and `_docs/journal.md` before changing the runnable report-metric layer.
+- Implemented a focused `effective_spread.q` production template for the first trade-to-quote transaction-cost metric.
+- Kept the slice deterministic and report-focused: executions are as-of joined to the prevailing same-symbol quote mid, unsigned effective spread is calculated in basis points, and bucket/group aggregates emit median effective spread with trade-count and notional metadata.
+- Added effective-spread input and output schema contracts for canonical trade and quote source functions, including required `sym` alignment columns and normalized output metadata.
+- Wired `effective_spread_bps` into `KdbMetricQueryPlanner`, `template_for_metric()`, source-function rendering, symbol filtering, `max_quote_age` parameter rendering, output-schema dispatch, and runner support.
+- Added `effective_spread_bps` to `config/report.production_minimal.yaml` with a note that canonical trades and quotes must expose same-symbol timestamps suitable for a prevailing quote-mid as-of join.
+- Updated production, kdb integration, roadmap, and milestone status docs to include the new runnable transaction-cost metric and keep validation utility expansion frozen.
+
+### Files changed
+
+- `README.md`
+- `_docs/ROADMAP.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/journal.md`
+- `config/report.production_minimal.yaml`
+- `docs/kdb_integration_testing.md`
+- `docs/production_readiness.md`
+- `mmsr/kdb/q_templates/effective_spread.q`
+- `mmsr/kdb/query_plan.py`
+- `mmsr/kdb/schema_contracts.py`
+- `mmsr/metrics/starter_definitions.py`
+- `tests/test_config_files.py`
+- `tests/test_kdb_metric_runner.py`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_kdb_schema_contracts.py`
+
+### Tests added or updated
+
+- Added schema-contract tests for `effective_spread.q` trade/quote input requirements, output metadata, result validation, dispatch, and non-effective-spread metric rejection.
+- Added query-planner coverage for `effective_spread_bps`, including the two-source trade/quote contract, selected-symbol rendering, `max_quote_age` rendering, q-template dispatch, source-function rendering, and required output columns.
+- Added runner normalization coverage for `effective_spread_bps`, including metadata preservation from `trade_count` and `notional`.
+- Updated the unsupported-runner test to use `price_impact_30s_bps`, which remains a registered metric without production q-template support.
+- Updated production minimal config coverage to include the new transaction-cost q-template metric.
+
+### Validation performed
+
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest tests/test_kdb_query_plan.py tests/test_kdb_schema_contracts.py tests/test_kdb_metric_runner.py tests/test_config_files.py tests/test_docs_governance.py -q --tb=short`: passed with 1 expected live-kdb/schema skip.
+- Ran `python -m pytest -q -ra --tb=short`: passed with 3 expected live-kdb/schema skips.
+- Ran `python -m black --check .`: could not run because Black is not installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Milestone 10 / runnable kdb metric coverage, with Milestone 9B validation utility expansion frozen per user feedback.
+
+### Current milestone progress
+
+- The effective-spread q-template slice is complete: 100% complete.
+- Milestone 10 is approximately 99.5% complete because activity, liquidity, tick-spread, volatility, effective-spread, flow, and reversion metric families now have checked-in q-template coverage, while `price_impact_30s_bps` remains a roadmap-only starter metric.
+
+### Remaining work before milestone completion
+
+- Add q-template support for the remaining registered transaction-cost metric: `price_impact_30s_bps`.
+- Improve report pages and deterministic commentary once the transaction-cost metrics are available as normalized `MetricTimeSeries` rows.
+- Keep broader validation framework work deferred until there are several reports with shared validation needs.
+
+### Best next deterministic step
+
+- Implement the horizon-specific `price_impact_30s_bps` q template, including trade/quote source contracts, quote-horizon alignment, output metadata, query-planner wiring, and tests.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 65.
+- Delivery archive name: `mmsr_phase10_iteration65.zip`.
+
+### Open questions
+
+- Should `effective_spread_bps` expose a configurable `max_quote_age` in report YAML, or is the current runner-level default of `1s` sufficient until transaction-cost configuration is generalized?
+
+---
+
+## 2026-05-27 — Phase 10 iteration 66: add 30-second price-impact q support
+
+### Implemented
+
+- Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, and `_docs/journal.md` before changing the runnable report-metric layer.
+- Implemented the remaining registered transaction-cost starter metric, `price_impact_30s_bps`, as a focused production q-template slice.
+- Added `price_impact.q`, which aligns trades to the prevailing same-symbol quote mid and the same-symbol quote mid at trade time plus the fixed 30-second horizon, then calculates signed price impact in basis points using feed-provided `aggressor_side`.
+- Added price-impact input and output schema contracts requiring canonical trade `aggressor_side` and canonical same-symbol quote fields, with `trade_count` and `notional` metadata preserved for report diagnostics.
+- Wired `price_impact_30s_bps` into q-template dispatch, query planning, source-function rendering, symbol filtering, horizon/freshness parameter rendering, output-schema dispatch, runner support, starter metric documentation, and `config/report.production_minimal.yaml`.
+- Updated README, kdb integration docs, production readiness docs, roadmap, and milestone status to describe the runnable price-impact metric and keep validation utility expansion frozen.
+
+### Files changed
+
+- `README.md`
+- `_docs/ROADMAP.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/journal.md`
+- `config/report.production_minimal.yaml`
+- `docs/kdb_integration_testing.md`
+- `docs/production_readiness.md`
+- `mmsr/kdb/q_templates/price_impact.q`
+- `mmsr/kdb/query_plan.py`
+- `mmsr/kdb/schema_contracts.py`
+- `mmsr/metrics/starter_definitions.py`
+- `tests/test_config_files.py`
+- `tests/test_kdb_metric_runner.py`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_kdb_schema_contracts.py`
+
+### Tests added or updated
+
+- Added schema-contract tests for `price_impact.q` trade/quote input requirements, output metadata, result validation, dispatch, and non-price-impact metric rejection.
+- Added query-planner coverage for `price_impact_30s_bps`, including the two-source trade/quote contract, selected-symbol rendering, fixed 30-second horizon rendering, quote-freshness parameters, q-template dispatch, and required output columns.
+- Added runner normalization coverage for `price_impact_30s_bps`, including metadata preservation from `trade_count` and `notional`.
+- Updated the unsupported-runner test to use a synthetic registered metric with no q template because all starter report metrics now have runnable q-template coverage.
+- Updated production minimal config coverage to include the new price-impact q-template metric.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_kdb_schema_contracts.py tests/test_kdb_query_plan.py tests/test_kdb_metric_runner.py tests/test_config_files.py tests/test_docs_governance.py -q --tb=short`: passed with 1 expected live-kdb/schema skip.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest -q -ra --tb=short`: passed with 3 expected live-kdb/schema skips.
+- `python -m black --check .`: could not run because Black is not installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Milestone 10 / runnable kdb metric coverage, with Milestone 9B validation utility expansion frozen per user feedback.
+
+### Current milestone progress
+
+- The price-impact q-template slice is complete: 100% complete.
+- Milestone 10 is approximately 100% complete for the registered starter metrics because activity, liquidity, tick-spread, volatility, effective-spread, price-impact, flow, and reversion metric families now have checked-in q-template coverage.
+
+### Remaining work before milestone completion
+
+- Run the full test suite and compile validation after the journal update.
+- Improve report pages and deterministic commentary now that the starter runnable kdb metrics are available as normalized `MetricTimeSeries` rows.
+- Keep broader validation framework work deferred until there are several reports with shared validation needs.
+
+### Best next deterministic step
+
+- Add a transaction-cost report section/table grouping `effective_spread_bps` and `price_impact_30s_bps` with metric-help text and deterministic commentary, using existing normalized comparison facts rather than adding more validation utilities.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 66.
+- Delivery archive name: `mmsr_phase10_iteration66.zip`.
+
+### Open questions
+
+- Should `max_quote_age` and `max_horizon_quote_age` become explicit report YAML settings for transaction-cost metrics, or should the current conservative runner defaults remain until transaction-cost configuration is generalized?
+
+---
+
+## 2026-05-27 — Phase 10 iteration 67: rescope default market report metrics
+
+### Implemented
+
+- Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, and `_docs/journal.md` before changing the default report scope.
+- Rescoped `config/report.production_minimal.yaml` to the market-monitoring metrics requested for this report: activity, displayed liquidity, and the six primary-quote reversion horizons.
+- Enabled the Cross-Venue Toxicity/Reversion settings in the minimal production config and made the venue-trade / primary-quote raw functions explicit for the reversion metrics.
+- Rescoped `config/report.example.yaml` to the same default market-report metric list so the example no longer advertises transaction-cost or optional add-on metrics as part of the standard report.
+- Documented that optional market-microstructure add-ons such as tick-normalized spread, quote-mid realized volatility, and feed-signed order-flow imbalance remain available as checked-in q templates, but are not enabled by default.
+- Documented that transaction-cost metrics such as effective spread and price impact are outside the default market-monitoring report scope and should not drive future report-section work unless the product scope explicitly changes.
+- Updated config-file tests to lock the minimal/example configs to the narrowed market-report metric list and verify explicit production reversion source functions.
+
+### Files changed
+
+- `README.md`
+- `_docs/ROADMAP.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/journal.md`
+- `config/report.example.yaml`
+- `config/report.production_minimal.yaml`
+- `docs/kdb_integration_testing.md`
+- `docs/production_readiness.md`
+- `tests/test_config_files.py`
+
+### Tests added or updated
+
+- Updated `test_production_minimal_config_loads_supported_kdb_metrics` to assert the exact market-monitoring metric set, toxicity/reversion enablement, and explicit venue-trade / primary-quote raw source functions.
+- Added `test_example_config_uses_market_monitoring_metrics` to prevent the example config from drifting back into transaction-cost or optional add-on metrics.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_config_files.py tests/test_docs_governance.py -q --tb=short`: passed.
+- Ran `python -m pytest tests/test_config_files.py tests/test_kdb_query_plan.py tests/test_kdb_schema_contracts.py tests/test_kdb_metric_runner.py tests/test_docs_governance.py -q --tb=short`: passed with 1 expected live-kdb/schema skip.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest -q -ra --tb=short`: passed with 3 expected live-kdb/schema skips.
+- `python -m black --check .`: could not run because Black is not installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Milestone 10 / kdb integration demo and first live-kdb market-report readiness.
+- Milestone 9B validation utility expansion remains frozen per user feedback.
+
+### Current milestone progress
+
+- The default report metric scope correction is complete: 100% complete.
+- Milestone 10 is approximately 99.5% complete for a first market-monitoring live run because the default configs now align with the market report scope and all default metrics have checked-in q-template coverage.
+
+### Remaining work before milestone completion
+
+- Clarify the sign convention and wording for primary-quote reversion so report users can distinguish reversion framing from price-impact framing.
+- Improve the Cross-Venue Toxicity/Reversion page and market-wide activity/liquidity summaries using the narrowed default metric set.
+- Keep broader validation framework work deferred until there are several reports with shared validation needs.
+
+### Best next deterministic step
+
+- Audit and, if needed, correct the primary-quote reversion sign convention and explanatory text so positive/negative values are consistently described as reversion versus adverse movement before enhancing the Cross-Venue Toxicity page.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 67.
+- Delivery archive name: `mmsr_phase10_iteration67.zip`.
+
+### Open questions
+
+- Should `primary_quote_reversion_*_bps` use a positive-is-reversion sign convention (`side * (pre_mid - post_mid)`) or keep the existing positive-is-adverse-movement convention while explaining that it is adverse reversion/toxicity rather than literal price reversion?
+
+## 2026-05-27 — Phase 10 Iteration 68: fix primary-quote reversion formula convention
+
+### Summary
+
+- Updated the primary-quote reversion convention per user direction to:
+  `aggressor_side * (future_mid - mid_at_trade) / future_mid * 10000`.
+- Changed `toxicity_reversion.q` to divide by `post_mid` and require `post_mid > 0` for valid scored rows.
+- Updated metric-definition formula text, Cross-Venue Toxicity help text, deterministic commentary docs, roadmap wording, production readiness notes, and kdb integration docs to use the future-mid denominator consistently.
+- Added regression coverage so the packaged q template cannot drift back to the old `primary_mid` denominator.
+
+### Files changed
+
+- `README.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `docs/kdb_integration_testing.md`
+- `docs/production_readiness.md`
+- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/metrics/starter_definitions.py`
+- `mmsr/report/toxicity.py`
+- `mmsr/visuals/toxicity.py`
+- `tests/test_kdb_query_loader.py`
+- `tests/test_toxicity_reversion.py`
+
+### Tests added or updated
+
+- Added `test_toxicity_reversion_template_uses_future_mid_denominator`.
+- Updated the registered reversion metric test to assert the documented formula denominator.
+
+### Validation performed
+
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest tests/test_kdb_query_loader.py tests/test_toxicity_reversion.py tests/test_toxicity_reversion_report.py tests/test_docs_governance.py -q --tb=short`: passed.
+- Ran `python -m pytest -q -ra --tb=short`: passed with 3 expected live-kdb/schema skips.
+- `python -m black --check .`: could not run because Black is not installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Milestone 10 / kdb integration demo and first live-kdb market-report readiness.
+- Validation utility expansion remains frozen per user feedback.
+
+### Current milestone progress
+
+- Formula-convention correction is complete: 100%.
+- Milestone 10 is approximately 99.8% complete for a first market-monitoring live run.
+
+### Remaining work before milestone completion
+
+- Improve the Cross-Venue Toxicity/Reversion page using the narrowed default market metric set, without adding transaction-cost report sections or additional validation utilities.
+
+### Best next deterministic step
+
+- Add a focused Cross-Venue Toxicity/Reversion report enhancement that uses the corrected reversion convention and existing normalized comparison facts.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 68.
+- Delivery archive name: `mmsr_phase10_iteration68.zip`.
+
+### Open questions
+
+- None.
+
+---
+
+## 2026-05-27 — Phase 10 iteration 69: add report scope guardrails
+
+### Implemented
+
+- Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, and `_docs/journal.md` before adding documentation guardrails.
+- Added `docs/report_scope.md` as the canonical scope gate for future implementation work.
+- Documented that `mmsr` is a Japanese market microstructure market-monitoring report package, not a transaction-cost analysis, execution-quality, smart-order-routing, venue-ranking, or generic validation-framework package.
+- Locked the default report metric description to activity, displayed liquidity, and the six Cross-Venue Toxicity/Reversion horizons.
+- Documented in-scope future work: market-wide summaries, intraday/auction profiles, taxonomy and symbol drilldowns, volatility or market-quality metrics that describe market state, and deterministic commentary.
+- Documented out-of-scope default work: effective spread, implementation shortfall, slippage, price impact, order-routing analytics, broker/client order analytics, and reusable validation frameworks.
+- Linked the scope guardrails from README, MkDocs navigation, docs index, AGENTS, the checked-in custom instructions copy, roadmap, milestone status, and production readiness docs.
+- Added a governance regression test so the scope guardrails and cross-doc references remain visible.
+
+### Files changed
+
+- `README.md`
+- `_docs/AGENTS.md`
+- `_docs/CUSTOM_GPT_INSTRUCTIONS.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `docs/index.md`
+- `docs/production_readiness.md`
+- `docs/report_scope.md`
+- `mkdocs.yml`
+- `tests/test_docs_governance.py`
+
+### Tests added or updated
+
+- Added `test_docs_define_report_scope_guardrails` to assert the canonical scope page, default metric set, out-of-scope execution-cost/TCA language, validation-framework boundary, and MkDocs nav entry.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_docs_governance.py -q --tb=short`: passed.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest -q -ra --tb=short`: passed with 3 expected live-kdb/schema skips.
+- `python -m black --check .`: not run because Black is not installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Milestone 10 / first live-kdb market-report readiness.
+- Validation utility expansion remains frozen per user feedback.
+
+### Current milestone progress
+
+- Scope-guardrail documentation is complete: 100%.
+- Milestone 10 remains approximately 99.8% complete for a first market-monitoring live run.
+
+### Remaining work before milestone completion
+
+- Improve the Cross-Venue Toxicity/Reversion page and market-wide activity/liquidity summaries using the narrowed default market metric set.
+- Use `docs/report_scope.md` as the gate before adding any new metrics, report sections, utilities, or roadmap next steps.
+
+### Best next deterministic step
+
+- Improve the Cross-Venue Toxicity/Reversion report page using the corrected reversion convention and existing normalized comparison facts, without adding transaction-cost report sections or additional validation utilities.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 69.
+- Delivery archive name: `mmsr_phase10_iteration69.zip`.
+
+### Open questions
+
+- None.
+---
+
+## 2026-05-27 — Phase 10 iteration 70: add toxicity reversion comparison table
+
+### Implemented
+
+- Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, `_docs/journal.md`, and the scope guardrail before implementing the next deterministic step.
+- Enhanced the Cross-Venue Toxicity/Reversion page so it can render existing normalized `MetricComparison` facts for the reversion metric family as a current-versus-reference metric table.
+- Kept the enhancement presentation-only: the page filters precomputed reversion comparisons, preserves current value, reference value, change, status, metric help, bucket, venue, horizon, and group context, and does not recalculate metrics or comparisons in Python.
+- Routed `MarketReportInput.comparisons` into the toxicity page from the canonical market report builder.
+- Added table help text that states the future-mid denominator convention and that positive current values or positive changes indicate more aggressive-direction primary-quote reversion.
+
+### Files changed
+
+- `mmsr/report/toxicity.py`
+- `mmsr/report/market_report.py`
+- `tests/test_toxicity_reversion_report.py`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Added `test_toxicity_reversion_page_adds_reversion_comparison_table`.
+- Updated the canonical market report toxicity-page insertion test to assert that reversion comparison facts are passed through to the page table.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_toxicity_reversion_report.py -q --tb=short`: passed.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest tests/test_toxicity_reversion.py tests/test_toxicity_reversion_report.py tests/test_market_report.py tests/test_html_rendering.py -q --tb=short`: passed.
+- Ran `python -m pytest -q -ra --tb=short`: passed with 3 expected live-kdb/schema skips.
+- `python -m black --check .`: not run successfully because Black is not installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Milestone 10 / first live-kdb market-report readiness.
+- Validation utility expansion remains frozen per user feedback.
+
+### Current milestone progress
+
+- Toxicity/Reversion page comparison-table enhancement is complete: 100%.
+- Milestone 10 remains approximately 99.85% complete for a first market-monitoring live run.
+
+### Remaining work before milestone completion
+
+- Improve the market-wide activity and displayed-liquidity summary presentation using the narrowed default market metric set.
+- Keep default report work inside `docs/report_scope.md`: activity, displayed liquidity, Cross-Venue Toxicity/Reversion, market-wide/intraday/taxonomy/symbol views, and deterministic commentary.
+- Live production validation remains pending until a real kdb+ process, credentials, source functions, and production-like schemas are available.
+
+### Best next deterministic step
+
+- Add a small market summary refinement that surfaces existing activity and displayed-liquidity comparison facts more clearly, without adding transaction-cost sections, new validation utilities, or new metric families.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 70.
+- Delivery archive name: `mmsr_phase10_iteration70.zip`.
+
+### Open questions
+
+- None.
+
+---
+
+## 2026-05-27 — Phase 10 iteration 71: surface activity and displayed-liquidity summary families
+
+### Implemented
+
+- Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, `_docs/journal.md`, and the scope guardrail before implementing the next deterministic step.
+- Enhanced the Executive Market Overview block so the Market Summary page surfaces existing comparison facts for the default market-monitoring families:
+  - Market activity: `turnover`, `volume`, and `trade_count`.
+  - Displayed liquidity: `quoted_spread_bps` and `top_of_book_depth`.
+- Kept the change presentation-only: the overview uses already-computed `MetricComparison` rows, respects the existing `max_metric_summaries` limit, and does not calculate new metrics, query kdb+, add transaction-cost sections, or add validation utilities.
+- Added lightweight CSS for the family overview callouts in the packaged HTML template.
+- Updated the canonical market-report regression test to assert the family summaries are rendered in both the component model and packaged HTML.
+
+### Files changed
+
+- `mmsr/report/overview.py`
+- `mmsr/report/templates/report.html.j2`
+- `tests/test_overview.py`
+- `tests/test_market_report.py`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Added `tests/test_overview.py` with coverage for activity and displayed-liquidity family summaries and omission behavior when a family has no selected default-family metrics.
+- Updated `tests/test_market_report.py` to assert the Market Summary page and rendered HTML expose the new family summary text.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_executive_overview.py tests/test_overview.py tests/test_market_report.py -q --tb=short`: passed.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest -q -ra --tb=short`: passed with 3 expected live-kdb/schema skips.
+- `python -m black --check .`: not run successfully because Black is not installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Milestone 10 / first live-kdb market-report readiness.
+- Validation utility expansion remains frozen per user feedback.
+
+### Current milestone progress
+
+- Market-summary activity and displayed-liquidity family callouts are complete: 100%.
+- Milestone 10 is approximately 99.9% complete for a first market-monitoring live run.
+
+### Remaining work before milestone completion
+
+- Live production validation remains pending until a real kdb+ process, credentials, source functions, and production-like schemas are available.
+- Keep future default-report refinements inside `docs/report_scope.md`: activity, displayed liquidity, Cross-Venue Toxicity/Reversion, market-wide/intraday/taxonomy/symbol views, and deterministic commentary.
+
+### Best next deterministic step
+
+- Add a concise production handoff note that points operators to the existing live-kdb smoke-test environment variables and bounded validation sequence, without adding new validation utilities.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 71.
+- Delivery archive name: `mmsr_phase10_iteration71.zip`.
+
+### Open questions
+
+- None.
+
+
+
+---
+
+## 2026-05-27 — Phase 10 iteration 72: switch production kdb boundary to user functions with positional arguments
+
+### Implemented
+
+- Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, `_docs/journal.md`, and the scope guardrail before implementing the user-requested production boundary change.
+- Replaced production trading-calendar table configuration with a user-owned calendar function configuration:
+  - `calendar.namespace`
+  - `calendar.function`
+  - `calendar.date_column`
+- Updated `KdbTradingCalendarSource` to call the configured calendar function as `{[start;end] .namespace.function[start;end]}` and coerce either a date vector or a table/dict with the configured date column.
+- Changed raw source-function rendering from a request dictionary to fixed positional q arguments:
+  - `startDate`
+  - `endDate`
+  - `startTimes`
+  - `endTimes`
+  - `bucket`
+  - `syms`
+  - `venues`
+  - `date`
+  - `symbolChunkId`
+  - `symbolChunkCount`
+- Updated production CLI wiring so `mmsr plan`, `mmsr preflight`, and `mmsr render` all use the configured calendar function.
+- Updated live-smoke helper environment variables from table names to user source functions:
+  - `MMSR_KDB_TRADE_FUNCTION`
+  - `MMSR_KDB_QUOTE_FUNCTION`
+  - `MMSR_KDB_CALENDAR_FUNCTION`
+- Updated production/example configs and production readiness documentation to describe the function-based boundary and positional argument contract.
+
+### Files changed
+
+- `README.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `config/report.example.yaml`
+- `config/report.production_minimal.yaml`
+- `docs/kdb_integration_testing.md`
+- `docs/production_readiness.md`
+- `mmsr/cli.py`
+- `mmsr/config/loading.py`
+- `mmsr/config/models.py`
+- `mmsr/kdb/live_smoke.py`
+- `mmsr/kdb/production.py`
+- `mmsr/kdb/q_templates/trading_calendar.q`
+- `mmsr/kdb/query_plan.py`
+- `mmsr/periods/calendar.py`
+- `tests/test_calendar.py`
+- `tests/test_config_files.py`
+- `tests/test_config_models.py`
+- `tests/test_docs_governance.py`
+- `tests/test_kdb_production_execution.py`
+- `tests/test_kdb_query_loader.py`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_live_kdb_smoke.py`
+- `tests/test_production_cli.py`
+
+### Tests added or updated
+
+- Updated calendar-source tests to assert user-function calendar calls instead of table selects.
+- Updated query-plan and production-execution tests to assert positional source-function calls and no request dictionary.
+- Updated production CLI tests to use `calendar.function` config and fake calendar function detection.
+- Updated live-kdb smoke tests to use function environment variables and source-function metric requests.
+- Updated governance/docs tests for the new function-based production boundary terms.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_config_models.py tests/test_config_files.py tests/test_calendar.py tests/test_kdb_query_loader.py tests/test_kdb_query_plan.py tests/test_kdb_production_execution.py tests/test_production_cli.py tests/test_live_kdb_smoke.py tests/test_docs_governance.py -q --tb=short`: passed with 2 expected live-kdb smoke skips.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest -q -ra --tb=short`: passed with 3 expected live-kdb/schema skips.
+- Ran `python -m black --check .`: not run successfully because Black is not installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Milestone 10 / first live-kdb market-report readiness.
+- Validation utility expansion remains frozen per user feedback.
+
+### Current milestone progress
+
+- User-function calendar and positional raw source-function boundary is complete: 100%.
+- Milestone 10 is approximately 99.95% complete for a first market-monitoring live run.
+
+### Remaining work before milestone completion
+
+- Live production validation remains pending until a real kdb+ process, credentials, configured source functions, configured calendar function, and production-like schemas are available.
+- Keep future default-report refinements inside `docs/report_scope.md`: activity, displayed liquidity, Cross-Venue Toxicity/Reversion, market-wide/intraday/taxonomy/symbol views, and deterministic commentary.
+
+### Best next deterministic step
+
+- Run a bounded live-kdb trial using `config/report.production_minimal.yaml`, one known-good trading day, one liquid symbol, and the configured user functions for calendar, trade, quote, venue trade, and primary quote.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 72.
+- Delivery archive name: `mmsr_phase10_iteration72.zip`.
+
+### Open questions
+
+- None.
+
+---
+
+## 2026-05-27 — Phase 10 iteration 73: simplify source functions and add symbol-universe function
+
+### Implemented
+
+- Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, `_docs/journal.md`, and the scope guardrail before implementing the user-requested source-boundary refinement.
+- Simplified raw trade/quote source-function rendering from the broader positional argument list to the minimal production boundary:
+  - `date`
+  - `syms`
+- Added first-class symbol-universe configuration:
+  - `symbols.namespace`
+  - `symbols.function`
+  - `symbols.symbol_column`
+- Added `KdbSymbolUniverseSource`, which calls the configured user-owned q function as `{[date] .namespace.function[date]}` and accepts either a symbol vector or a table/dict with the configured symbol column.
+- Updated `KdbProductionExecutor`, `KdbProductionExecutionPlanner`, and preflight planning so production runs use the configured symbol-universe function by default, while explicit CLI `--symbol` values remain a bounded smoke/debug override.
+- Updated production plan summaries to show the configured symbol-universe function.
+- Removed `symbolChunkId` and `symbolChunkCount` from raw source-function calls; chunking remains an MMSR-side execution-plan detail that determines which `syms` vector each source call receives.
+- Updated production/example configs and operator documentation to describe the new `getSymbols[date]`, `getTrade[date;syms]`, and `getQuote[date;syms]` contracts.
+
+### Files changed
+
+- `README.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `config/report.example.yaml`
+- `config/report.production_minimal.yaml`
+- `docs/kdb_integration_testing.md`
+- `docs/production_readiness.md`
+- `mmsr/cli.py`
+- `mmsr/config/__init__.py`
+- `mmsr/config/loading.py`
+- `mmsr/config/models.py`
+- `mmsr/kdb/production.py`
+- `mmsr/kdb/query_plan.py`
+- `mmsr/periods/__init__.py`
+- `mmsr/periods/symbols.py`
+- `tests/test_config_files.py`
+- `tests/test_config_models.py`
+- `tests/test_kdb_production_execution.py`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_production_cli.py`
+- `tests/test_symbols.py`
+
+### Tests added or updated
+
+- Added `tests/test_symbols.py` for `KdbSymbolUniverseSource` function calls and vector coercion.
+- Updated config model/config-file tests for `SymbolUniverseConfig` and `symbols:` YAML loading.
+- Updated query-plan tests to assert raw source functions are called as `function[date;syms]` with no request dictionary and no chunk-id arguments.
+- Updated production execution tests to assert day-specific symbol universes drive symbol chunks when CLI symbols are not provided.
+- Updated production CLI tests to fake the configured symbol-universe function and verify plan summaries include it.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_config_models.py tests/test_config_files.py tests/test_calendar.py tests/test_symbols.py tests/test_kdb_query_loader.py tests/test_kdb_query_plan.py tests/test_kdb_production_execution.py tests/test_production_cli.py tests/test_live_kdb_smoke.py tests/test_docs_governance.py -q --tb=short --color=no`: passed with 2 expected live-kdb smoke skips.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest -q -ra --tb=short --color=no`: passed with 3 expected live-kdb/schema skips.
+- Ran `python -m black --check .`: not run successfully because Black is not installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Milestone 10 / first live-kdb market-report readiness.
+- Validation utility expansion remains frozen per user feedback.
+
+### Current milestone progress
+
+- Minimal `date;syms` raw source-function boundary and user-owned symbol-universe function support are complete: 100%.
+- Milestone 10 is approximately 99.97% complete for a first market-monitoring live run.
+
+### Remaining work before milestone completion
+
+- Live production validation remains pending until a real kdb+ process, credentials, configured calendar/symbol/trade/quote functions, and production-like schemas are available.
+- Keep future default-report refinements inside `docs/report_scope.md`: activity, displayed liquidity, Cross-Venue Toxicity/Reversion, market-wide/intraday/taxonomy/symbol views, and deterministic commentary.
+
+### Best next deterministic step
+
+- Run a bounded live-kdb trial using `config/report.production_minimal.yaml`, one known-good trading day, and the configured user functions for calendar, symbols, trade, quote, venue trade, and primary quote.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 73.
+- Delivery archive name: `mmsr_phase10_iteration73.zip`.
+
+### Open questions
+
+- None.
+
+
+## 2026-05-27 - Phase 10 Iteration 74
+
+### Summary
+
+Implemented MMSR-owned q aggregation helpers under the configured calculation namespace so user-owned kdb functions remain limited to calendar, symbol-universe, and canonical source-row access while MMSR owns metric calculation logic.
+
+### Files changed
+
+- `README.md`
+- `mmsr/kdb/query_loader.py`
+- `mmsr/kdb/runner.py`
+- `mmsr/kdb/q_templates/activity.q`
+- `mmsr/kdb/q_templates/calculation_functions.q`
+- `mmsr/kdb/q_templates/liquidity.q`
+- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `tests/test_kdb_metric_runner.py`
+- `tests/test_kdb_query_loader.py`
+- `tests/test_kdb_query_plan.py`
+
+### Tests added or updated
+
+- Added tests for rendering the calculation-function bootstrap into a configured namespace.
+- Added a runner test for `install_calculation_functions()`.
+- Updated query-plan and runner tests to assert activity, liquidity, and reversion templates use MMSR-owned namespace helpers for core aggregations.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_kdb_query_loader.py tests/test_kdb_query_plan.py tests/test_kdb_metric_runner.py -q --tb=short --color=no`: passed.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest -q -ra --tb=short --color=no`: passed with 3 expected live-kdb/schema skips.
+- Ran `python -m black --check .`: not run successfully because Black is not installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Milestone 10 / first live-kdb market-report readiness.
+- Validation utility expansion remains frozen per user feedback.
+
+### Current milestone progress
+
+- Minimal source functions and MMSR-owned kdb calculation namespace support are complete: 100%.
+- Milestone 10 is approximately 99.98% complete for a first market-monitoring live run.
+
+### Remaining work before milestone completion
+
+- Live production validation remains pending until a real kdb+ process, credentials, configured calendar/symbol/trade/quote functions, and production-like schemas are available.
+- Keep future default-report refinements inside `docs/report_scope.md`: activity, displayed liquidity, Cross-Venue Toxicity/Reversion, market-wide/intraday/taxonomy/symbol views, and deterministic commentary.
+
+### Best next deterministic step
+
+- Run a bounded live-kdb trial using `config/report.production_minimal.yaml`, one known-good trading day, configured user source functions, and the MMSR calculation namespace.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 74.
+- Delivery archive name: `mmsr_phase10_iteration74.zip`.
+
+### Open questions
+
+- None.
+
+
+## 2026-05-27 - Phase 10 Iteration 75
+
+### Summary
+
+Implemented the production source-boundary update requested for the first real
+kdb trial: static session times are no longer required in production configs,
+trade/quote source rows carry per-tick `session` and `auction` state, a
+user-owned reference-data function supplies TOPIX/cap/lot-size metadata, and a
+packaged live-kdb example config is included in the package.
+
+### Files changed
+
+- `README.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `config/report.example.yaml`
+- `config/report.production_minimal.yaml`
+- `docs/kdb_integration_testing.md`
+- `docs/production_readiness.md`
+- `mmsr/config/__init__.py`
+- `mmsr/config/loading.py`
+- `mmsr/config/models.py`
+- `mmsr/examples/config/live_kdb_report.yaml`
+- `mmsr/examples/mock_kdb_demo.py`
+- `mmsr/kdb/live_smoke.py`
+- `mmsr/kdb/q_templates/activity.q`
+- `mmsr/kdb/q_templates/calculation_functions.q`
+- `mmsr/kdb/q_templates/liquidity.q`
+- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/kdb/query_plan.py`
+- `mmsr/kdb/schema_contracts.py`
+- `mmsr/periods/models.py`
+- `pyproject.toml`
+- `tests/test_cli.py`
+- `tests/test_config_models.py`
+- `tests/test_kdb_metric_runner.py`
+- `tests/test_kdb_production_execution.py`
+- `tests/test_kdb_query_loader.py`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_kdb_schema_contracts.py`
+- `tests/test_live_kdb_smoke.py`
+- `tests/test_mock_kdb_demo.py`
+- `tests/test_periods.py`
+- `tests/test_production_cli.py`
+
+### Tests added or updated
+
+- Added/updated config tests for `reference_data` / `getRef` config loading and
+  source-function propagation.
+- Updated schema-contract tests so activity, liquidity, reversion, and reference
+  data contracts require per-tick `session`/`auction` state and `getRef` fields.
+- Updated query-plan and runner tests to assert `date;syms` source calls,
+  reference-data joins, and namespace-owned session/auction-aware time bucketing.
+- Updated production CLI/executor/live-smoke tests for the `reference_data`
+  function and sessionless production period config.
+- Updated mock-kdb demo tests for the new canonical q source shape.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_kdb_query_plan.py tests/test_kdb_metric_runner.py tests/test_live_kdb_smoke.py -q --tb=short --color=no`: passed with 2 expected live-kdb smoke skips.
+- Ran `python -m pytest tests/test_config_models.py tests/test_kdb_schema_contracts.py tests/test_kdb_query_loader.py tests/test_kdb_production_execution.py tests/test_production_cli.py tests/test_mock_kdb_demo.py tests/test_cli.py tests/test_periods.py -q --tb=short --color=no`: passed with 1 expected live-schema skip.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest -q -ra --tb=short --color=no`: passed with 3 expected live-kdb/schema skips.
+- Ran `python -m black --check .`: not run successfully because Black is not installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Milestone 10 / first live-kdb market-report readiness.
+- Validation utility expansion remains frozen per user feedback.
+
+### Current milestone progress
+
+- Production kdb source-boundary alignment with user-owned calendar, symbol,
+  reference, trade, and quote functions is complete: 100%.
+- Milestone 10 is approximately 99.99% complete for a first market-monitoring
+  live run.
+
+### Remaining work before milestone completion
+
+- Live production validation remains pending until a real kdb+ process,
+  credentials, configured calendar/symbol/reference/trade/quote functions, and
+  production-like schemas are available.
+- Keep future default-report refinements inside `docs/report_scope.md`: activity,
+  displayed liquidity, Cross-Venue Toxicity/Reversion, market-wide/intraday/
+  taxonomy/symbol views, and deterministic commentary.
+
+### Best next deterministic step
+
+- Run a bounded live-kdb trial using `config/report.production_minimal.yaml`, one
+  known-good trading day, one liquid symbol, configured `getTradingCalendar`,
+  `getSymbols`, `getRef`, `getTrade`, and `getQuote` functions, and the MMSR
+  calculation namespace.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 75.
+- Delivery archive name: `mmsr_phase10_iteration75.zip`.
+
+### Open questions
+
+- Confirm whether `getRef` should support client-specific additional taxonomy
+  columns beyond `topix_bucket`, `market_cap_bucket`, and `lot_size` before
+  those columns are enabled in `groups`.
+

@@ -2,10 +2,35 @@
 
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 from typing import Sequence
 
+import typer
+
+from mmsr.analysis.comparison import (
+    ComparisonPolicy,
+    ReferenceObservationSpec,
+    compare_metric_timeseries,
+)
+from mmsr.config import load_report_config_file
+from mmsr.config.models import ReportConfig
+from mmsr.kdb.client import KdbClient, KdbConfig
+from mmsr.kdb.production import (
+    KdbProductionExecutor,
+    KdbProductionPlanSummary,
+    KdbProductionPreflight,
+    KdbProductionPreflightResult,
+)
+from mmsr.kdb.runner import KdbMetricRunner
+from mmsr.metrics.registry import build_default_registry
+from mmsr.metrics.results import MetricComparison, MetricObservation, MetricTimeSeries
+from mmsr.periods.calendar import KdbTradingCalendarSource
+from mmsr.periods.symbols import KdbSymbolUniverseSource
+from mmsr.report.market_report import (
+    MarketReportInput,
+    MarketReportOptions,
+    build_market_monitor_report,
+)
 from mmsr.examples import (
     MockKdbIntegrationDemoOptions,
     OfflineDemoReportOptions,
@@ -14,184 +39,708 @@ from mmsr.examples import (
 )
 from mmsr.report.render_html import render_report
 
+CLI_HELP = "Generate Japanese market microstructure monitoring report artifacts."
 
-def build_parser() -> argparse.ArgumentParser:
-    """Build the command-line parser."""
+app = typer.Typer(
+    help=CLI_HELP,
+    no_args_is_help=True,
+    add_completion=False,
+)
 
-    parser = argparse.ArgumentParser(
-        prog="mmsr",
-        description=(
-            "Generate Japanese market microstructure monitoring report artifacts."
-        ),
-    )
-    subparsers = parser.add_subparsers(dest="command")
 
-    offline_demo = subparsers.add_parser(
-        "offline-demo",
-        help="Render the deterministic mock-data production-format HTML report.",
-        description=(
-            "Render a deterministic mock-data production-format HTML report without "
-            "importing PyKX, connecting to kdb+, or calling an LLM."
-        ),
-    )
-    offline_demo.add_argument(
-        "-o",
+def build_cli_app() -> typer.Typer:
+    """Build the Typer command-line application."""
+
+    return app
+
+
+@app.command(
+    "offline-demo",
+    help=(
+        "Render the deterministic mock-data production-format HTML report without "
+        "importing PyKX, connecting to kdb+, or calling an LLM."
+    ),
+)
+
+
+def _offline_demo_command(
+    output: Path = typer.Option(
+        Path("mmsr_offline_demo.html"),
         "--output",
-        default="mmsr_offline_demo.html",
+        "-o",
         help="Output HTML path. Parent directories are created automatically.",
-    )
-    offline_demo.add_argument(
+    ),
+    template_dir: Path | None = typer.Option(
+        None,
         "--template-dir",
-        default=None,
         help="Optional directory containing report.html.j2 and partial templates.",
-    )
-    offline_demo.add_argument(
+    ),
+    title: str | None = typer.Option(
+        None,
         "--title",
-        default=None,
         help="Override the mock-data report title.",
-    )
-    offline_demo.add_argument(
+    ),
+    brand_name: str | None = typer.Option(
+        None,
         "--brand-name",
-        default=None,
         help="Override the rendered report brand name.",
-    )
-    offline_demo.add_argument(
+    ),
+    generated_at_text: str | None = typer.Option(
+        None,
         "--generated-at-text",
-        default=None,
         help="Override the generated-at text shown in the rendered report.",
-    )
-    offline_demo.add_argument(
+    ),
+    no_appendix: bool = typer.Option(
+        False,
         "--no-appendix",
-        action="store_true",
         help="Omit the metric definitions appendix from the mock-data report.",
-    )
-    offline_demo.add_argument(
+    ),
+    max_metric_cards: int | None = typer.Option(
+        None,
         "--max-metric-cards",
-        type=int,
-        default=None,
         help="Optional limit for summary metric cards.",
-    )
-    offline_demo.add_argument(
+    ),
+    max_comments: int | None = typer.Option(
+        None,
         "--max-comments",
-        type=int,
-        default=None,
         help="Optional limit for deterministic commentary lines.",
-    )
-    offline_demo.add_argument(
+    ),
+    max_table_rows: int | None = typer.Option(
+        None,
         "--max-table-rows",
-        type=int,
-        default=None,
         help="Optional limit for comparison table rows.",
-    )
-    offline_demo.add_argument(
+    ),
+    max_chart_points: int | None = typer.Option(
+        None,
         "--max-chart-points",
-        type=int,
-        default=None,
         help="Optional limit for points per time-series chart.",
-    )
-    offline_demo.add_argument(
+    ),
+    max_heatmap_cells: int | None = typer.Option(
+        None,
         "--max-heatmap-cells",
-        type=int,
-        default=None,
         help="Optional limit for cells per heatmap.",
-    )
-    offline_demo.add_argument(
+    ),
+    include_intraday_heatmaps: bool = typer.Option(
+        False,
+        "--include-intraday-heatmaps",
+        help=(
+            "Opt into intraday heatmaps in addition to the default time-bucket "
+            "line charts."
+        ),
+    ),
+    no_drilldown_page: bool = typer.Option(
+        False,
         "--no-drilldown-page",
-        action="store_true",
         help="Omit the sector, segment, and market-cap drilldown page.",
-    )
-    offline_demo.add_argument(
+    ),
+    max_drilldown_rows: int | None = typer.Option(
+        None,
         "--max-drilldown-rows",
-        type=int,
-        default=None,
         help="Optional limit for drilldown table rows.",
-    )
-    offline_demo.set_defaults(handler=_handle_offline_demo)
+    ),
+) -> int:
+    """Render an offline deterministic report without kdb+, PyKX, or an LLM."""
 
-    mock_kdb_demo = subparsers.add_parser(
-        "mock-kdb-demo",
-        help="Render the deterministic mock-kdb integration HTML report.",
-        description=(
-            "Execute deterministic mock kdb queries through the real q-template "
-            "and KdbMetricRunner path, then render the canonical production-format "
-            "HTML report without importing PyKX or connecting to production kdb+."
+    options = _offline_demo_options_from_values(
+        title=title,
+        brand_name=brand_name,
+        generated_at_text=generated_at_text,
+        no_appendix=no_appendix,
+        max_metric_cards=max_metric_cards,
+        max_comments=max_comments,
+        max_table_rows=max_table_rows,
+        max_chart_points=max_chart_points,
+        max_heatmap_cells=max_heatmap_cells,
+        include_intraday_heatmaps=include_intraday_heatmaps,
+        no_drilldown_page=no_drilldown_page,
+        max_drilldown_rows=max_drilldown_rows,
+    )
+    output_path = render_offline_demo_report_file(
+        output,
+        options=options,
+        template_dir=template_dir,
+    )
+    typer.echo(f"Rendered mock-data production-format report: {output_path}")
+    return 0
+
+@app.command(
+    "mock-kdb-demo",
+    help=(
+        "Execute deterministic mock kdb queries through the real q-template "
+        "and KdbMetricRunner path, then render the canonical production-format "
+        "HTML report without importing PyKX or connecting to production kdb+."
+    ),
+)
+
+
+def _mock_kdb_demo_command(
+    output: Path = typer.Option(
+        Path("mmsr_mock_kdb_demo.html"),
+        "--output",
+        "-o",
+        help="Output HTML path. Parent directories are created automatically.",
+    ),
+    template_dir: Path | None = typer.Option(
+        None,
+        "--template-dir",
+        help="Optional directory containing report.html.j2 and partial templates.",
+    ),
+    title: str | None = typer.Option(
+        None,
+        "--title",
+        help="Override the mock-kdb report title.",
+    ),
+    brand_name: str | None = typer.Option(
+        None,
+        "--brand-name",
+        help="Override the rendered report brand name.",
+    ),
+    generated_at_text: str | None = typer.Option(
+        None,
+        "--generated-at-text",
+        help="Override the generated-at text shown in the rendered report.",
+    ),
+    no_appendix: bool = typer.Option(
+        False,
+        "--no-appendix",
+        help="Omit the metric definitions appendix from the mock-kdb report.",
+    ),
+    max_metric_cards: int | None = typer.Option(
+        None,
+        "--max-metric-cards",
+        help="Optional limit for summary metric cards.",
+    ),
+    max_comments: int | None = typer.Option(
+        None,
+        "--max-comments",
+        help="Optional limit for deterministic commentary lines.",
+    ),
+    max_table_rows: int | None = typer.Option(
+        None,
+        "--max-table-rows",
+        help="Optional limit for comparison table rows.",
+    ),
+    max_chart_points: int | None = typer.Option(
+        None,
+        "--max-chart-points",
+        help="Optional limit for points per time-series chart.",
+    ),
+    max_heatmap_cells: int | None = typer.Option(
+        None,
+        "--max-heatmap-cells",
+        help="Optional limit for cells per heatmap.",
+    ),
+    include_intraday_heatmaps: bool = typer.Option(
+        False,
+        "--include-intraday-heatmaps",
+        help=(
+            "Opt into intraday heatmaps in addition to the default time-bucket "
+            "line charts."
+        ),
+    ),
+    no_drilldown_page: bool = typer.Option(
+        False,
+        "--no-drilldown-page",
+        help="Omit the sector, segment, and market-cap drilldown page.",
+    ),
+    max_drilldown_rows: int | None = typer.Option(
+        None,
+        "--max-drilldown-rows",
+        help="Optional limit for drilldown table rows.",
+    ),
+) -> int:
+    """Render the deterministic mock-kdb path through KdbMetricRunner."""
+
+    options = _mock_kdb_demo_options_from_values(
+        title=title,
+        brand_name=brand_name,
+        generated_at_text=generated_at_text,
+        no_appendix=no_appendix,
+        max_metric_cards=max_metric_cards,
+        max_comments=max_comments,
+        max_table_rows=max_table_rows,
+        max_chart_points=max_chart_points,
+        max_heatmap_cells=max_heatmap_cells,
+        include_intraday_heatmaps=include_intraday_heatmaps,
+        no_drilldown_page=no_drilldown_page,
+        max_drilldown_rows=max_drilldown_rows,
+    )
+    output_path = render_mock_kdb_demo_report_file(
+        output,
+        options=options,
+        template_dir=template_dir,
+    )
+    typer.echo(f"Rendered mock-kdb integration report: {output_path}")
+    return 0
+
+@app.command(
+    "plan",
+    help=(
+        "Summarize the production kdb-backed render plan without executing "
+        "metric q. The command loads config, calls the kdb trading-calendar "
+        "function, derives target/reference trading days, and prints source-function "
+        "schema contracts."
+    ),
+)
+
+
+def _plan_command(
+    config: Path = typer.Option(
+        ...,
+        "--config",
+        "-c",
+        help="YAML report config path.",
+    ),
+    kdb_host: str = typer.Option(
+        ...,
+        "--kdb-host",
+        help="kdb+ host for the production plan summary.",
+    ),
+    kdb_port: int = typer.Option(
+        ...,
+        "--kdb-port",
+        help="kdb+ port for the production plan summary.",
+    ),
+    kdb_username: str | None = typer.Option(
+        None,
+        "--kdb-username",
+        help="Optional kdb+ username.",
+    ),
+    kdb_password: str | None = typer.Option(
+        None,
+        "--kdb-password",
+        help="Optional kdb+ password.",
+    ),
+    symbol: list[str] | None = typer.Option(
+        None,
+        "--symbol",
+        help=(
+            "Optional symbol filter for planning. Repeat the option for "
+            "multiple symbols; configured symbol_chunk_size is applied."
+        ),
+    ),
+    venue: list[str] | None = typer.Option(
+        None,
+        "--venue",
+        help="Optional venue filter. Repeat the option for multiple venues.",
+    ),
+) -> int:
+    """Print target/reference execution scope without running metric q."""
+
+    summary = summarize_production_report_plan(
+        config_path=config,
+        kdb_host=kdb_host,
+        kdb_port=kdb_port,
+        kdb_username=kdb_username,
+        kdb_password=kdb_password,
+        symbols=symbol,
+        venues=venue,
+    )
+    for line in summary.summary_lines():
+        typer.echo(line)
+    return 0
+
+@app.command(
+    "render",
+    help=(
+        "Render a production kdb-backed report from a YAML config. The command "
+        "uses the production executor, a kdb-backed trading-calendar function, "
+        "user-defined raw-data functions, and MMSR-owned calculation templates."
+    ),
+)
+
+
+def _render_command(
+    config: Path = typer.Option(
+        ...,
+        "--config",
+        "-c",
+        help="YAML report config path.",
+    ),
+    output: Path = typer.Option(
+        Path("mmsr_report.html"),
+        "--output",
+        "-o",
+        help="Output HTML path. Parent directories are created automatically.",
+    ),
+    kdb_host: str = typer.Option(
+        ...,
+        "--kdb-host",
+        help="kdb+ host for the production report run.",
+    ),
+    kdb_port: int = typer.Option(
+        ...,
+        "--kdb-port",
+        help="kdb+ port for the production report run.",
+    ),
+    kdb_username: str | None = typer.Option(
+        None,
+        "--kdb-username",
+        help="Optional kdb+ username.",
+    ),
+    kdb_password: str | None = typer.Option(
+        None,
+        "--kdb-password",
+        help="Optional kdb+ password.",
+    ),
+    symbol: list[str] | None = typer.Option(
+        None,
+        "--symbol",
+        help=(
+            "Optional symbol filter. Repeat the option for multiple symbols; "
+            "configured symbol_chunk_size is applied before kdb execution."
+        ),
+    ),
+    venue: list[str] | None = typer.Option(
+        None,
+        "--venue",
+        help="Optional venue filter. Repeat the option for multiple venues.",
+    ),
+    template_dir: Path | None = typer.Option(
+        None,
+        "--template-dir",
+        help="Optional directory containing report.html.j2 and partial templates.",
+    ),
+) -> int:
+    """Render a production report by executing configured kdb source functions."""
+
+    output_path = render_production_report_file(
+        output,
+        config_path=config,
+        kdb_host=kdb_host,
+        kdb_port=kdb_port,
+        kdb_username=kdb_username,
+        kdb_password=kdb_password,
+        symbols=symbol,
+        venues=venue,
+        template_dir=template_dir,
+    )
+    typer.echo(f"Rendered production kdb-backed report: {output_path}")
+    return 0
+
+@app.command(
+    "preflight",
+    help=(
+        "Validate a production kdb-backed report config before a full run. "
+        "The command loads the config, checks configured q names, calls the "
+        "kdb trading-calendar function, plans the first bounded metric step, executes "
+        "that single step, and validates the returned schema."
+    ),
+)
+
+
+def _preflight_command(
+    config: Path = typer.Option(
+        ...,
+        "--config",
+        "-c",
+        help="YAML report config path.",
+    ),
+    kdb_host: str = typer.Option(
+        ...,
+        "--kdb-host",
+        help="kdb+ host for the production preflight run.",
+    ),
+    kdb_port: int = typer.Option(
+        ...,
+        "--kdb-port",
+        help="kdb+ port for the production preflight run.",
+    ),
+    kdb_username: str | None = typer.Option(
+        None,
+        "--kdb-username",
+        help="Optional kdb+ username.",
+    ),
+    kdb_password: str | None = typer.Option(
+        None,
+        "--kdb-password",
+        help="Optional kdb+ password.",
+    ),
+    symbol: list[str] | None = typer.Option(
+        None,
+        "--symbol",
+        help=(
+            "Optional symbol filter for the bounded sample step. Repeat the "
+            "option for multiple symbols."
+        ),
+    ),
+    metric: str | None = typer.Option(
+        None,
+        "--metric",
+        help=(
+            "Optional configured metric name to validate instead of the first "
+            "configured metric."
+        ),
+    ),
+    venue: list[str] | None = typer.Option(
+        None,
+        "--venue",
+        help="Optional venue filter. Repeat the option for multiple venues.",
+    ),
+) -> int:
+    """Run one bounded production metric step and print diagnostics."""
+
+    result = preflight_production_report(
+        config_path=config,
+        kdb_host=kdb_host,
+        kdb_port=kdb_port,
+        kdb_username=kdb_username,
+        kdb_password=kdb_password,
+        symbols=symbol,
+        venues=venue,
+        metric_name=metric,
+    )
+    for line in result.summary_lines():
+        typer.echo(line)
+    return 0
+
+
+def _kdb_calendar_source(
+    client: KdbClient,
+    report_config: ReportConfig,
+) -> KdbTradingCalendarSource:
+    """Build the configured user-function-backed kdb calendar source."""
+
+    return KdbTradingCalendarSource(
+        client=client,
+        function=report_config.calendar.qualified_function(),
+        date_column=report_config.calendar.date_column,
+    )
+
+
+def _kdb_symbol_source(
+    client: KdbClient,
+    report_config: ReportConfig,
+) -> KdbSymbolUniverseSource:
+    """Build the configured user-function-backed kdb symbol-universe source."""
+
+    return KdbSymbolUniverseSource(
+        client=client,
+        function=report_config.symbols.qualified_function(),
+        symbol_column=report_config.symbols.symbol_column,
+    )
+
+
+def summarize_production_report_plan(
+    *,
+    config_path: str | Path,
+    kdb_host: str,
+    kdb_port: int,
+    kdb_username: str | None = None,
+    kdb_password: str | None = None,
+    symbols: Sequence[str] | None = None,
+    venues: Sequence[str] | None = None,
+) -> KdbProductionPlanSummary:
+    """Return a production execution summary without executing metric q."""
+
+    report_config, period = load_report_config_file(config_path)
+    client = KdbClient(
+        KdbConfig(
+            host=kdb_host,
+            port=kdb_port,
+            username=kdb_username,
+            password=kdb_password,
+        )
+    )
+    calendar = _kdb_calendar_source(client, report_config)
+    symbol_source = _kdb_symbol_source(client, report_config)
+    runner = KdbMetricRunner(client)
+    executor = KdbProductionExecutor(
+        runner=runner,
+        calendar_source=calendar,
+        symbol_source=symbol_source,
+    )
+    return executor.build_plan_summary(
+        config=report_config,
+        period=period,
+        symbols=symbols,
+        venues=venues,
+    )
+
+
+def preflight_production_report(
+    *,
+    config_path: str | Path,
+    kdb_host: str,
+    kdb_port: int,
+    kdb_username: str | None = None,
+    kdb_password: str | None = None,
+    symbols: Sequence[str] | None = None,
+    venues: Sequence[str] | None = None,
+    metric_name: str | None = None,
+) -> KdbProductionPreflightResult:
+    """Run a bounded production preflight against the configured kdb endpoint."""
+
+    report_config, period = load_report_config_file(config_path)
+    client = KdbClient(
+        KdbConfig(
+            host=kdb_host,
+            port=kdb_port,
+            username=kdb_username,
+            password=kdb_password,
+        )
+    )
+    calendar = _kdb_calendar_source(client, report_config)
+    symbol_source = _kdb_symbol_source(client, report_config)
+    runner = KdbMetricRunner(client)
+    preflight = KdbProductionPreflight(
+        runner=runner,
+        calendar_source=calendar,
+        symbol_source=symbol_source,
+    )
+    return preflight.run(
+        config=report_config,
+        period=period,
+        symbols=symbols,
+        venues=venues,
+        metric_name=metric_name,
+    )
+
+
+def render_production_report_file(
+    output_path: str | Path,
+    *,
+    config_path: str | Path,
+    kdb_host: str,
+    kdb_port: int,
+    kdb_username: str | None = None,
+    kdb_password: str | None = None,
+    symbols: Sequence[str] | None = None,
+    venues: Sequence[str] | None = None,
+    template_dir: str | Path | None = None,
+) -> Path:
+    """Render a production report through the production kdb executor.
+
+    This is the live production path. It uses a PyKX-backed ``KdbClient`` unless
+    tests inject lower-level fakes around ``KdbProductionExecutor`` directly.
+    Raw trade/quote data remains behind the configured user source functions and
+    q execution is scoped by the executor to one trading day and optional symbol
+    chunk per metric request.
+    """
+
+    resolved_output_path = _validated_output_path(output_path)
+    report_config, period = load_report_config_file(config_path)
+
+    client = KdbClient(
+        KdbConfig(
+            host=kdb_host,
+            port=kdb_port,
+            username=kdb_username,
+            password=kdb_password,
+        )
+    )
+    calendar = _kdb_calendar_source(client, report_config)
+    symbol_source = _kdb_symbol_source(client, report_config)
+    runner = KdbMetricRunner(client)
+    executor = KdbProductionExecutor(
+        runner=runner,
+        calendar_source=calendar,
+        symbol_source=symbol_source,
+    )
+    current_series = executor.run(
+        config=report_config,
+        period=period,
+        symbols=symbols,
+        venues=venues,
+    )
+    reference_series = executor.run_reference(
+        config=report_config,
+        period=period,
+        symbols=symbols,
+        venues=venues,
+    )
+
+    registry = build_default_registry()
+    definitions = {
+        metric_name: registry.get(metric_name)
+        for metric_name in report_config.metrics
+    }
+    comparisons = _compare_production_series(
+        report_config=report_config,
+        current_series=current_series,
+        reference_series=reference_series,
+    )
+    document = build_market_monitor_report(
+        MarketReportInput(
+            metric_definitions=definitions,
+            current_series=current_series,
+            comparisons=comparisons,
+            reference_series=reference_series,
+        ),
+        options=MarketReportOptions(
+            title=report_config.title,
+            brand_name=report_config.html.branding.brand_name,
+            generated_at_text="production kdb-backed run",
+            summary_scope_label="production kdb",
+            include_metric_definitions_appendix=True,
+            include_toxicity_reversion_page=report_config.toxicity.enabled,
         ),
     )
-    mock_kdb_demo.add_argument(
-        "-o",
-        "--output",
-        default="mmsr_mock_kdb_demo.html",
-        help="Output HTML path. Parent directories are created automatically.",
-    )
-    mock_kdb_demo.add_argument(
-        "--template-dir",
-        default=None,
-        help="Optional directory containing report.html.j2 and partial templates.",
-    )
-    mock_kdb_demo.add_argument(
-        "--title",
-        default=None,
-        help="Override the mock-kdb report title.",
-    )
-    mock_kdb_demo.add_argument(
-        "--brand-name",
-        default=None,
-        help="Override the rendered report brand name.",
-    )
-    mock_kdb_demo.add_argument(
-        "--generated-at-text",
-        default=None,
-        help="Override the generated-at text shown in the rendered report.",
-    )
-    mock_kdb_demo.add_argument(
-        "--no-appendix",
-        action="store_true",
-        help="Omit the metric definitions appendix from the mock-kdb report.",
-    )
-    mock_kdb_demo.add_argument(
-        "--max-metric-cards",
-        type=int,
-        default=None,
-        help="Optional limit for summary metric cards.",
-    )
-    mock_kdb_demo.add_argument(
-        "--max-comments",
-        type=int,
-        default=None,
-        help="Optional limit for deterministic commentary lines.",
-    )
-    mock_kdb_demo.add_argument(
-        "--max-table-rows",
-        type=int,
-        default=None,
-        help="Optional limit for comparison table rows.",
-    )
-    mock_kdb_demo.add_argument(
-        "--max-chart-points",
-        type=int,
-        default=None,
-        help="Optional limit for points per time-series chart.",
-    )
-    mock_kdb_demo.add_argument(
-        "--max-heatmap-cells",
-        type=int,
-        default=None,
-        help="Optional limit for cells per heatmap.",
-    )
-    mock_kdb_demo.add_argument(
-        "--no-drilldown-page",
-        action="store_true",
-        help="Omit the sector, segment, and market-cap drilldown page.",
-    )
-    mock_kdb_demo.add_argument(
-        "--max-drilldown-rows",
-        type=int,
-        default=None,
-        help="Optional limit for drilldown table rows.",
-    )
-    mock_kdb_demo.set_defaults(handler=_handle_mock_kdb_demo)
+    html = render_report(document, template_dir=template_dir)
 
-    return parser
+    resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
+    resolved_output_path.write_text(html, encoding="utf-8")
+    return resolved_output_path
+
+
+def _compare_production_series(
+    *,
+    report_config: ReportConfig,
+    current_series: Sequence[MetricTimeSeries],
+    reference_series: Sequence[MetricTimeSeries],
+) -> tuple[MetricComparison, ...]:
+    registry = build_default_registry()
+    policy = ComparisonPolicy(
+        reference_observation=ReferenceObservationSpec(
+            observation_unit=report_config.reference.observation_unit,
+            comparable_keys=tuple(report_config.reference.comparable_keys),
+        ),
+        min_samples_for_z_score=report_config.reference.min_samples_for_z_score,
+        min_samples_for_empirical_percentile=(
+            report_config.reference.min_samples_for_empirical_percentile
+        ),
+    )
+    metric_directions = {
+        metric_name: registry.get(metric_name).higher_is_better
+        for metric_name in report_config.metrics
+    }
+    return tuple(
+        compare_metric_timeseries(
+            _observations_from_series(current_series),
+            _observations_from_series(reference_series),
+            method=_reference_comparison_method(
+                report_config.reference.default_technical_score
+            ),
+            metric_directions=metric_directions,
+            policy=policy,
+            reference_observation_aggregation=_reference_observation_aggregation(
+                report_config.reference.statistic
+            ),
+        )
+    )
+
+
+def _observations_from_series(
+    series: Sequence[MetricTimeSeries],
+) -> tuple[MetricObservation, ...]:
+    observations: list[MetricObservation] = []
+    for item in series:
+        observations.extend(item.observations)
+    return tuple(observations)
+
+
+def _reference_comparison_method(score_name: str) -> str:
+    normalized = score_name.strip().lower()
+    if normalized in {"standard", "standard_z_score", "z_score"}:
+        return "standard"
+    return "robust"
+
+
+def _reference_observation_aggregation(statistic: str) -> str:
+    normalized = statistic.strip().lower()
+    if normalized in {"mean", "median", "sum", "first", "last"}:
+        return normalized
+    return "mean"
 
 
 def render_offline_demo_report_file(
@@ -241,38 +790,15 @@ def render_mock_kdb_demo_report_file(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run the command-line interface."""
+    """Run the Typer command-line interface and return a process exit code."""
 
-    parser = build_parser()
-    args = parser.parse_args(argv)
+    args = list(argv) if argv is not None else None
+    try:
+        result = app(args=args, prog_name="mmsr", standalone_mode=False)
+    except typer.Exit as exc:
+        return int(exc.exit_code or 0)
 
-    if not hasattr(args, "handler"):
-        parser.print_help()
-        return 0
-
-    return int(args.handler(args))
-
-
-def _handle_offline_demo(args: argparse.Namespace) -> int:
-    options = _offline_demo_options_from_args(args)
-    output_path = render_offline_demo_report_file(
-        args.output,
-        options=options,
-        template_dir=args.template_dir,
-    )
-    print(f"Rendered mock-data production-format report: {output_path}")
-    return 0
-
-
-def _handle_mock_kdb_demo(args: argparse.Namespace) -> int:
-    options = _mock_kdb_demo_options_from_args(args)
-    output_path = render_mock_kdb_demo_report_file(
-        args.output,
-        options=options,
-        template_dir=args.template_dir,
-    )
-    print(f"Rendered mock-kdb integration report: {output_path}")
-    return 0
+    return int(result or 0)
 
 
 def _validated_output_path(output_path: str | Path) -> Path:
@@ -282,62 +808,88 @@ def _validated_output_path(output_path: str | Path) -> Path:
     return resolved_output_path
 
 
-def _offline_demo_options_from_args(
-    args: argparse.Namespace,
+def _offline_demo_options_from_values(
+    *,
+    title: str | None,
+    brand_name: str | None,
+    generated_at_text: str | None,
+    no_appendix: bool,
+    max_metric_cards: int | None,
+    max_comments: int | None,
+    max_table_rows: int | None,
+    max_chart_points: int | None,
+    max_heatmap_cells: int | None,
+    include_intraday_heatmaps: bool,
+    no_drilldown_page: bool,
+    max_drilldown_rows: int | None,
 ) -> OfflineDemoReportOptions:
     defaults = OfflineDemoReportOptions()
     return OfflineDemoReportOptions(
-        title=args.title or defaults.title,
-        brand_name=args.brand_name or defaults.brand_name,
-        generated_at_text=args.generated_at_text or defaults.generated_at_text,
+        title=title or defaults.title,
+        brand_name=brand_name or defaults.brand_name,
+        generated_at_text=generated_at_text or defaults.generated_at_text,
         summary_page_title=defaults.summary_page_title,
         detail_page_title=defaults.detail_page_title,
         comparison_table_title=defaults.comparison_table_title,
         comparison_help_text=defaults.comparison_help_text,
         detail_help_text=defaults.detail_help_text,
-        include_metric_definitions_appendix=not args.no_appendix,
+        include_metric_definitions_appendix=not no_appendix,
         max_metric_cards=_default_when_none(
-            args.max_metric_cards,
+            max_metric_cards,
             defaults.max_metric_cards,
         ),
-        max_comments=_default_when_none(args.max_comments, defaults.max_comments),
-        max_table_rows=args.max_table_rows,
-        max_chart_points=args.max_chart_points,
-        max_heatmap_cells=args.max_heatmap_cells,
-        include_drilldown_page=not args.no_drilldown_page,
+        max_comments=_default_when_none(max_comments, defaults.max_comments),
+        max_table_rows=max_table_rows,
+        max_chart_points=max_chart_points,
+        max_heatmap_cells=max_heatmap_cells,
+        include_intraday_heatmaps=include_intraday_heatmaps,
+        include_drilldown_page=not no_drilldown_page,
         max_drilldown_rows=_default_when_none(
-            args.max_drilldown_rows,
+            max_drilldown_rows,
             defaults.max_drilldown_rows,
         ),
     )
 
 
-def _mock_kdb_demo_options_from_args(
-    args: argparse.Namespace,
+def _mock_kdb_demo_options_from_values(
+    *,
+    title: str | None,
+    brand_name: str | None,
+    generated_at_text: str | None,
+    no_appendix: bool,
+    max_metric_cards: int | None,
+    max_comments: int | None,
+    max_table_rows: int | None,
+    max_chart_points: int | None,
+    max_heatmap_cells: int | None,
+    include_intraday_heatmaps: bool,
+    no_drilldown_page: bool,
+    max_drilldown_rows: int | None,
 ) -> MockKdbIntegrationDemoOptions:
     defaults = MockKdbIntegrationDemoOptions()
     return MockKdbIntegrationDemoOptions(
-        title=args.title or defaults.title,
-        brand_name=args.brand_name or defaults.brand_name,
-        generated_at_text=args.generated_at_text or defaults.generated_at_text,
+        title=title or defaults.title,
+        brand_name=brand_name or defaults.brand_name,
+        generated_at_text=generated_at_text or defaults.generated_at_text,
         summary_page_title=defaults.summary_page_title,
         detail_page_title=defaults.detail_page_title,
         comparison_table_title=defaults.comparison_table_title,
         comparison_help_text=defaults.comparison_help_text,
         detail_help_text=defaults.detail_help_text,
-        include_metric_definitions_appendix=not args.no_appendix,
+        include_metric_definitions_appendix=not no_appendix,
         max_metric_cards=_default_when_none(
-            args.max_metric_cards,
+            max_metric_cards,
             defaults.max_metric_cards,
         ),
-        max_comments=_default_when_none(args.max_comments, defaults.max_comments),
-        max_table_rows=args.max_table_rows,
-        max_chart_points=args.max_chart_points,
-        max_heatmap_cells=args.max_heatmap_cells,
+        max_comments=_default_when_none(max_comments, defaults.max_comments),
+        max_table_rows=max_table_rows,
+        max_chart_points=max_chart_points,
+        max_heatmap_cells=max_heatmap_cells,
+        include_intraday_heatmaps=include_intraday_heatmaps,
         max_overview_metrics=defaults.max_overview_metrics,
-        include_drilldown_page=not args.no_drilldown_page,
+        include_drilldown_page=not no_drilldown_page,
         max_drilldown_rows=_default_when_none(
-            args.max_drilldown_rows,
+            max_drilldown_rows,
             defaults.max_drilldown_rows,
         ),
     )
@@ -347,7 +899,6 @@ def _default_when_none(value: int | None, default: int) -> int:
     if value is None:
         return default
     return value
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

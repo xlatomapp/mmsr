@@ -10,6 +10,20 @@ from mmsr.kdb.live_smoke import (
     run_live_liquidity_smoke,
 )
 
+from mmsr.kdb.production import (
+    KdbProductionExecutionError,
+    KdbProductionExecutionPlanner,
+    KdbProductionExecutor,
+    KdbProductionMetricContract,
+    KdbProductionPlanSummary,
+    KdbProductionPreflight,
+    KdbProductionPreflightCheck,
+    KdbProductionPreflightResult,
+    KdbProductionRunPlan,
+    KdbProductionReferenceWindow,
+    ProductionMetricRunStep,
+)
+
 from mmsr.kdb.query_loader import (
     QueryTemplateError,
     load_q_template,
@@ -51,6 +65,17 @@ __all__ = [
     "KdbClient",
     "KdbConfig",
     "KdbMetricRunner",
+    "ProductionMetricRunStep",
+    "KdbProductionRunPlan",
+    "KdbProductionReferenceWindow",
+    "KdbProductionMetricContract",
+    "KdbProductionPlanSummary",
+    "KdbProductionExecutor",
+    "KdbProductionPreflight",
+    "KdbProductionPreflightCheck",
+    "KdbProductionPreflightResult",
+    "KdbProductionExecutionPlanner",
+    "KdbProductionExecutionError",
     "KdbMetricRunnerError",
     "validate_output_schema_for_template",
     "output_schema_contract_for_template",

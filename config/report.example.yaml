@@ -15,23 +15,43 @@ report:
 
 data:
   source: kdb
-  tables:
-    trades: trade
-    quotes: quote
-    symbols: symbol_master
-
+  # Production metric queries should call user-defined raw-data functions rather
+  # than physical trade/quote tables directly. These functions may cleanse data
+  # and route between HDB/RDB before returning canonical rows to MMSR q.
+  kdb:
+    calculation_namespace: ".desk.mmsr"
+    enforce_daily_raw_scope: true
+    # Optional: split the configured symbol universe into chunks before calling
+    # raw source functions. Each raw source function receives date and syms only.
+    symbol_chunk_size: 500
+    raw_data_functions:
+      namespace: ".sb.mmsr"
+      trade: "getTrade"
+      quote: "getQuote"
+      venue_trade: "getTrade"
+      primary_quote: "getQuote"
+      reference_data: "getRef"
 calendar:
   source: kdb
-  table: trading_calendar
+  namespace: ".sb.mmsr"
+  function: "getTradingCalendar"
   date_column: date
-  is_trading_day_column: is_trading_day
+
+symbols:
+  source: kdb
+  namespace: ".sb.mmsr"
+  function: "getSymbols"
+  symbol_column: sym
+
+reference_data:
+  source: kdb
+  namespace: ".sb.mmsr"
+  function: "getRef"
+  symbol_column: sym
 
 period:
   start_date: "2026-05-01"
   end_date: "2026-05-22"
-  trading_sessions:
-    - ["09:00:00", "11:30:00"]
-    - ["12:30:00", "15:30:00"]
 
 intraday:
   bucket_size: "5m"
@@ -47,8 +67,6 @@ intraday:
 
 groups:
   - market_cap_bucket
-  - market_segment
-  - sector
   - topix_bucket
 
 reference:
@@ -71,13 +89,7 @@ metrics:
   - volume
   - trade_count
   - quoted_spread_bps
-  - quoted_spread_ticks
   - top_of_book_depth
-  - realized_volatility
-  - effective_spread_bps
-  - price_impact_30s_bps
-  - signed_turnover
-  - trade_imbalance
   - primary_quote_reversion_10ms_bps
   - primary_quote_reversion_100ms_bps
   - primary_quote_reversion_500ms_bps

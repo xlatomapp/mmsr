@@ -21,14 +21,15 @@ def test_bucket_spec_rejects_invalid_value() -> None:
         IntradayBucketSpec("five_minutes")
 
 
-def test_report_period_requires_sessions() -> None:
-    with pytest.raises(ValueError):
-        ReportPeriod(
-            start_date=date(2026, 5, 1),
-            end_date=date(2026, 5, 2),
-            sessions=[],
-            bucket=IntradayBucketSpec("5m"),
-        )
+def test_report_period_allows_no_static_sessions_for_production_kdb() -> None:
+    period = ReportPeriod(
+        start_date=date(2026, 5, 1),
+        end_date=date(2026, 5, 2),
+        sessions=[],
+        bucket=IntradayBucketSpec("5m"),
+    )
+
+    assert period.sessions == []
 
 
 def test_trading_session_requires_start_before_end() -> None:

@@ -17,6 +17,35 @@ The package must support:
 - Deterministic template commentary by default.
 - Optional LLM commentary only when explicitly enabled.
 
+## 1A. Product scope guardrails
+
+Before choosing a roadmap or implementation step, treat `docs/report_scope.md`
+as a scope gate. `mmsr` is a Japanese market microstructure market-monitoring
+report package. It is not a transaction-cost analysis (TCA), execution quality,
+execution-quality, smart-order-routing, venue-ranking, or generic
+validation-framework / generic validation package.
+
+Default report implementation must stay centered on:
+
+- market activity: `turnover`, `volume`, and `trade_count`;
+- displayed liquidity: `quoted_spread_bps` and `top_of_book_depth`;
+- Cross-Venue Toxicity/Reversion using the six `primary_quote_reversion_*_bps`
+  horizons;
+- market-wide, intraday, taxonomy, venue, and symbol-level views;
+- volatility or market-quality extensions only when they describe market state
+  rather than a specific execution outcome.
+
+Do not add default config entries, report sections, executive-summary language,
+or next-step roadmap items for effective spread, implementation shortfall,
+slippage, price impact, order-routing analytics, or other execution-cost/TCA
+features unless the user explicitly changes the product scope. Existing
+compatibility q templates may remain tested, but they must not drive the default
+market report design.
+
+Do not expand report-local validation helpers into a reusable validation
+framework inside this package. After several reports exist, repeated validation
+needs should be designed above `mmsr`.
+
 ## 2. Mandatory reading order before any code change
 
 Before modifying code, tests, config, docs, or roadmap, read these files in order:

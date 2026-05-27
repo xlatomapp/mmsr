@@ -5,6 +5,7 @@ from mmsr.kdb.query_loader import (
     QueryTemplateError,
     load_q_template,
     render_template,
+    render_calculation_function_bootstrap,
     template_parameters,
 )
 
@@ -12,8 +13,7 @@ from mmsr.kdb.query_loader import (
 def test_load_q_template_reads_packaged_template() -> None:
     template = load_q_template("trading_calendar.q")
 
-    assert "select {{ date_column }}" in template
-    assert "{{ table }}" in template
+    assert "{{ calendar_function }}[start;end]" in template
 
 
 def test_load_q_template_rejects_paths_and_non_q_names() -> None:
@@ -83,7 +83,7 @@ def test_packaged_activity_template_parameters_ignore_documentation_comments() -
     template = load_q_template("activity.q")
 
     assert template_parameters(template) == frozenset(
-        {"trades_table", "date_filter", "time_filter", "bucket_expr", "group_by", "symbol_filter"}
+        {"trades_table", "ref_table", "calculation_namespace", "date_filter", "bucket_expr", "group_by", "symbol_filter"}
     )
 
 
@@ -100,7 +100,7 @@ def test_packaged_liquidity_template_parameters_include_bucket_expr() -> None:
     template = load_q_template("liquidity.q")
 
     assert template_parameters(template) == frozenset(
-        {"quotes_table", "date_filter", "time_filter", "bucket_expr", "group_by", "symbol_filter"}
+        {"quotes_table", "ref_table", "calculation_namespace", "date_filter", "bucket_expr", "group_by", "symbol_filter"}
     )
 
 
@@ -111,11 +111,13 @@ def test_packaged_toxicity_reversion_template_parameters_are_strict() -> None:
         {
             "venue_trades_table",
             "primary_quotes_table",
+            "ref_table",
+            "calculation_namespace",
             "date_filter",
-            "time_filter",
             "bucket_expr",
             "group_by",
             "venue_filter",
+            "auction_filter",
             "primary_venue",
             "horizon",
             "horizon_label",
@@ -124,3 +126,28 @@ def test_packaged_toxicity_reversion_template_parameters_are_strict() -> None:
             "value_column",
         }
     )
+
+
+def test_toxicity_reversion_template_uses_future_mid_denominator() -> None:
+    template = load_q_template("toxicity_reversion.q")
+
+    assert (
+        "reversion_bps: aggressor_side * 10000 * "
+        "(post_mid - primary_mid) % post_mid" in template
+    )
+    assert "post_mid > 0" in template
+    assert "% primary_mid" not in template
+
+
+def test_render_calculation_function_bootstrap_installs_helpers_in_namespace() -> None:
+    rendered = render_calculation_function_bootstrap(".desk.mmsr")
+
+    assert ".desk.mmsr.sumNotional" in rendered
+    assert ".desk.mmsr.medianQuotedSpreadBps" in rendered
+    assert ".desk.mmsr.weightedAverage" in rendered
+    assert "{{" not in rendered
+
+
+def test_render_calculation_function_bootstrap_validates_namespace() -> None:
+    with pytest.raises(ValueError, match="must start with"):
+        render_calculation_function_bootstrap("desk.mmsr")

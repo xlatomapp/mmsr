@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-import argparse
 from dataclasses import dataclass
+from pathlib import Path
+import re
 
 import pytest
+import typer
+import typer.main
+from typer.testing import CliRunner
 
-from mmsr.cli import build_parser
+from mmsr.cli import CLI_HELP, build_cli_app
 
 
 @dataclass(frozen=True)
@@ -22,6 +26,7 @@ class CliDefaultSnapshot:
     max_table_rows: int | None
     max_chart_points: int | None
     max_heatmap_cells: int | None
+    include_intraday_heatmaps: bool
     no_drilldown_page: bool
     max_drilldown_rows: int | None
 
@@ -38,23 +43,51 @@ EXPECTED_DEMO_OPTIONS = (
     "--max-table-rows",
     "--max-chart-points",
     "--max-heatmap-cells",
+    "--include-intraday-heatmaps",
     "--no-drilldown-page",
     "--max-drilldown-rows",
 )
 
 
-def test_top_level_help_snapshot_lists_current_commands(capsys: pytest.CaptureFixture[str]) -> None:
-    parser = build_parser()
+def _click_root():
+    return typer.main.get_command(build_cli_app())
 
-    with pytest.raises(SystemExit) as excinfo:
-        parser.parse_args(["--help"])
 
-    assert excinfo.value.code == 0
-    help_text = capsys.readouterr().out
-    assert "usage: mmsr" in help_text
+def _click_command(command: str):
+    return _click_root().commands[command]
+
+
+def _command_params(command: str, args: list[str] | None = None) -> dict:
+    ctx = _click_command(command).make_context(
+        f"mmsr {command}",
+        args or [],
+        resilient_parsing=False,
+    )
+    return ctx.params
+
+
+def _command_options(command: str) -> set[str]:
+    option_names: set[str] = set()
+    for param in _click_command(command).params:
+        option_names.update(param.opts)
+        option_names.update(param.secondary_opts)
+    return option_names
+
+
+def _strip_ansi(text: str) -> str:
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
+
+def test_top_level_help_snapshot_lists_current_commands() -> None:
+    result = CliRunner().invoke(build_cli_app(), ["--help"], prog_name="mmsr")
+
+    assert result.exit_code == 0
+    help_text = _strip_ansi(result.output)
+    assert "Usage:" in help_text
+    assert "mmsr" in help_text
     assert "offline-demo" in help_text
     assert "mock-kdb-demo" in help_text
-    assert "Generate Japanese market microstructure monitoring report artifacts." in help_text
+    assert CLI_HELP in help_text
 
 
 @pytest.mark.parametrize(
@@ -68,25 +101,24 @@ def test_demo_command_default_argument_snapshots(
     command: str,
     expected_output: str,
 ) -> None:
-    parser = build_parser()
-
-    args = parser.parse_args([command])
+    args = _command_params(command)
 
     snapshot = CliDefaultSnapshot(
-        command=args.command,
-        output=args.output,
-        template_dir=args.template_dir,
-        title=args.title,
-        brand_name=args.brand_name,
-        generated_at_text=args.generated_at_text,
-        no_appendix=args.no_appendix,
-        max_metric_cards=args.max_metric_cards,
-        max_comments=args.max_comments,
-        max_table_rows=args.max_table_rows,
-        max_chart_points=args.max_chart_points,
-        max_heatmap_cells=args.max_heatmap_cells,
-        no_drilldown_page=args.no_drilldown_page,
-        max_drilldown_rows=args.max_drilldown_rows,
+        command=command,
+        output=str(Path(args["output"])),
+        template_dir=args["template_dir"],
+        title=args["title"],
+        brand_name=args["brand_name"],
+        generated_at_text=args["generated_at_text"],
+        no_appendix=args["no_appendix"],
+        max_metric_cards=args["max_metric_cards"],
+        max_comments=args["max_comments"],
+        max_table_rows=args["max_table_rows"],
+        max_chart_points=args["max_chart_points"],
+        max_heatmap_cells=args["max_heatmap_cells"],
+        include_intraday_heatmaps=args["include_intraday_heatmaps"],
+        no_drilldown_page=args["no_drilldown_page"],
+        max_drilldown_rows=args["max_drilldown_rows"],
     )
     assert snapshot == CliDefaultSnapshot(
         command=command,
@@ -101,6 +133,7 @@ def test_demo_command_default_argument_snapshots(
         max_table_rows=None,
         max_chart_points=None,
         max_heatmap_cells=None,
+        include_intraday_heatmaps=False,
         no_drilldown_page=False,
         max_drilldown_rows=None,
     )
@@ -108,11 +141,9 @@ def test_demo_command_default_argument_snapshots(
 
 @pytest.mark.parametrize("command", ("offline-demo", "mock-kdb-demo"))
 def test_demo_command_override_argument_snapshot(command: str) -> None:
-    parser = build_parser()
-
-    args = parser.parse_args(
+    args = _command_params(
+        command,
         [
-            command,
             "--output",
             "reports/custom.html",
             "--template-dir",
@@ -134,73 +165,58 @@ def test_demo_command_override_argument_snapshot(command: str) -> None:
             "4",
             "--max-heatmap-cells",
             "5",
+            "--include-intraday-heatmaps",
             "--no-drilldown-page",
             "--max-drilldown-rows",
             "6",
-        ]
+        ],
     )
 
-    assert args.command == command
-    assert args.output == "reports/custom.html"
-    assert args.template_dir == "templates"
-    assert args.title == "Custom Title"
-    assert args.brand_name == "Custom Brand"
-    assert args.generated_at_text == "fixed timestamp"
-    assert args.no_appendix is True
-    assert args.max_metric_cards == 1
-    assert args.max_comments == 2
-    assert args.max_table_rows == 3
-    assert args.max_chart_points == 4
-    assert args.max_heatmap_cells == 5
-    assert args.no_drilldown_page is True
-    assert args.max_drilldown_rows == 6
+    assert args["output"] == "reports/custom.html"
+    assert args["template_dir"] == "templates"
+    assert args["title"] == "Custom Title"
+    assert args["brand_name"] == "Custom Brand"
+    assert args["generated_at_text"] == "fixed timestamp"
+    assert args["no_appendix"] is True
+    assert args["max_metric_cards"] == 1
+    assert args["max_comments"] == 2
+    assert args["max_table_rows"] == 3
+    assert args["max_chart_points"] == 4
+    assert args["max_heatmap_cells"] == 5
+    assert args["include_intraday_heatmaps"] is True
+    assert args["no_drilldown_page"] is True
+    assert args["max_drilldown_rows"] == 6
 
 
 @pytest.mark.parametrize("command", ("offline-demo", "mock-kdb-demo"))
-def test_demo_command_help_option_snapshot(
-    command: str,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    parser = build_parser()
+def test_demo_command_option_surface_snapshot(command: str) -> None:
+    option_names = _command_options(command)
 
-    with pytest.raises(SystemExit) as excinfo:
-        parser.parse_args([command, "--help"])
-
-    assert excinfo.value.code == 0
-    help_text = capsys.readouterr().out
-    assert f"usage: mmsr {command}" in help_text
     for option in EXPECTED_DEMO_OPTIONS:
-        assert option in help_text
+        assert option in option_names
 
 
-def test_offline_demo_help_preserves_offline_safety_language(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    parser = build_parser()
+def test_offline_demo_help_preserves_offline_safety_language() -> None:
+    result = CliRunner().invoke(build_cli_app(), ["offline-demo", "--help"], prog_name="mmsr")
 
-    with pytest.raises(SystemExit) as excinfo:
-        parser.parse_args(["offline-demo", "--help"])
-
-    assert excinfo.value.code == 0
-    help_text = " ".join(capsys.readouterr().out.split())
-    assert "without importing PyKX, connecting to kdb+, or calling an LLM" in help_text
+    assert result.exit_code == 0
+    help_text = " ".join(_strip_ansi(result.output).split())
+    assert "importing PyKX, connecting to kdb+, or calling an LLM" in help_text
 
 
-def test_mock_kdb_demo_help_preserves_integration_boundary_language(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    parser = build_parser()
+def test_mock_kdb_demo_help_preserves_integration_boundary_language() -> None:
+    result = CliRunner().invoke(
+        build_cli_app(),
+        ["mock-kdb-demo", "--help"],
+        prog_name="mmsr",
+    )
 
-    with pytest.raises(SystemExit) as excinfo:
-        parser.parse_args(["mock-kdb-demo", "--help"])
-
-    assert excinfo.value.code == 0
-    help_text = " ".join(capsys.readouterr().out.split())
-    assert "through the real q-template and KdbMetricRunner path" in help_text
-    assert "without importing PyKX or connecting to production kdb+" in help_text
+    assert result.exit_code == 0
+    help_text = " ".join(_strip_ansi(result.output).split())
+    assert "real q-template and KdbMetricRunner path" in help_text
 
 
-def test_parser_remains_argparse_until_typer_migration_is_explicit() -> None:
-    parser = build_parser()
+def test_cli_application_uses_typer() -> None:
+    app = build_cli_app()
 
-    assert isinstance(parser, argparse.ArgumentParser)
+    assert isinstance(app, typer.Typer)

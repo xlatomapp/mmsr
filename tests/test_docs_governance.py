@@ -51,6 +51,7 @@ def test_mkdocs_quickstart_documents_drilldown_demo_options() -> None:
         "poetry run mmsr mock-kdb-demo --output reports/mock_kdb_demo.html",
         "--max-drilldown-rows",
         "--no-drilldown-page",
+        "--include-intraday-heatmaps",
         "sector, segment, and market-cap",
         "does not query kdb+",
         "without a live\nkdb+ connection or PyKX import",
@@ -82,9 +83,9 @@ def test_docs_document_live_kdb_integration_boundary() -> None:
     required_terms = [
         "MMSR_KDB_HOST",
         "MMSR_KDB_PORT",
-        "MMSR_KDB_TRADES_TABLE",
-        "MMSR_KDB_QUOTES_TABLE",
-        "MMSR_KDB_CALENDAR_TABLE",
+        "MMSR_KDB_TRADE_FUNCTION",
+        "MMSR_KDB_QUOTE_FUNCTION",
+        "MMSR_KDB_CALENDAR_FUNCTION",
         "MMSR_KDB_TEST_DATE",
         "@pytest.mark.kdb_integration",
         "skipped by default",
@@ -125,11 +126,11 @@ def test_docs_document_production_readiness_checklist() -> None:
         "sector taxonomy",
         "market-cap bucket",
         "Symbol metadata / taxonomy table",
-        "Trading calendar table",
-        "Trades table for `activity.q`",
-        "Quotes table for `liquidity.q`",
-        "Venue trade table for `toxicity_reversion.q`",
-        "Primary quote table for `toxicity_reversion.q`",
+        "Trading calendar function",
+        "Trade raw-data function for `activity.q`",
+        "Quote raw-data function for `liquidity.q`",
+        "Venue trade raw-data function for `toxicity_reversion.q`",
+        "Primary quote raw-data function for `toxicity_reversion.q`",
         "bounded validation slice",
         "market-data owner",
     ]
@@ -142,3 +143,58 @@ def test_docs_document_production_readiness_checklist() -> None:
     assert "Production readiness checklist: production_readiness.md" in mkdocs
     assert "Production readiness requirements are documented" in status
     assert "docs/production_readiness.md" in roadmap
+    assert "production kdb source-function boundary" in roadmap
+    assert ".sb.mmsr.getTrade" in readme
+
+
+def test_docs_define_report_scope_guardrails() -> None:
+    scope = (ROOT / "docs" / "report_scope.md").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    index = (ROOT / "docs" / "index.md").read_text(encoding="utf-8")
+    agents = (ROOT / "_docs" / "AGENTS.md").read_text(encoding="utf-8")
+    custom = (ROOT / "_docs" / "CUSTOM_GPT_INSTRUCTIONS.md").read_text(
+        encoding="utf-8"
+    )
+    roadmap = (ROOT / "_docs" / "ROADMAP.md").read_text(encoding="utf-8")
+    status = (ROOT / "_docs" / "MILESTONE_STATUS.md").read_text(
+        encoding="utf-8"
+    )
+    production = (ROOT / "docs" / "production_readiness.md").read_text(
+        encoding="utf-8"
+    )
+    mkdocs = (ROOT / "mkdocs.yml").read_text(encoding="utf-8")
+
+    required_scope_terms = [
+        "market-monitoring report",
+        "not a transaction-cost analysis",
+        "execution-quality",
+        "smart order-routing",
+        "generic validation-framework",
+        "Default report metric set",
+        "primary_quote_reversion_10ms_bps",
+        "primary_quote_reversion_10s_bps",
+        "Out of scope for the default report",
+        "effective spread",
+        "implementation shortfall",
+        "slippage",
+        "price impact",
+        "Implementation gate",
+        "docs/report_scope.md",
+    ]
+
+    for term in required_scope_terms:
+        assert term in scope
+
+    required_cross_doc_terms = [
+        "docs/report_scope.md",
+        "transaction-cost analysis",
+        "execution quality",
+        "price impact",
+        "generic validation",
+    ]
+
+    for doc in [readme, index, agents, custom, roadmap, status, production]:
+        for term in required_cross_doc_terms:
+            assert term in doc
+
+    assert "Report scope guardrails: report_scope.md" in mkdocs

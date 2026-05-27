@@ -114,17 +114,21 @@ class AuctionBucketLabels:
 
 @dataclass(frozen=True)
 class ReportPeriod:
-    """A report period represented as a date range and trading sessions."""
+    """A report period represented as a date range and bucket size.
+
+    ``sessions`` is retained for legacy/offline bucket-grid use, but production
+    kdb runs no longer derive session state from static config. Production
+    trade/quote source rows must carry their own ``session`` and ``auction``
+    columns because sessions can vary by symbol and trading day.
+    """
 
     start_date: date
     end_date: date
-    sessions: list[TradingSession]
-    bucket: IntradayBucketSpec
+    sessions: list[TradingSession] = field(default_factory=list)
+    bucket: IntradayBucketSpec = field(default_factory=lambda: IntradayBucketSpec("5m"))
     timezone: str = "Asia/Tokyo"
     labels: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.start_date > self.end_date:
             raise ValueError("ReportPeriod.start_date must be on or before end_date")
-        if not self.sessions:
-            raise ValueError("ReportPeriod requires at least one trading session")

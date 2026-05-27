@@ -1,9 +1,9 @@
 """Query planning for kdb-backed metric execution.
 
 The query planner is the stable boundary between MMSR's Python orchestration and
-manual q-template edits. It renders q text, records the source-table contracts
-the template expects, and exposes the exact output columns the kdb result must
-return before the runner executes anything.
+q code executed inside kdb+. It renders q text, records the raw source contracts
+that user-provided functions must return, and exposes the exact output columns
+the kdb result must return before the runner executes anything.
 """
 
 from __future__ import annotations
@@ -19,8 +19,14 @@ from mmsr.kdb.schema_contracts import (
     QTemplateInputTableSchemaContract,
     QTemplateOutputSchemaContract,
     activity_input_schema_contract,
+    effective_spread_input_schema_contracts,
+    flow_input_schema_contract,
     liquidity_input_schema_contract,
+    liquidity_ticks_input_schema_contract,
     output_schema_contract_for_template,
+    price_impact_input_schema_contracts,
+    realized_volatility_input_schema_contract,
+    reference_data_input_schema_contract,
     toxicity_reversion_input_schema_contracts,
 )
 from mmsr.metrics.base import MetricDefinition
@@ -29,6 +35,11 @@ from mmsr.periods.models import IntradayBucketSpec, ReportPeriod, TradingSession
 
 _ACTIVITY_METRICS = frozenset({"turnover", "volume", "trade_count"})
 _LIQUIDITY_METRICS = frozenset({"quoted_spread_bps", "top_of_book_depth"})
+_LIQUIDITY_TICKS_METRICS = frozenset({"quoted_spread_ticks"})
+_FLOW_METRICS = frozenset({"signed_turnover", "trade_imbalance"})
+_EFFECTIVE_SPREAD_METRICS = frozenset({"effective_spread_bps"})
+_PRICE_IMPACT_METRICS = frozenset({"price_impact_30s_bps"})
+_REALIZED_VOLATILITY_METRICS = frozenset({"realized_volatility"})
 _REVERSION_METRIC_PATTERN = re.compile(
     r"^primary_quote_reversion_(?P<horizon>10ms|100ms|500ms|1s|5s|10s)_bps$"
 )
@@ -50,14 +61,28 @@ _REVERSION_METRICS = frozenset(
 _METRIC_TEMPLATE_MAP = {
     **{metric_name: "activity.q" for metric_name in _ACTIVITY_METRICS},
     **{metric_name: "liquidity.q" for metric_name in _LIQUIDITY_METRICS},
+    **{metric_name: "liquidity_ticks.q" for metric_name in _LIQUIDITY_TICKS_METRICS},
+    **{
+        metric_name: "realized_volatility.q"
+        for metric_name in _REALIZED_VOLATILITY_METRICS
+    },
+    **{metric_name: "flow.q" for metric_name in _FLOW_METRICS},
+    **{metric_name: "effective_spread.q" for metric_name in _EFFECTIVE_SPREAD_METRICS},
+    **{metric_name: "price_impact.q" for metric_name in _PRICE_IMPACT_METRICS},
     **{metric_name: _REVERSION_TEMPLATE for metric_name in _REVERSION_METRICS},
 }
 _METRIC_TABLE_PARAMETER_MAP = {
-    "activity.q": (("trades", "trades_table"),),
-    "liquidity.q": (("quotes", "quotes_table"),),
+    "activity.q": (("trades", "trades_table"), ("reference_data", "ref_table")),
+    "liquidity.q": (("quotes", "quotes_table"), ("reference_data", "ref_table")),
+    "liquidity_ticks.q": (("quotes", "quotes_table"),),
+    "realized_volatility.q": (("quotes", "quotes_table"),),
+    "flow.q": (("trades", "trades_table"),),
+    "effective_spread.q": (("trades", "trades_table"), ("quotes", "quotes_table")),
+    "price_impact.q": (("trades", "trades_table"), ("quotes", "quotes_table")),
     _REVERSION_TEMPLATE: (
         ("venue_trades", "venue_trades_table"),
         ("primary_quotes", "primary_quotes_table"),
+        ("reference_data", "ref_table"),
     ),
 }
 
@@ -70,16 +95,24 @@ class KdbMetricQueryPlanError(RuntimeError):
 class MetricRunRequest:
     """Request to run one metric over a period and grouping.
 
+    Production requests should prefer ``source_functions`` over direct
+    ``table_names``. The raw data functions are user-defined q functions that
+    accept ``date`` and ``syms`` positional arguments and return canonical
+    trade/quote rows; MMSR-owned q then performs the metric aggregation inside
+    ``calculation_namespace``.
+
     ``parameters`` carries metric-family-specific scalar settings that are not
-    table names. The first user is the cross-venue reversion family, which needs
+    source names. The first user is the cross-venue reversion family, which needs
     ``primary_venue``, ``venues``, and optionally ``max_primary_quote_age``.
     """
 
     metric: MetricDefinition
     period: ReportPeriod
     group_by: list[str]
-    table_names: dict[str, str]
+    table_names: dict[str, str] = field(default_factory=dict)
     parameters: dict[str, Any] = field(default_factory=dict)
+    source_functions: dict[str, str] = field(default_factory=dict)
+    calculation_namespace: str = ".mmsr"
 
 
 @dataclass(frozen=True)
@@ -92,6 +125,8 @@ class RenderedMetricQuery:
     requested_group_by: tuple[str, ...]
     result_group_by: tuple[str, ...]
     table_names: tuple[tuple[str, str], ...]
+    source_functions: tuple[tuple[str, str], ...]
+    calculation_namespace: str
     input_contracts: tuple[QTemplateInputTableSchemaContract, ...]
     output_contract: QTemplateOutputSchemaContract
 
@@ -133,24 +168,41 @@ class KdbMetricQueryPlanner:
             request.group_by,
         )
 
+        calculation_namespace = _q_namespace(
+            request.calculation_namespace,
+            "calculation_namespace",
+        )
         params = {
-            **_table_parameters(
-                template_name,
-                request.table_names,
-                request.metric.name,
+            **_source_parameters(
+                template_name=template_name,
+                table_names=request.table_names,
+                source_functions=request.source_functions,
+                request=request,
             ),
             "date_filter": _date_filter(
                 request.period.start_date,
                 request.period.end_date,
             ),
-            "time_filter": _time_filter(request.period.sessions),
-            "bucket_expr": _bucket_expr(request.period.bucket),
+            "bucket_expr": _bucket_expr(request.period.bucket, calculation_namespace),
             "group_by": _group_by_suffix(query_group_by),
+            "calculation_namespace": calculation_namespace,
         }
-        if template_name in {"activity.q", "liquidity.q"}:
-            params["symbol_filter"] = _optional_symbol_filter(
-                request.parameters.get("symbol")
-            )
+        if "{{ time_filter }}" in template:
+            params["time_filter"] = _time_filter(request.period.sessions)
+        if template_name in {
+            "activity.q",
+            "liquidity.q",
+            "liquidity_ticks.q",
+            "realized_volatility.q",
+            "flow.q",
+            "effective_spread.q",
+            "price_impact.q",
+        }:
+            params["symbol_filter"] = _optional_symbol_filter(request.parameters)
+        if template_name == "effective_spread.q":
+            params.update(_effective_spread_template_parameters(request))
+        if template_name == "price_impact.q":
+            params.update(_price_impact_template_parameters(request))
         if template_name == _REVERSION_TEMPLATE:
             params.update(_reversion_template_parameters(request))
 
@@ -162,10 +214,16 @@ class KdbMetricQueryPlanner:
             requested_group_by=tuple(request.group_by),
             result_group_by=tuple(result_group_by),
             table_names=tuple(sorted(request.table_names.items())),
+            source_functions=tuple(sorted(request.source_functions.items())),
+            calculation_namespace=_q_namespace(
+                request.calculation_namespace,
+                "calculation_namespace",
+            ),
             input_contracts=tuple(
                 _input_contracts_for_template(
                     template_name=template_name,
                     table_names=request.table_names,
+                    source_functions=request.source_functions,
                     query_group_by=query_group_by,
                     parameters=request.parameters,
                 )
@@ -208,30 +266,102 @@ def _input_contracts_for_template(
     *,
     template_name: str,
     table_names: Mapping[str, str],
+    source_functions: Mapping[str, str],
     query_group_by: Sequence[str],
     parameters: Mapping[str, Any],
 ) -> Sequence[QTemplateInputTableSchemaContract]:
     if template_name == "activity.q":
-        extra = _source_extra_columns(query_group_by, parameters)
+        raw_extra = _raw_source_extra_columns(parameters)
+        ref_extra = _reference_extra_columns(query_group_by)
         return (
             activity_input_schema_contract(
-                trades_table=table_names["trades"],
-                extra_required_columns=extra,
+                trades_table=_source_label("trades", table_names, source_functions),
+                extra_required_columns=raw_extra,
+            ),
+            reference_data_input_schema_contract(
+                reference_table=_source_label(
+                    "reference_data",
+                    table_names,
+                    source_functions,
+                ),
+                extra_required_columns=ref_extra,
+                template_name=template_name,
             ),
         )
     if template_name == "liquidity.q":
-        extra = _source_extra_columns(query_group_by, parameters)
+        raw_extra = _raw_source_extra_columns(parameters)
+        ref_extra = _reference_extra_columns(query_group_by)
         return (
             liquidity_input_schema_contract(
-                quotes_table=table_names["quotes"],
+                quotes_table=_source_label("quotes", table_names, source_functions),
+                extra_required_columns=raw_extra,
+            ),
+            reference_data_input_schema_contract(
+                reference_table=_source_label(
+                    "reference_data",
+                    table_names,
+                    source_functions,
+                ),
+                extra_required_columns=ref_extra,
+                template_name=template_name,
+            ),
+        )
+    if template_name == "liquidity_ticks.q":
+        extra = _source_extra_columns(query_group_by, parameters)
+        return (
+            liquidity_ticks_input_schema_contract(
+                quotes_table=_source_label("quotes", table_names, source_functions),
                 extra_required_columns=extra,
             ),
         )
+    if template_name == "realized_volatility.q":
+        extra = _source_extra_columns(query_group_by, parameters)
+        return (
+            realized_volatility_input_schema_contract(
+                quotes_table=_source_label("quotes", table_names, source_functions),
+                extra_required_columns=extra,
+            ),
+        )
+    if template_name == "flow.q":
+        extra = _source_extra_columns(query_group_by, parameters)
+        return (
+            flow_input_schema_contract(
+                trades_table=_source_label("trades", table_names, source_functions),
+                extra_required_columns=extra,
+            ),
+        )
+    if template_name == "effective_spread.q":
+        trade_extra = _source_extra_columns(query_group_by, parameters)
+        return effective_spread_input_schema_contracts(
+            trades_table=_source_label("trades", table_names, source_functions),
+            quotes_table=_source_label("quotes", table_names, source_functions),
+            extra_trade_required_columns=trade_extra,
+        )
+    if template_name == "price_impact.q":
+        trade_extra = _source_extra_columns(query_group_by, parameters)
+        return price_impact_input_schema_contracts(
+            trades_table=_source_label("trades", table_names, source_functions),
+            quotes_table=_source_label("quotes", table_names, source_functions),
+            extra_trade_required_columns=trade_extra,
+        )
     if template_name == _REVERSION_TEMPLATE:
         return toxicity_reversion_input_schema_contracts(
-            venue_trades_table=table_names["venue_trades"],
-            primary_quotes_table=table_names["primary_quotes"],
-            extra_required_columns=query_group_by,
+            venue_trades_table=_source_label(
+                "venue_trades",
+                table_names,
+                source_functions,
+            ),
+            primary_quotes_table=_source_label(
+                "primary_quotes",
+                table_names,
+                source_functions,
+            ),
+            reference_table=_source_label(
+                "reference_data",
+                table_names,
+                source_functions,
+            ),
+            extra_required_columns=_reference_extra_columns(query_group_by),
         )
     return ()
 
@@ -241,36 +371,135 @@ def _source_extra_columns(
     parameters: Mapping[str, Any],
 ) -> tuple[str, ...]:
     extra = list(query_group_by)
-    if parameters.get("symbol") not in {None, ""}:
+    if _symbol_filter_values(parameters):
         extra.append("sym")
     return tuple(_dedupe(extra))
 
 
-def _table_parameters(
+
+
+def _raw_source_extra_columns(parameters: Mapping[str, Any]) -> tuple[str, ...]:
+    """Return extra raw tick columns required by filters."""
+
+    if _symbol_filter_values(parameters):
+        return ("sym",)
+    return ()
+
+
+def _reference_extra_columns(query_group_by: Sequence[str]) -> tuple[str, ...]:
+    """Return group columns expected from the reference-data source."""
+
+    return tuple(_dedupe(list(query_group_by)))
+
+
+def _source_parameters(
+    *,
     template_name: str,
     table_names: Mapping[str, str],
-    metric_name: str,
+    source_functions: Mapping[str, str],
+    request: MetricRunRequest,
 ) -> dict[str, str]:
     params: dict[str, str] = {}
-    for table_key, table_parameter in _METRIC_TABLE_PARAMETER_MAP[template_name]:
-        if table_key not in table_names:
-            raise KdbMetricQueryPlanError(
-                f"missing table_names entry {table_key!r} for metric {metric_name!r}"
-            )
-        params[table_parameter] = _q_identifier(table_names[table_key], "table name")
+    for source_key, template_parameter in _METRIC_TABLE_PARAMETER_MAP[template_name]:
+        params[template_parameter] = _q_source_expression(
+            source_key=source_key,
+            table_names=table_names,
+            source_functions=source_functions,
+            request=request,
+        )
     return params
 
 
-def _optional_symbol_filter(symbol: Any) -> str:
-    """Return an optional q where-clause suffix for a single symbol smoke slice."""
-
-    if symbol is None or symbol == "":
-        return ""
-    if not isinstance(symbol, str):
-        raise KdbMetricQueryPlanError(
-            "parameter 'symbol' must be a string when provided"
+def _q_source_expression(
+    *,
+    source_key: str,
+    table_names: Mapping[str, str],
+    source_functions: Mapping[str, str],
+    request: MetricRunRequest,
+) -> str:
+    if source_key in source_functions:
+        function_name = _q_function_identifier(
+            source_functions[source_key],
+            f"source_functions[{source_key!r}]",
         )
-    return f", sym = {_q_symbol_from_string(symbol)}"
+        return f"({function_name}[{_q_raw_data_function_arguments(request)}])"
+
+    if source_key in table_names:
+        return _q_identifier(table_names[source_key], "table name")
+
+    if source_key == "reference_data":
+        return (
+            "([]date:0#0Nd;"
+            "sym:`symbol$();"
+            "topix_bucket:`symbol$();"
+            "market_cap_bucket:`symbol$();"
+            "lot_size:0#0N)"
+        )
+
+    raise KdbMetricQueryPlanError(
+        f"missing source_functions or table_names entry {source_key!r} "
+        f"for metric {request.metric.name!r}"
+    )
+
+
+def _source_label(
+    source_key: str,
+    table_names: Mapping[str, str],
+    source_functions: Mapping[str, str],
+) -> str:
+    if source_key in source_functions:
+        return source_functions[source_key]
+    if source_key in table_names:
+        return table_names[source_key]
+    return source_key
+
+
+def _optional_symbol_filter(parameters: Mapping[str, Any]) -> str:
+    """Return an optional q where-clause suffix for requested symbols.
+
+    ``symbol`` is retained for legacy/smoke callers. Production execution uses
+    ``symbols`` so one date can be split into deterministic symbol chunks without
+    making raw source functions scan a multi-day period.
+    """
+
+    symbols = _symbol_filter_values(parameters)
+    if not symbols:
+        return ""
+    if len(symbols) == 1:
+        return f", sym = {_q_symbol_from_string(symbols[0])}"
+    return f", sym in {_q_symbol_vector_from_strings(symbols)}"
+
+
+def _effective_spread_template_parameters(request: MetricRunRequest) -> dict[str, str]:
+    """Return effective-spread q parameters with a conservative freshness default."""
+
+    max_quote_age = request.parameters.get("max_quote_age", "1s")
+    if not isinstance(max_quote_age, str):
+        raise KdbMetricQueryPlanError("parameter 'max_quote_age' must be a string")
+    return {
+        "max_quote_age": _q_duration(max_quote_age, "max_quote_age"),
+    }
+
+
+def _price_impact_template_parameters(request: MetricRunRequest) -> dict[str, str]:
+    """Return price-impact q parameters for the fixed 30s metric horizon."""
+
+    max_quote_age = request.parameters.get("max_quote_age", "1s")
+    max_horizon_quote_age = request.parameters.get("max_horizon_quote_age", "1s")
+    if not isinstance(max_quote_age, str):
+        raise KdbMetricQueryPlanError("parameter 'max_quote_age' must be a string")
+    if not isinstance(max_horizon_quote_age, str):
+        raise KdbMetricQueryPlanError(
+            "parameter 'max_horizon_quote_age' must be a string"
+        )
+    return {
+        "horizon": _q_duration("30s", "price_impact horizon"),
+        "max_quote_age": _q_duration(max_quote_age, "max_quote_age"),
+        "max_horizon_quote_age": _q_duration(
+            max_horizon_quote_age,
+            "max_horizon_quote_age",
+        ),
+    }
 
 
 def _reversion_template_parameters(request: MetricRunRequest) -> dict[str, str]:
@@ -283,10 +512,13 @@ def _reversion_template_parameters(request: MetricRunRequest) -> dict[str, str]:
             "parameter 'max_primary_quote_age' must be a string"
         )
 
+    exclude_auction = bool(request.parameters.get("exclude_auction", False))
+
     return {
         "value_column": _q_identifier(request.metric.name, "metric value column"),
         "primary_venue": _q_symbol(primary_venue, "primary_venue"),
         "venue_filter": f"venue in {_q_symbol_vector(venues, 'venues')}",
+        "auction_filter": "null auction" if exclude_auction else "1b",
         "horizon": _q_duration(horizon, "horizon"),
         "horizon_label": _q_symbol_from_string(horizon),
         "horizon_sort_order": str(_reversion_horizon_sort_order(horizon)),
@@ -363,15 +595,112 @@ def _required_string_sequence_parameter(
     return strings
 
 
+def _q_raw_data_function_arguments(request: MetricRunRequest) -> str:
+    """Render the canonical positional raw-source function arguments.
+
+    User source functions must match this fixed argument order:
+
+    ``date; syms``.
+
+    The arguments intentionally scope raw data access to one requested trading
+    day and one symbol slice before MMSR-owned q performs calculation.
+    Production callers should pass a one-trading-day ``ReportPeriod`` when
+    running full-market reports.
+    """
+
+    return ";".join(
+        (
+            _q_date(request.period.start_date),
+            _q_symbol_filter_vector(request.parameters),
+        )
+    )
+
+
+def _q_symbol_filter_vector(parameters: Mapping[str, Any]) -> str:
+    symbols = _symbol_filter_values(parameters)
+    if not symbols:
+        return "0#`"
+    if len(symbols) == 1:
+        return f"enlist {_q_symbol_from_string(symbols[0])}"
+    return _q_symbol_vector_from_strings(symbols)
+
+
+def _symbol_filter_values(parameters: Mapping[str, Any]) -> tuple[str, ...]:
+    """Return symbol filters from either production ``symbols`` or legacy ``symbol``."""
+
+    symbols_value = parameters.get("symbols")
+    symbol_value = parameters.get("symbol")
+
+    if symbols_value not in (None, ""):
+        if isinstance(symbols_value, str) or not isinstance(symbols_value, Sequence):
+            raise KdbMetricQueryPlanError(
+                "parameter 'symbols' must be a sequence of strings when provided"
+            )
+        symbols = tuple(
+            value for value in symbols_value if isinstance(value, str) and value
+        )
+        if len(symbols) != len(symbols_value):
+            raise KdbMetricQueryPlanError(
+                "parameter 'symbols' must contain only non-empty strings"
+            )
+        if symbol_value not in (None, "") and tuple(symbols) != (symbol_value,):
+            raise KdbMetricQueryPlanError(
+                "parameters 'symbol' and 'symbols' conflict"
+            )
+        return symbols
+
+    if symbol_value in (None, ""):
+        return ()
+    if not isinstance(symbol_value, str):
+        raise KdbMetricQueryPlanError(
+            "parameter 'symbol' must be a string when provided"
+        )
+    return (symbol_value,)
+
+
+def _q_symbol_vector_from_strings(values: Sequence[str]) -> str:
+    if not values:
+        return "0#`"
+    rendered = ";".join(_q_symbol_from_string(value) for value in values)
+    if len(values) == 1:
+        return f"enlist {rendered}"
+    return f"({rendered})"
+
+
+def _q_positive_int_parameter(value: Any, label: str) -> str:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise KdbMetricQueryPlanError(f"parameter {label!r} must be a positive integer")
+    return str(value)
+
+
+def _q_symbol_vector_or_empty(value: Any) -> str:
+    if value is None or value == "":
+        return "0#`"
+    if isinstance(value, str):
+        return f"enlist {_q_symbol(value, 'venues')}"
+    if not isinstance(value, Sequence) or isinstance(value, (bytes, bytearray)):
+        raise KdbMetricQueryPlanError(
+            "parameter 'venues' must be a sequence of strings when provided"
+        )
+    return _q_symbol_vector(value, "venues")
+
+
+def _q_time_vector(values: Sequence[time]) -> str:
+    if not values:
+        return "()"
+    rendered = ";".join(_q_time(value) for value in values)
+    if len(values) == 1:
+        return f"enlist {rendered}"
+    return f"({rendered})"
+
+
 def _date_filter(start: date, end: date) -> str:
     return f"date within ({_q_date(start)};{_q_date(end)})"
 
 
 def _time_filter(sessions: Sequence[TradingSession]) -> str:
     if not sessions:
-        raise KdbMetricQueryPlanError(
-            "period must contain at least one trading session"
-        )
+        return "1b"
 
     clauses = [
         f"time within ({_q_time(session.start)};{_q_time(session.end)})"
@@ -382,14 +711,16 @@ def _time_filter(sessions: Sequence[TradingSession]) -> str:
     return "(" + " | ".join(f"({clause})" for clause in clauses) + ")"
 
 
-def _bucket_expr(bucket: IntradayBucketSpec) -> str:
+def _bucket_expr(bucket: IntradayBucketSpec, calculation_namespace: str) -> str:
     if bucket.unit == "m":
-        return f"0D00:{bucket.size:02d}:00.000 xbar time"
-    if bucket.unit == "h":
-        return f"0D{bucket.size:02d}:00:00.000 xbar time"
-    if bucket.unit == "d":
-        return "date"
-    raise KdbMetricQueryPlanError(f"unsupported bucket unit: {bucket.unit}")
+        duration = f"0D00:{bucket.size:02d}:00.000"
+    elif bucket.unit == "h":
+        duration = f"0D{bucket.size:02d}:00:00.000"
+    elif bucket.unit == "d":
+        duration = "1D00:00:00.000"
+    else:
+        raise KdbMetricQueryPlanError(f"unsupported bucket unit: {bucket.unit}")
+    return f"{calculation_namespace}.timeBucket[time; session; auction; {duration}]"
 
 
 def _group_by_suffix(group_by: Sequence[str]) -> str:
@@ -418,6 +749,34 @@ def _q_identifier(value: str, label: str) -> str:
     if any(part[0].isdigit() for part in value.split(".") if part):
         raise KdbMetricQueryPlanError(f"invalid {label}: {value!r}")
     return value
+
+
+def _q_namespace(value: str, label: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise KdbMetricQueryPlanError(f"{label} must be a non-empty string")
+    if not value.startswith("."):
+        raise KdbMetricQueryPlanError(f"{label} must start with '.'")
+    _validate_q_dotted_identifier(value[1:], label)
+    return value
+
+
+def _q_function_identifier(value: str, label: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise KdbMetricQueryPlanError(f"{label} must be a non-empty string")
+    if value.startswith("."):
+        _validate_q_dotted_identifier(value[1:], label)
+        return value
+    _validate_q_dotted_identifier(value, label)
+    return value
+
+
+def _validate_q_dotted_identifier(value: str, label: str) -> None:
+    parts = value.split(".")
+    if not parts or any(part == "" for part in parts):
+        raise KdbMetricQueryPlanError(f"invalid {label}: {value!r}")
+    for part in parts:
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", part):
+            raise KdbMetricQueryPlanError(f"invalid {label}: {value!r}")
 
 
 def _q_symbol(value: str, label: str) -> str:

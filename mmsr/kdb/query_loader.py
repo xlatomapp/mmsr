@@ -102,3 +102,26 @@ def render_template(template: str, params: dict[str, str]) -> str:
 def _is_valid_parameter_name(name: str) -> bool:
     """Return whether ``name`` is accepted as a template parameter name."""
     return bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name))
+
+
+def render_calculation_function_bootstrap(calculation_namespace: str) -> str:
+    """Render MMSR-owned reusable q helper functions for a calculation namespace.
+
+    User-owned kdb functions should only supply calendar, symbols, and raw
+    canonical source rows. MMSR installs/uses these helper functions in the
+    configured namespace so metric aggregation logic remains owned by the
+    package rather than by the user's source-data boundary.
+    """
+    if not isinstance(calculation_namespace, str) or not calculation_namespace:
+        raise ValueError("calculation_namespace must be a non-empty string")
+    if not calculation_namespace.startswith("."):
+        raise ValueError("calculation_namespace must start with '.'")
+    if not re.fullmatch(
+        r"\.[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*",
+        calculation_namespace,
+    ):
+        raise ValueError(f"invalid calculation_namespace: {calculation_namespace!r}")
+    return render_template(
+        load_q_template("calculation_functions.q"),
+        {"calculation_namespace": calculation_namespace},
+    )

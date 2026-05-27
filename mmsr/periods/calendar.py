@@ -1,9 +1,10 @@
 """Trading calendar abstractions.
 
 Production trading calendars should come from a dedicated data source. For this
-project, that source is expected to be kdb+. The weekday helper remains available
-only for offline examples and unit tests; production report generation should use
-``KdbTradingCalendarSource`` or another explicit ``TradingCalendarSource``.
+project, that source is expected to be a user-owned kdb+ function. The weekday
+helper remains available only for offline examples and unit tests; production
+report generation should use ``KdbTradingCalendarSource`` or another explicit
+``TradingCalendarSource``.
 """
 
 from __future__ import annotations
@@ -22,23 +23,23 @@ class TradingCalendarSource(Protocol):
 
 @dataclass(frozen=True)
 class KdbTradingCalendarSource:
-    """Trading calendar source backed by a kdb+ calendar table."""
+    """Trading calendar source backed by a user-defined kdb+ function.
+
+    The configured function must accept two positional arguments,
+    ``start`` and ``end``, and return either a date vector or a table/dict with
+    ``date_column``.
+    """
 
     client: Any
-    table: str = "trading_calendar"
+    function: str = ".mmsr.getTradingCalendar"
     date_column: str = "date"
-    is_trading_day_column: str = "is_trading_day"
 
     def trading_days(self, start: date, end: date) -> list[date]:
-        """Return trading days by querying the configured kdb calendar table."""
+        """Return trading days by querying the configured calendar function."""
         if start > end:
             raise ValueError("start must be on or before end")
 
-        query = (
-            f"select {self.date_column} from {self.table} "
-            f"where {self.date_column} within (start;end), "
-            f"{self.is_trading_day_column}"
-        )
+        query = f"{{[start;end] {_q_function_identifier(self.function)}[start;end]}}"
         result = self.client.execute(query, start, end)
         return _coerce_calendar_dates(result, self.date_column)
 
@@ -71,6 +72,21 @@ def _coerce_calendar_dates(result: Any, date_column: str) -> list[date]:
         return _coerce_calendar_dates(result.py(), date_column)
 
     raise TypeError(f"unsupported calendar result type: {type(result)!r}")
+
+
+def _q_function_identifier(value: str) -> str:
+    """Validate and return a q function identifier used in a calendar call."""
+
+    if not isinstance(value, str) or not value:
+        raise ValueError("calendar function must be a non-empty q function name")
+    candidate = value[1:] if value.startswith(".") else value
+    parts = candidate.split(".")
+    if not parts or any(part == "" for part in parts):
+        raise ValueError(f"invalid calendar function: {value!r}")
+    for part in parts:
+        if not part.replace("_", "a").isalnum() or part[0].isdigit():
+            raise ValueError(f"invalid calendar function: {value!r}")
+    return value
 
 
 def weekdays_between(start: date, end: date) -> list[date]:

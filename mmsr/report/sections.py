@@ -219,6 +219,138 @@ def build_time_series_chart(
     )
 
 
+def build_intraday_time_bucket_chart(
+    title: str,
+    series: MetricTimeSeries,
+    metric_definition: MetricDefinition,
+    *,
+    group_by: Sequence[str] | None = None,
+    max_points: int | None = None,
+    x_axis_label: str = "Intraday time bucket",
+    y_axis_label: str | None = None,
+    help_text: str | None = None,
+) -> TimeSeriesChart:
+    """Build a deterministic intraday line chart with bucket labels on the x-axis.
+
+    This visual is designed for dense intraday grids such as 1-minute buckets:
+    the SVG keeps a fixed width, samples x-axis tick labels, and preserves every
+    rendered observation in the backing data table. It avoids the unbounded
+    width growth that a bucket-by-group heatmap can create for hundreds of
+    buckets.
+    """
+
+    chart_title = title.strip()
+    if not chart_title:
+        raise ValueError("title must not be empty")
+    if series.metric_name != metric_definition.name:
+        raise ValueError(
+            "metric_definition.name must match series.metric_name: "
+            f"{metric_definition.name} != {series.metric_name}"
+        )
+    if max_points is not None and max_points < 0:
+        raise ValueError("max_points must be non-negative")
+    if not x_axis_label.strip():
+        raise ValueError("x_axis_label must not be empty")
+    if y_axis_label is not None and not y_axis_label.strip():
+        raise ValueError("y_axis_label must not be empty when supplied")
+    if help_text is not None and not help_text.strip():
+        raise ValueError("help_text must not be empty when supplied")
+
+    observations = (
+        series.observations if max_points is None else series.observations[:max_points]
+    )
+    return TimeSeriesChart(
+        title=chart_title,
+        metric=metric_definition,
+        points=[
+            _intraday_chart_point_from_observation(
+                observation,
+                metric_definition,
+                group_by=group_by,
+            )
+            for observation in observations
+        ],
+        x_axis_label=x_axis_label.strip(),
+        y_axis_label=None if y_axis_label is None else y_axis_label.strip(),
+        help_text=None if help_text is None else help_text.strip(),
+    )
+
+
+def build_reference_target_trend_chart(
+    title: str,
+    *,
+    reference_series: MetricTimeSeries | None,
+    target_series: MetricTimeSeries,
+    metric_definition: MetricDefinition,
+    group_by: Sequence[str] | None = None,
+    max_points: int | None = None,
+    x_axis_label: str = "Trading day",
+    y_axis_label: str | None = None,
+    help_text: str | None = None,
+) -> TimeSeriesChart:
+    """Build a daily line chart spanning reference and target observations.
+
+    The report layer does not aggregate or recalculate metrics here. It simply
+    places already-normalized reference rows before target rows, uses the
+    observation date as the x-axis, and keeps intraday bucket plus configured
+    group context in the series label.
+    """
+
+    chart_title = title.strip()
+    if not chart_title:
+        raise ValueError("title must not be empty")
+    if target_series.metric_name != metric_definition.name:
+        raise ValueError(
+            "metric_definition.name must match target_series.metric_name: "
+            f"{metric_definition.name} != {target_series.metric_name}"
+        )
+    if (
+        reference_series is not None
+        and reference_series.metric_name != metric_definition.name
+    ):
+        raise ValueError(
+            "metric_definition.name must match reference_series.metric_name: "
+            f"{metric_definition.name} != {reference_series.metric_name}"
+        )
+    if max_points is not None and max_points < 0:
+        raise ValueError("max_points must be non-negative")
+    if not x_axis_label.strip():
+        raise ValueError("x_axis_label must not be empty")
+    if y_axis_label is not None and not y_axis_label.strip():
+        raise ValueError("y_axis_label must not be empty when supplied")
+    if help_text is not None and not help_text.strip():
+        raise ValueError("help_text must not be empty when supplied")
+
+    period_observations: list[tuple[MetricObservation, str]] = []
+    if reference_series is not None:
+        period_observations.extend(
+            (observation, "reference")
+            for observation in reference_series.observations
+        )
+    period_observations.extend(
+        (observation, "target") for observation in target_series.observations
+    )
+    if max_points is not None:
+        period_observations = period_observations[:max_points]
+
+    return TimeSeriesChart(
+        title=chart_title,
+        metric=metric_definition,
+        points=[
+            _reference_target_chart_point_from_observation(
+                observation,
+                metric_definition,
+                period_label=period_label,
+                group_by=group_by,
+            )
+            for observation, period_label in period_observations
+        ],
+        x_axis_label=x_axis_label.strip(),
+        y_axis_label=None if y_axis_label is None else y_axis_label.strip(),
+        help_text=None if help_text is None else help_text.strip(),
+    )
+
+
 def build_heatmap(
     title: str,
     series: MetricTimeSeries,
@@ -337,6 +469,50 @@ def _metric_table_row_from_comparison(
     )
 
 
+def _intraday_chart_point_from_observation(
+    observation: MetricObservation,
+    definition: MetricDefinition,
+    *,
+    group_by: Sequence[str] | None,
+) -> TimeSeriesChartPoint:
+    date_text = observation.date.isoformat()
+    bucket_text = _format_bucket_text(observation.time_bucket)
+    return TimeSeriesChartPoint(
+        x_text=_format_intraday_chart_x_text(date_text, bucket_text),
+        date_text=date_text,
+        time_bucket_text=bucket_text,
+        series_text=_format_series_text(observation.group, group_by=group_by),
+        value_text=_format_metric_value(observation.value, definition.unit),
+        metadata_text=_format_metadata_text(observation.metadata),
+        value=observation.value,
+    )
+
+
+def _reference_target_chart_point_from_observation(
+    observation: MetricObservation,
+    definition: MetricDefinition,
+    *,
+    period_label: str,
+    group_by: Sequence[str] | None,
+) -> TimeSeriesChartPoint:
+    date_text = observation.date.isoformat()
+    bucket_text = _format_bucket_text(observation.time_bucket)
+    metadata = {"period": period_label, **observation.metadata}
+    return TimeSeriesChartPoint(
+        x_text=date_text,
+        date_text=date_text,
+        time_bucket_text=bucket_text,
+        series_text=_format_reference_target_series_text(
+            observation,
+            bucket_text=bucket_text,
+            group_by=group_by,
+        ),
+        value_text=_format_metric_value(observation.value, definition.unit),
+        metadata_text=_format_metadata_text(metadata),
+        value=observation.value,
+    )
+
+
 def _time_series_chart_point_from_observation(
     observation: MetricObservation,
     definition: MetricDefinition,
@@ -381,6 +557,27 @@ def _format_heatmap_x_text(date_text: str, bucket_text: str | None) -> str:
     if bucket_text:
         return bucket_text
     return date_text
+
+
+def _format_intraday_chart_x_text(date_text: str, bucket_text: str | None) -> str:
+    if bucket_text:
+        return bucket_text
+    return date_text
+
+
+def _format_reference_target_series_text(
+    observation: MetricObservation,
+    *,
+    bucket_text: str | None,
+    group_by: Sequence[str] | None,
+) -> str | None:
+    parts: list[str] = []
+    group_text = _format_series_text(observation.group, group_by=group_by)
+    if group_text:
+        parts.append(group_text)
+    if bucket_text:
+        parts.append(f"Intraday bucket: {bucket_text}")
+    return ", ".join(parts) if parts else None
 
 
 def _format_chart_x_text(date_text: str, bucket_text: str | None) -> str:

@@ -17,6 +17,7 @@ This audit validates the implementation against `_docs/ROADMAP.md` as of 2026-05
 | 8. Report components and metric help | Complete | HTML report components render metric cards, metric tables, deterministic time-series charts, deterministic heatmap visuals, trusted HTML blocks, and a deterministic metric definitions appendix with metric help/documentation. |
 | 9. End-to-end mock-data demo | Complete | Deterministic synthetic metric fixtures, the `mmsr offline-demo` HTML command path, README quickstart instructions, and delegation into the canonical production-format report builder are present and tested. |
 | 9A. Production-format report polish before kdb integration | Complete | The canonical production-format report builder, shared accessible metric/help controls, inline SVG time-series trend visuals, inline SVG heatmap visual encodings, human-friendly display labels, and the executive market overview section are present and tested. |
+| 9B. Production kdb source-function boundary | In progress | `ReportConfig` now models a calculation namespace, user-defined calendar/symbol/reference/trade/quote functions, daily-scope enforcement, optional symbol chunk sizing, and reference lookback policy. `KdbMetricQueryPlanner` renders `.sb.mmsr.getTrade[date;syms]`, `.sb.mmsr.getQuote[date;syms]`, and `.sb.mmsr.getRef[date;syms]` style sources under a configured namespace, and source rows now carry per-tick `session`/`auction` state instead of relying on configured static session times. `KdbProductionExecutionPlanner` / `KdbProductionExecutor` build one-trading-day target/reference plans from calendar plus symbol-universe functions, summarize the bounded run scope without metric IO, and execute those plans with optional symbol chunks. `mmsr plan`, metric-selectable `mmsr preflight`, and `mmsr render` cover review, bounded validation, and current-vs-reference reporting. Live source-function validation remains pending. |
 | 10. kdb integration demo | In progress | Deterministic mock-kdb integration demo executes rendered q templates through `KdbMetricRunner`, normalizes mock kdb-shaped rows, compares current/reference observations, and renders the canonical report path without PyKX. Live-kdb integration-test documentation and the first environment-gated `activity.q` smoke harness are in place; actual live execution remains deferred until a real kdb+ process and production-like schemas are available. |
 | Later. Symbol-level anomaly pages | Complete for current phase | Deterministic symbol anomaly selection, summary-page assembly, optional per-symbol detail pages, configurable symbol keys, and offline-demo symbol fixtures work from existing `MetricComparison` and `MetricTimeSeries` facts, insert into the canonical report when symbol rows are present, and remain offline/LLM-free. |
 | Later. Sector, segment, and market-cap drilldowns | Complete for current phase | `DrilldownSelectionOptions`, `select_drilldown_comparisons()`, `drilldown_scope_key()`, `DrilldownReportPageOptions`, and `build_drilldown_report_page()` select and render existing sector, segment, and market-cap `MetricComparison` facts as metric-help-backed drilldown tables. `MarketReportOptions` wires the page into the canonical report when matching group-level rows are present, and the offline/mock-kdb demo options plus CLI expose drilldown opt-out and row-limit controls. |
@@ -69,7 +70,7 @@ This audit validates the implementation against `_docs/ROADMAP.md` as of 2026-05
 | `KdbClient` can be instantiated from config | `KdbConfig` and `KdbClient` exist; tests instantiate the client without importing PyKX. | Met |
 | Query templates can be loaded from package resources | `load_q_template()` reads packaged q templates and rejects non-q names, nested paths, and missing resources; tests cover this. | Met |
 | Query rendering validates required parameters | `render_template()` extracts explicit placeholders, rejects missing/unused/invalid parameters, requires string values, and fails on malformed placeholder blocks; tests cover this behavior. | Met |
-| Trading calendar data is read from a dedicated kdb calendar table | `KdbTradingCalendarSource` queries a configurable calendar table; tests assert `trading_calendar` and `is_trading_day`. | Met |
+| Trading calendar data is read from a dedicated kdb calendar function | `KdbTradingCalendarSource` calls a configurable user-owned calendar function; tests assert `.sb.mmsr.getTradingCalendar[start;end]`. | Met |
 | Offline tests do not require live kdb | Current tests pass without PyKX or kdb. | Met |
 
 ## Milestone 5: Metric execution interface
@@ -94,7 +95,7 @@ This audit validates the implementation against `_docs/ROADMAP.md` as of 2026-05
 | q template exists for primary-quote reversion calculation | `toxicity_reversion.q` is now a strict renderable template with placeholders for venue trades, primary quotes, date/time filters, venue filters, horizon, horizon sort order, max primary quote age, bucket expression, value column, and group columns. `toxicity_reversion_input_schema_contracts()` defines required venue-trade and primary-quote source columns; `toxicity_reversion_output_schema_contract()` defines the required report-boundary output columns offline. | Met under documented source/output schema assumptions. |
 | Runner maps reversion metrics to the q template | `KdbMetricRunner` maps `primary_quote_reversion_*_bps` to `toxicity_reversion.q`, renders horizon/venue/primary-venue parameters, validates the reversion output schema contract, and normalizes `venue`/`horizon` dimensions into `MetricTimeSeries`. | Met |
 | Config supports venues, primary venue, horizons, side source, clustering, stale quote filters, and confidence thresholds | `ToxicityConfig` and nested typed config models expose venues, primary venue, horizons, side source, clustering, stale-quote filters, and confidence thresholds. `ReportConfig.metric_parameters_for()` translates reversion settings into `MetricRunRequest.parameters`. | Met |
-| Production visual supports venue reversion curves, context ranking, and duplicate detail suppression | `build_toxicity_reversion_page()` renders deterministic SVG venue reversion curves from normalized kdb-backed `MetricTimeSeries` rows. Horizon progression uses configured horizon order or q-output `horizon_sort_order`; low-confidence sample metadata is surfaced; context ranking options select largest positive reversion, largest absolute reversion, lowest confidence, upstream `context_sort_order`, or chronological order before chart limits. `MarketReportOptions.include_toxicity_reversion_metrics_in_detail_page` defaults to `False`, so the dedicated page suppresses duplicate reversion series from generic `Intraday Detail` unless callers opt in. | Met |
+| Production visual supports venue reversion curves, context ranking, and duplicate detail suppression | `build_toxicity_reversion_page()` renders deterministic SVG venue reversion curves from normalized kdb-backed `MetricTimeSeries` rows. Horizon progression uses configured horizon order or q-output `horizon_sort_order`; low-confidence sample metadata is surfaced; context ranking options select largest positive reversion, largest absolute reversion, lowest confidence, upstream `context_sort_order`, or chronological order before chart limits. The q convention is `aggressor_side * (future_mid - mid_at_trade) / future_mid * 10000`. `MarketReportOptions.include_toxicity_reversion_metrics_in_detail_page` defaults to `False`, so the dedicated page suppresses duplicate reversion series from generic `Intraday Detail` unless callers opt in. | Met |
 | Tests verify metric registration and basic visual rendering | `tests/test_toxicity_reversion.py` covers registration, placeholder rendering, point conversion, and confidence flagging; `tests/test_kdb_metric_runner.py` covers runner integration. | Met |
 | Terminology uses `reversion` consistently | User-facing labels use `+... Reversion`; visual uses `Reversion (bps)`. | Met |
 | Deterministic commentary supports reversion results | `reversion_commentary_facts_from_curve_points()` converts curve points into grounded `CommentaryFact` objects for headline positive reversion and low-confidence warnings without LLM dependencies. | Met |
@@ -144,12 +145,24 @@ This audit validates the implementation against `_docs/ROADMAP.md` as of 2026-05
 | --- | --- | --- |
 | Canonical production-format report builder exists and mock-data demo delegates to it | `mmsr.report.market_report.build_market_monitor_report()` owns the shared report document shape; `mmsr.examples.offline_demo.build_offline_demo_report()` adapts mock fixtures into `MarketReportInput` and delegates to it. | Met |
 | Roadmap/status docs state that demo and production share the same template and report assembly path | `_docs/ROADMAP.md`, `_docs/MILESTONE_STATUS.md`, and README describe the mock-data demo as a format acceptance harness. | Met |
-| Time-series trend visuals render as real chart components | `TimeSeriesChart` renders deterministic inline SVG line charts with one series per group and keeps an expandable backing data table for auditability; tests cover direct rendering and production-format reports. | Met |
-| Heatmap/intraday diagnostics render with visual encodings | `Heatmap` renders deterministic inline SVG matrix visuals, encodes magnitude through cell intensity, includes missing-value cells, and keeps an expandable backing data table for auditability; tests cover direct rendering and production-format reports. | Met |
+| Time-series trend visuals render as real chart components | `TimeSeriesChart` renders deterministic inline SVG line charts with one series per group and keeps an expandable backing data table for auditability; tests cover direct rendering, reference-to-target daily trends, dense intraday time-bucket line charts, and production-format reports. | Met |
+| Heatmap/intraday diagnostics render with visual encodings | `Heatmap` renders deterministic inline SVG matrix visuals, encodes magnitude through cell intensity, includes missing-value cells, and keeps an expandable backing data table for auditability; report detail pages now use dense intraday time-bucket line charts by default, preserve heatmaps as an explicit opt-in, and the demo CLI exposes `--include-intraday-heatmaps` for sample artifacts that need both views. | Met |
 | Deterministic commentary uses display labels | `mmsr.presentation.labels` formats auction buckets, group keys/values, comparison scopes, and reference observation units; commentary, comparison tables, charts, heatmaps, offline demo HTML, and CLI output tests assert human-facing labels and reject internal key/value strings. | Met |
 | Executive market overview summarizes high-level trends before per-bucket diagnostics | `build_executive_market_overview_block()` renders a deterministic high-level status summary before metric cards, comparison tables, and per-bucket diagnostic visuals; market-report and offline-demo tests assert it appears before the diagnostic components. | Met |
 | Metric/help controls are working accessible controls | Shared `partials/help_control.html.j2` renders deterministic `<details>/<summary>` controls across metric cards, tables, charts, heatmaps, and trusted HTML blocks; tests assert there are no title-only info buttons. | Met |
 | Tests prove mock-data and production-format reports use the same builder/template path | `tests/test_market_report.py` and offline-demo tests cover canonical builder delegation and packaged template rendering. | Met |
+
+## Milestone 9B: Production kdb source-function boundary
+
+**Outcome:** In progress.
+
+| Exit criterion | Evidence | Status |
+| --- | --- | --- |
+| Config exposes namespace and raw data functions | `KdbExecutionConfig` and `KdbRawDataFunctionsConfig` are available from `ReportConfig.kdb`; `enforce_daily_raw_scope` and `symbol_chunk_size` document the production scaling contract. | Met |
+| Metric plans call user-defined raw functions | `MetricRunRequest.source_functions` and `KdbMetricQueryPlanner` render raw-source function calls. | Met |
+| MMSR calculations are namespace scoped | `activity.q`, `liquidity.q`, and `toxicity_reversion.q` install calculation functions under the configured `calculation_namespace`. | Met |
+| Raw function result schemas are validated | Existing input contracts now apply to canonical rows returned by source functions; output contracts validate metric tables before normalization; `mmsr preflight` executes one bounded production metric step and can target a configured metric with `--metric` before full rendering. | Met offline; live preflight available |
+| Production orchestration loops by date/chunk | `KdbProductionExecutionPlanner` builds one-day metric requests from a trading calendar and optional symbol chunks; `KdbProductionExecutor.build_plan_summary()` reports target/reference scope and contracts without metric IO; `KdbProductionExecutor` executes plans through `KdbMetricRunner` and combines normalized observations by metric; `mmsr preflight` validates the first planned step or a selected configured metric before a full run. | Met offline; live validation gated |
 
 ## Milestone 10: kdb integration demo
 
@@ -198,26 +211,37 @@ until kdb+ schemas and credentials are available.
 
 ## Later milestone: ppw packaging parity and CLI ergonomics
 
-**Outcome:** Complete for the current package phase; Typer remains a future optional revisit.
+**Outcome:** Complete for the current package phase.
 
 | Exit criterion | Evidence | Status |
 | --- | --- | --- |
 | `dev` and `doc` setup paths are documented and validated in CI or local tests | `pyproject.toml` declares the existing `dev` group and a dedicated `doc` group for MkDocs tooling; README documents `poetry install --with dev` and `poetry install --with doc`; `docs/index.md` mirrors the README demo quickstart, including `--max-drilldown-rows` and `--no-drilldown-page`; tox and CI include a docs build path; tests validate the metadata and docs text. | Met for dependency groups |
 | Runtime install remains lean and does not pull documentation or development tooling unless explicitly requested | Runtime dependencies remain separate from `pytest`, formatter/type-check tooling, `mkdocs`, `mkdocs-material`, and `mkdocstrings`. | Met |
-| CLI tests cover the existing `offline-demo` and `mock-kdb-demo` command behavior before and after any Typer migration | Existing render-path tests cover both demo commands; `tests/test_cli_behavior_snapshots.py` snapshots current argparse top-level help, demo command defaults, override parsing, option presence, and offline/mock-kdb safety language. The phase decision is to keep argparse to avoid adding a new dependency for a small command surface. | Met |
-| The roadmap and journal explain any new dependency added | Roadmap and journal document why the documentation dependencies live in the `doc` group. | Met |
+| CLI tests cover the existing `offline-demo` and `mock-kdb-demo` command behavior before and after any Typer migration | Existing render-path tests cover both demo commands; `tests/test_cli_behavior_snapshots.py` now snapshots the Typer command surface, demo command defaults, override parsing, option presence, offline/mock-kdb safety language, and the explicit `--include-intraday-heatmaps` opt-in. | Met |
+| The roadmap and journal explain any new dependency added | Roadmap and journal document why the documentation dependencies live in the `doc` group, and why Typer is now a runtime dependency for the requested CLI ergonomics. | Met |
 
 ## Earliest incomplete roadmap item
 
-The earliest incomplete milestone remains **Milestone 10**, but live execution is
-intentionally deferred while no real kdb+ process, credentials, or
-production-like schemas are available. The mock-kdb path, offline q-template
-schema contracts, live-kdb integration-test guidance, and the environment-gated
-live `activity.q` and `liquidity.q` smoke harnesses are already in place.
+The earliest incomplete milestone remains **Milestone 10**, but additional
+live validation harnesses are intentionally deferred and the existing
+live-kdb integration-test guidance remains the opt-in boundary. After user feedback in
+iteration 62, report-local validation utilities are frozen at the current
+`mmsr plan` and `mmsr preflight` scope. After iteration 67, the default
+production config and example config are scoped back to the market-monitoring
+report: activity, displayed liquidity, and cross-venue primary-quote reversion.
+Optional market-microstructure templates such as `liquidity_ticks.q`,
+`realized_volatility.q`, and `flow.q` remain available but are not enabled by
+default. Transaction-cost templates remain outside the default market-report
+scope. Iteration 69 adds `docs/report_scope.md` as the explicit scope gate for
+future roadmap and implementation choices so default work stays on market
+monitoring rather than transaction-cost analysis, TCA, execution quality,
+price impact, venue routing, or generic validation frameworks.
 
 ## Recommended next deterministic step
 
-Keep live kdb+ execution deferred until a real endpoint, credentials, and
-production-like schemas are available. For local production-report work, choose
-only narrow features backed by production user feedback, such as refinements to
-detail-page navigation, drilldown summarization, or alert delivery formatting.
+Focus future iterations on report implementation rather than more validation
+utilities. The next deterministic implementation step should improve the actual
+market-monitoring report surface, especially the Cross-Venue Toxicity/Reversion
+page and market-wide activity/liquidity summaries, using the narrowed default
+metric set and the `docs/report_scope.md` gate rather than adding
+transaction-cost sections.

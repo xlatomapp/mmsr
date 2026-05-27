@@ -11,6 +11,7 @@ from mmsr.kdb.runner import (
     template_for_metric,
 )
 from mmsr.metrics import build_default_registry
+from mmsr.metrics.base import MetricDefinition
 from mmsr.periods import IntradayBucketSpec, ReportPeriod, TradingSession
 
 
@@ -42,6 +43,8 @@ def test_template_for_metric_maps_initial_activity_liquidity_and_reversion_metri
     assert template_for_metric("trade_count") == "activity.q"
     assert template_for_metric("quoted_spread_bps") == "liquidity.q"
     assert template_for_metric("top_of_book_depth") == "liquidity.q"
+    assert template_for_metric("effective_spread_bps") == "effective_spread.q"
+    assert template_for_metric("price_impact_30s_bps") == "price_impact.q"
     assert template_for_metric("primary_quote_reversion_100ms_bps") == "toxicity_reversion.q"
     assert template_for_metric("primary_quote_reversion_10s_bps") == "toxicity_reversion.q"
 
@@ -84,10 +87,9 @@ def test_kdb_metric_runner_renders_activity_query_and_normalizes_column_result()
     query = client.queries[0]
     assert "from trade" in query
     assert "date within (2026.05.01;2026.05.02)" in query
-    assert "0D00:05:00.000 xbar time" in query
+    assert ".mmsr.timeBucket[time; session; auction; 0D00:05:00.000]" in query
     assert "market_segment" in query
-    assert "time within (09:00:00.000;11:30:00.000)" in query
-    assert "time within (12:30:00.000;15:30:00.000)" in query
+    assert "time within" not in query
 
 
 def test_kdb_metric_runner_can_bound_starter_query_to_single_symbol() -> None:
@@ -143,6 +145,88 @@ def test_kdb_metric_runner_renders_liquidity_query_without_group_columns() -> No
     assert series.observations[0].group == {}
     assert "from quote" in client.queries[0]
     assert "by date, time_bucket:" in client.queries[0]
+
+
+def test_kdb_metric_runner_renders_effective_spread_query_and_preserves_metadata() -> None:
+    registry = build_default_registry()
+    client = FakeKdbClient(
+        {
+            "date": [date(2026, 5, 1)],
+            "time_bucket": ["09:00"],
+            "sector": ["Banks"],
+            "effective_spread_bps": [6.25],
+            "trade_count": [20],
+            "notional": [25_000_000.0],
+        }
+    )
+    runner = KdbMetricRunner(client)  # type: ignore[arg-type]
+
+    series = runner.run(
+        MetricRunRequest(
+            metric=registry.get("effective_spread_bps"),
+            period=_period(),
+            group_by=["sector"],
+            table_names={"trades": "trade", "quotes": "quote"},
+            parameters={"max_quote_age": "500ms"},
+        )
+    )
+
+    assert series.metric_name == "effective_spread_bps"
+    assert series.values == (6.25,)
+    assert series.observations[0].group == {"sector": "Banks"}
+    assert series.observations[0].metadata == {
+        "trade_count": 20,
+        "notional": 25_000_000.0,
+    }
+    assert series.metadata["template"] == "effective_spread.q"
+
+    query = client.queries[0]
+    assert "from trade" in query
+    assert "from quote" in query
+    assert "aj[`date`sym`time" in query
+    assert "quote_age <= 0D00:00:00.500" in query
+    assert "effective_spread_bps: med" in query
+
+
+def test_kdb_metric_runner_renders_price_impact_query_and_preserves_metadata() -> None:
+    registry = build_default_registry()
+    client = FakeKdbClient(
+        {
+            "date": [date(2026, 5, 1)],
+            "time_bucket": ["09:00"],
+            "sector": ["Banks"],
+            "price_impact_30s_bps": [4.75],
+            "trade_count": [20],
+            "notional": [25_000_000.0],
+        }
+    )
+    runner = KdbMetricRunner(client)  # type: ignore[arg-type]
+
+    series = runner.run(
+        MetricRunRequest(
+            metric=registry.get("price_impact_30s_bps"),
+            period=_period(),
+            group_by=["sector"],
+            table_names={"trades": "trade", "quotes": "quote"},
+            parameters={"max_quote_age": "500ms", "max_horizon_quote_age": "2s"},
+        )
+    )
+
+    assert series.metric_name == "price_impact_30s_bps"
+    assert series.values == (4.75,)
+    assert series.observations[0].group == {"sector": "Banks"}
+    assert series.observations[0].metadata == {
+        "trade_count": 20,
+        "notional": 25_000_000.0,
+    }
+    assert series.metadata["template"] == "price_impact.q"
+
+    query = client.queries[0]
+    assert "from trade" in query
+    assert "from quote" in query
+    assert "horizon_time: time + 0D00:00:30.000" in query
+    assert "horizon_quote_age <= 0D00:00:02.000" in query
+    assert "price_impact_30s_bps: med" in query
 
 
 def test_kdb_metric_runner_renders_reversion_query_and_normalizes_venue_horizon() -> None:
@@ -208,15 +292,15 @@ def test_kdb_metric_runner_renders_reversion_query_and_normalizes_venue_horizon(
     assert series.metadata["group_by"] == ("venue", "horizon", "sym")
 
     query = client.queries[0]
-    assert "from venue_trade" in query
-    assert "from quote" in query
+    assert "rawVenueTrades: venue_trade lj refs" in query
+    assert "rawPrimaryQuotes: quote lj refs" in query
     assert "venue in `TSE`SBIJ" in query
     assert "venue = `TSE" in query
     assert "time + 0D00:00:00.100" in query
     assert "horizon: $\"100ms\"" in query
     assert "horizon_sort_order: 2" in query
     assert "primary_quote_age <= 0D00:00:00.500" in query
-    assert "primary_quote_reversion_100ms_bps: wavg" in query
+    assert "primary_quote_reversion_100ms_bps: .mmsr.weightedAverage[notional; reversion_bps]" in query
     assert "by date, time_bucket:" in query
     assert ", venue, horizon:" in query
     assert ", sym" in query
@@ -333,14 +417,28 @@ def test_reversion_runner_requires_venue_parameters_before_execution() -> None:
 
 
 def test_runner_rejects_unsupported_metrics_before_query_execution() -> None:
-    registry = build_default_registry()
+    metric = MetricDefinition(
+        name="registered_without_q_template",
+        label="Registered Without Q Template",
+        category="Test",
+        description="Synthetic registered metric without a q template.",
+        formula="n/a",
+        interpretation="n/a",
+        unit="count",
+        higher_is_better=None,
+        default_aggregation="sum",
+        supports_intraday=True,
+        supports_symbol_level=False,
+        required_tables=[],
+        required_columns=[],
+    )
     client = FakeKdbClient({})
     runner = KdbMetricRunner(client)  # type: ignore[arg-type]
 
     with pytest.raises(NotImplementedError, match="not yet supported"):
         runner.run(
             MetricRunRequest(
-                metric=registry.get("realized_volatility"),
+                metric=metric,
                 period=_period(),
                 group_by=[],
                 table_names={"quotes": "quote"},
@@ -350,12 +448,12 @@ def test_runner_rejects_unsupported_metrics_before_query_execution() -> None:
     assert client.queries == []
 
 
-def test_runner_requires_metric_table_mapping() -> None:
+def test_runner_requires_metric_source_mapping() -> None:
     registry = build_default_registry()
     client = FakeKdbClient({})
     runner = KdbMetricRunner(client)  # type: ignore[arg-type]
 
-    with pytest.raises(KdbMetricRunnerError, match="missing table_names entry"):
+    with pytest.raises(KdbMetricRunnerError, match="missing source_functions or table_names entry"):
         runner.run(
             MetricRunRequest(
                 metric=registry.get("quoted_spread_bps"),
@@ -439,3 +537,14 @@ def test_normalize_metric_result_rejects_mismatched_column_lengths() -> None:
         )
 
 
+
+
+def test_kdb_metric_runner_installs_calculation_functions() -> None:
+    client = FakeKdbClient({})
+    runner = KdbMetricRunner(client)
+
+    runner.install_calculation_functions(".desk.mmsr")
+
+    assert len(client.queries) == 1
+    assert ".desk.mmsr.sumNotional" in client.queries[0]
+    assert ".desk.mmsr.medianTopOfBookDepth" in client.queries[0]

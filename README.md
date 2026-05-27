@@ -13,6 +13,24 @@ A Python package for generating Japanese market microstructure monitoring report
 - Deterministic template commentary by default.
 - Optional LLM commentary only when explicitly enabled.
 
+## Report scope guardrails
+
+`mmsr` is a market-monitoring report package, not a transaction-cost analysis
+(TCA), execution quality, execution-quality, smart-order-routing,
+venue-ranking, or generic validation-framework / generic validation package. Future implementation should stay centered on
+market activity, displayed liquidity, volatility/market quality where clearly
+market-state focused, intraday/taxonomy/symbol drilldowns, and Cross-Venue
+Toxicity/Reversion.
+
+The default report metric set is intentionally limited to `turnover`, `volume`,
+`trade_count`, `quoted_spread_bps`, `top_of_book_depth`, and the six
+`primary_quote_reversion_*_bps` horizons. Execution-cost metrics such as
+effective spread, implementation shortfall, slippage, and price impact must not
+be added to default configs or report sections unless the product scope is
+explicitly changed. See `docs/report_scope.md` before choosing a future roadmap
+or implementation step.
+
+
 
 ## Python support
 
@@ -23,6 +41,89 @@ This project targets Python 3.12 and 3.13.
 HTML output is template-driven so reports stay visually consistent across runs.
 The default template lives at `mmsr/report/templates/report.html.j2`.
 Branding options such as header image, footer image, logo image, and footer text are configured in `config/report.example.yaml`.
+
+
+
+### Production kdb render
+
+The production entrypoint is `mmsr render`. It reads the YAML config, connects to
+kdb+ through the lazy PyKX-backed client, obtains target and reference trading
+days from the configured calendar function, asks the configured symbol-universe
+function for each trading day, and runs the bounded production executor. Metric q
+remains MMSR-owned and namespaced. User-owned q functions are responsible only for
+calendar dates, symbol universe selection, reference data, and canonicalized
+trade/quote rows.
+
+MMSR installs reusable q aggregation helpers such as `.desk.mmsr.sumNotional`,
+`.desk.mmsr.medianQuotedSpreadBps`, `.desk.mmsr.weightedAverage`, and
+`.desk.mmsr.timeBucket` inside the configured
+`data.kdb.calculation_namespace`. The time-bucket helper uses the per-tick
+`session` and `auction` columns returned by your source functions, so production
+configs should not hard-code static session start/end times.
+
+`config/report.production_minimal.yaml` is the recommended first live-kdb
+configuration in the repo. The same example is packaged in
+`mmsr/examples/config/live_kdb_report.yaml` for installed wheels/sdists. It is
+intentionally scoped to market-monitoring metrics only: `turnover`, `volume`,
+`trade_count`, `quoted_spread_bps`, `top_of_book_depth`, and the six
+primary-quote reversion horizons from `primary_quote_reversion_10ms_bps` through
+`primary_quote_reversion_10s_bps`.
+
+```bash
+mmsr render \
+  --config config/report.production_minimal.yaml \
+  --output report.html \
+  --kdb-host localhost \
+  --kdb-port 5001 \
+  --symbol 7203 \
+  --symbol 6758 \
+  --venue TSE
+```
+
+For full-universe reports, omit repeated `--symbol` filters and let the
+configured symbol function choose the analysis universe for each trading day.
+When a symbol list is supplied, `data.kdb.symbol_chunk_size` bounds each
+production request to one trading day and one symbol chunk before q execution.
+The same bounded daily/chunk execution shape is used for reference observations
+derived from `reference.lookback_days`, and `mmsr render` wires those reference
+observations into current-vs-reference comparison tables and trend charts.
+
+Run `mmsr plan` before executing production metric q when operators need to
+review the bounded run scope. It loads the config, queries the trading-calendar
+function, derives target and reference trading days, applies configured symbol
+chunking, and prints the source-function/input and output schema contracts
+without running metric q:
+
+```bash
+mmsr plan \
+  --config config/report.production_minimal.yaml \
+  --kdb-host localhost \
+  --kdb-port 5001 \
+  --symbol 7203 \
+  --symbol 6758 \
+  --venue TSE
+```
+
+Run `mmsr preflight` before a full production render to validate config loading,
+q namespace/source-function names, kdb calendar access, query planning, and one
+bounded sample metric result schema. By default it checks the first configured
+metric. Pass `--metric` to validate a specific configured metric family, such as
+an activity, liquidity, or reversion metric, before broadening the live check:
+
+```bash
+mmsr preflight \
+  --config config/report.production_minimal.yaml \
+  --kdb-host localhost \
+  --kdb-port 5001 \
+  --symbol 7203 \
+  --venue TSE \
+  --metric quoted_spread_bps
+```
+
+The plan command does not execute metric q. The preflight uses the same
+production executor boundary but executes only one planned
+trading-day/chunk/metric step for the default or selected metric.
+
 
 ## Development workflow
 
@@ -36,8 +137,9 @@ After every implementation step, update `_docs/journal.md`.
 
 ## Installation profiles
 
-Runtime installs stay lean by default and do not include PyKX, plotting,
-development, or documentation tooling unless explicitly requested.
+Runtime installs stay lean by default and include only the production package,
+the Typer-powered `mmsr` CLI, and report-rendering dependencies. PyKX, plotting,
+development, and documentation tooling are excluded unless explicitly requested.
 
 ```bash
 # Runtime package only.
@@ -93,10 +195,17 @@ poetry run mmsr offline-demo \
 poetry run mmsr offline-demo \
   --output reports/offline_demo_no_drilldown.html \
   --no-drilldown-page
+
+poetry run mmsr offline-demo \
+  --output reports/offline_demo_with_heatmaps.html \
+  --include-intraday-heatmaps
 ```
 
 Use `--max-drilldown-rows` for compact sector, segment, and market-cap tables,
 and `--no-drilldown-page` when a smoke-test artifact should omit that page.
+Dense intraday time-bucket line charts remain the default; use
+`--include-intraday-heatmaps` only when a sample report should also include the
+matrix-style bucket × group diagnostic views.
 
 Use the mock-data demo as a smoke test for the production report format and
 documentation layout only. It does not query kdb+, validate production table
@@ -115,7 +224,8 @@ poetry run mmsr mock-kdb-demo --output reports/mock_kdb_demo.html
 This path validates the q-template and normalization boundary without a live
 kdb+ connection or PyKX import. It is still synthetic: use it to check integration
 plumbing and report shape, not production table schemas or market data quality.
-It exposes the same drilldown controls as the offline demo:
+It exposes the same drilldown and explicit heatmap opt-in controls as the
+offline demo:
 
 ```bash
 poetry run mmsr mock-kdb-demo \
@@ -125,7 +235,91 @@ poetry run mmsr mock-kdb-demo \
 poetry run mmsr mock-kdb-demo \
   --output reports/mock_kdb_demo_no_drilldown.html \
   --no-drilldown-page
+
+poetry run mmsr mock-kdb-demo \
+  --output reports/mock_kdb_demo_with_heatmaps.html \
+  --include-intraday-heatmaps
 ```
+
+### Production kdb source-function boundary
+
+Production metric runs call user-owned q functions instead of querying physical
+tables directly. Those functions can route between HDB/RDB, cleanse data,
+normalize venue codes, enrich permissions, and map internal schemas to MMSR's
+canonical boundary. MMSR then joins reference data and runs the metric
+aggregation q inside the configured calculation namespace.
+
+Example configuration shape:
+
+```yaml
+data:
+  source: kdb
+  kdb:
+    calculation_namespace: ".desk.mmsr"
+    enforce_daily_raw_scope: true
+    symbol_chunk_size: 500
+    raw_data_functions:
+      namespace: ".sb.mmsr"
+      trade: "getTrade"
+      quote: "getQuote"
+      venue_trade: "getTrade"
+      primary_quote: "getQuote"
+      reference_data: "getRef"
+
+calendar:
+  source: kdb
+  namespace: ".sb.mmsr"
+  function: "getTradingCalendar"
+  date_column: date
+
+symbols:
+  source: kdb
+  namespace: ".sb.mmsr"
+  function: "getSymbols"
+  symbol_column: sym
+
+reference_data:
+  source: kdb
+  namespace: ".sb.mmsr"
+  function: "getRef"
+  symbol_column: sym
+```
+
+The required user q function signatures are positional and intentionally small:
+
+```q
+.sb.mmsr.getTradingCalendar[start;end]
+.sb.mmsr.getSymbols[date]
+.sb.mmsr.getRef[date;syms]
+.sb.mmsr.getTrade[date;syms]
+.sb.mmsr.getQuote[date;syms]
+```
+
+Trade and quote rows must carry per-tick market-state columns. `session` should
+identify the market session, for example `am` or `pm`. `auction` should identify
+auction ticks, for example `open` or `close`; continuous-session ticks should
+have null `auction`. MMSR uses those columns to derive continuous intraday
+buckets and explicit auction buckets such as `AMO`, `AMC`, `PMO`, and `PMC`,
+instead of relying on a static configured session-time grid.
+
+Canonical trade rows should expose `date`, `time`, `sym`, `session`, `auction`,
+`trade_price`, and `trade_size`. Reversion metrics also require `venue` and
+`aggressor_side` where `1` means buyer-initiated and `-1` means seller-initiated.
+Canonical quote rows should expose `date`, `time`, `sym`, `session`, `auction`,
+`bid_price`, `ask_price`, `bid_size`, and `ask_size`. Reversion metrics also
+require `venue` on quote rows so primary-venue quotes can be selected.
+
+The reference-data function should return one row per requested `date`/`sym`
+with at least `date`, `sym`, `topix_bucket`, `market_cap_bucket`, and `lot_size`.
+Add any additional grouping columns, such as `sector` or `market_segment`, to
+`getRef` before including those names in the config `groups` list.
+
+The production execution path is driven by `KdbProductionExecutor`, which asks a
+trading-calendar function for dates, asks the symbol-universe function for the
+analysis symbols on each trading day, asks the reference-data function for
+symbol metadata, and builds one `MetricRunRequest` per trading day, metric, and
+optional symbol chunk. Do not request or hold a multi-day full-market raw
+trade/quote window in Python.
 
 ### kdb query plans and schema contracts
 
@@ -190,12 +384,15 @@ when a client schema uses a different identifier column such as
 used for the anomaly summary page and any per-symbol detail pages. When callers
 also provide symbol-scoped `MetricTimeSeries` rows through
 `MarketReportInput.symbol_series`, the report can insert optional per-symbol
-detail pages with deterministic trend charts and intraday heatmaps for the
-selected symbols. These detail pages format existing normalized rows only; they
-do not query kdb+, calculate additional metrics, or call an LLM. When detail
-pages are emitted, the `Symbol Anomalies` page also includes a compact
-`Symbol Detail Index` with deterministic links to each emitted detail page.
-Set `include_symbol_detail_pages=False` to omit the detail pages or
+detail pages with deterministic intraday time-bucket line charts for the
+selected symbols. Dense intraday bucket grids such as `1m` are shown with the
+bucket on the x-axis by default; heatmaps remain available through
+`include_intraday_heatmaps=True` for clients that explicitly want matrix-style
+diagnostics. These detail pages format existing normalized rows only; they do
+not query kdb+, calculate additional metrics, or call an LLM. When detail pages
+are emitted, the `Symbol Anomalies` page also includes a compact `Symbol Detail
+Index` with deterministic links to each emitted detail page. Set
+`include_symbol_detail_pages=False` to omit the detail pages or
 `include_symbol_detail_index=False` to keep the details while omitting the index.
 
 The bundled `offline-demo` includes three synthetic symbol-scoped comparison rows
@@ -286,12 +483,15 @@ that need market-data owner sign-off.
 
 ## Example configuration
 
-See `config/report.example.yaml`.
+Use `config/report.production_minimal.yaml` for the first live-kdb run because
+it includes only the market-monitoring metrics that belong in this report.
+`config/report.example.yaml` uses the same default metric scope and adds fuller
+commentary, branding, grouping, and toxicity/reversion settings for reference.
 
 ## Package flow
 
 ```text
-config -> kdb calendar -> period/session/bucket grid -> metric registry -> PyKX/kdb metric runner -> metric time-series result -> comparable reference comparison -> visuals -> template commentary -> report renderer
+config -> kdb calendar/symbol/ref functions -> metric registry -> PyKX/kdb metric runner -> per-tick session/auction-aware time-series result -> comparable reference comparison -> visuals -> template commentary -> report renderer
 ```
 
 ## Notes
@@ -302,7 +502,7 @@ This skeleton is designed to be copied into or generated alongside a ppw project
 
 The production report includes a dedicated `Cross-Venue Toxicity` page when normalized kdb-backed primary-quote reversion rows are present. It renders deterministic SVG venue reversion curves with horizon progression on the x-axis, reversion in bps on the y-axis, and one line per venue such as TSE, SBIJ, and ODX. The page consumes already-computed `MetricTimeSeries` rows and does not query kdb+, calculate raw-tick metrics, or call an LLM in the report layer.
 
-When production output contains many date, intraday bucket, sector, segment, or symbol contexts, the toxicity page ranks contexts deterministically before applying the chart limit. The default ranking surfaces the contexts with the largest positive reversion first because positive values indicate adverse movement in the aggressive-trade direction. Production callers can set `MarketReportOptions.toxicity_reversion_context_ranking` to `max_positive_reversion`, `max_absolute_reversion`, `lowest_confidence`, `context_sort_order`, or `chronological`. When normalized kdb-backed rows include optional `context_sort_order` metadata, `context_sort_order` ranks smaller numeric values first, then falls back to adverse reversion and chronological ordering for ties or missing values.
+When production output contains many date, intraday bucket, sector, segment, or symbol contexts, the toxicity page ranks contexts deterministically before applying the chart limit. The default ranking surfaces the contexts with the largest positive reversion first because positive values indicate future primary-mid movement in the aggressive-trade direction under `aggressor_side * (future_mid - mid_at_trade) / future_mid * 10000`. Production callers can set `MarketReportOptions.toxicity_reversion_context_ranking` to `max_positive_reversion`, `max_absolute_reversion`, `lowest_confidence`, `context_sort_order`, or `chronological`. When normalized kdb-backed rows include optional `context_sort_order` metadata, `context_sort_order` ranks smaller numeric values first, then falls back to adverse reversion and chronological ordering for ties or missing values.
 
 By default, when the dedicated `Cross-Venue Toxicity` page is present, `build_market_monitor_report()` suppresses the `primary_quote_reversion_*_bps` family from the generic `Intraday Detail` page so the same venue/horizon curves are not duplicated. Production callers that explicitly want both displays can set `MarketReportOptions.include_toxicity_reversion_metrics_in_detail_page=True`; if the dedicated toxicity page is disabled or absent, the generic detail page still renders any supplied reversion series.
 
@@ -321,3 +521,10 @@ Reference comparison is built around a configured observation unit. The default 
 Z-scores are optional anomaly diagnostics, not mandatory report fields. The default policy requires at least 30 comparable reference observations before a z-score or normal-score percentile is treated as a headline statistic. With one reference observation the report shows only current-vs-reference change; with fewer than 30 observations it prefers empirical rank, range position, and a low-confidence flag.
 
 For non-technical readers, prefer empirical percentile or normal-score percentile language over raw z-scores. For example, say “current spread ranked above 95% of comparable observations” or “normal-score percentile: 97.5%” rather than presenting only `z = 1.96`.
+
+
+When callers provide `MarketReportInput.reference_series` together with the
+target/current series, the default report includes a `Reference and Target Daily
+Trends` page. This plots the reference trading days followed by the target period
+on a daily x-axis so reviewers can see the time series that produced the
+comparison summary.

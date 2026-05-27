@@ -14,6 +14,7 @@ def test_runtime_dependencies_stay_lean() -> None:
     runtime_dependencies = set(data["tool"]["poetry"]["dependencies"])
 
     assert "jinja2" in runtime_dependencies
+    assert "typer" in runtime_dependencies
     assert "pykx" in runtime_dependencies
     assert "pytest" not in runtime_dependencies
     assert "black" not in runtime_dependencies
@@ -68,5 +69,5 @@ def test_roadmap_records_packaging_progress_and_remaining_cli_work() -> None:
 
     assert "A dedicated `doc` Poetry group" in text
     assert "`mkdocs`, `mkdocs-material`, and `mkdocstrings[python]`" in text
-    assert "CLI behavior snapshots now preserve the current argparse command surface" in text
-    assert "CLI implementation decision for this phase is to keep argparse" in text
+    assert "CLI behavior snapshots preserve the Typer command surface" in text
+    assert "The CLI now uses Typer as an explicit runtime dependency" in text

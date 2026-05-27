@@ -8,21 +8,28 @@ from dataclasses import dataclass, field, replace
 from datetime import date, time
 from typing import Literal
 
+from mmsr.analysis.commentary import TemplateCommentaryEngine
 from mmsr.config.models import ToxicityConfidenceConfig
 from mmsr.metrics.base import MetricDefinition
-from mmsr.metrics.results import MetricTimeSeries
+from mmsr.metrics.results import MetricComparison, MetricTimeSeries
 from mmsr.presentation.labels import (
     format_comparison_scope_label,
     format_group_label,
     format_intraday_bucket_label,
 )
-from mmsr.report.components import CommentaryBlock, ReportPage, TimeSeriesChart, TimeSeriesChartPoint
+from mmsr.report.components import (
+    CommentaryBlock,
+    MetricTable,
+    ReportPage,
+    TimeSeriesChart,
+    TimeSeriesChartPoint,
+)
+from mmsr.report.sections import build_comparison_metric_table
 from mmsr.visuals.toxicity import (
     ReversionCurvePoint,
     reversion_commentary_facts_from_curve_points,
     reversion_curve_points_from_timeseries_collection,
 )
-from mmsr.analysis.commentary import TemplateCommentaryEngine
 
 
 REVERSION_METRIC_PREFIX = "primary_quote_reversion_"
@@ -67,8 +74,8 @@ class ToxicityReversionPageOptions:
     help_text: str = (
         "Primary-quote reversion by venue and horizon. The x-axis is the "
         "configured reversion horizon, the y-axis is reversion in bps, and each "
-        "line is one execution venue. Positive values indicate adverse movement "
-        "in the aggressive-trade direction."
+        "line is one execution venue. Positive values indicate movement in "
+        "the aggressive-trade direction under the configured future-mid denominator."
     )
     max_charts: int | None = 6
     max_points_per_chart: int | None = None
@@ -78,6 +85,15 @@ class ToxicityReversionPageOptions:
     confidence: ToxicityConfidenceConfig | None = field(
         default_factory=ToxicityConfidenceConfig
     )
+    comparison_table_title: str = "Reversion current versus reference"
+    comparison_table_help_text: str = (
+        "Precomputed normalized comparison rows for the reversion metric family. "
+        "Rows preserve current value, comparable reference value, absolute and "
+        "percentage change, and status. Positive current values and positive "
+        "changes mean more aggressive-direction primary-quote reversion under "
+        "the future-mid denominator convention."
+    )
+    max_comparison_rows: int | None = 12
     max_comments: int = 5
     max_commentary_headline_points: int = 3
     max_low_confidence_warnings: int = 3
@@ -90,10 +106,22 @@ class ToxicityReversionPageOptions:
         if not self.help_text.strip():
             raise ValueError("help_text must not be empty")
         _require_optional_non_negative(self.max_charts, "max_charts")
-        _require_optional_non_negative(self.max_points_per_chart, "max_points_per_chart")
+        _require_optional_non_negative(
+            self.max_points_per_chart,
+            "max_points_per_chart",
+        )
         _require_context_ranking(self.context_ranking)
         _require_non_empty_sequence(self.venue_order, "venue_order")
         _require_non_empty_sequence(self.horizon_order, "horizon_order")
+        _require_non_empty(self.comparison_table_title, "comparison_table_title")
+        _require_non_empty(
+            self.comparison_table_help_text,
+            "comparison_table_help_text",
+        )
+        _require_optional_non_negative(
+            self.max_comparison_rows,
+            "max_comparison_rows",
+        )
         _require_non_negative(self.max_comments, "max_comments")
         _require_non_negative(
             self.max_commentary_headline_points,
@@ -113,6 +141,7 @@ def build_toxicity_reversion_page(
     current_series: Sequence[MetricTimeSeries],
     metric_definitions: Mapping[str, MetricDefinition] | Iterable[MetricDefinition],
     *,
+    comparisons: Sequence[MetricComparison] = (),
     options: ToxicityReversionPageOptions | None = None,
 ) -> ReportPage | None:
     """Build the production cross-venue toxicity/reversion report page.
@@ -121,6 +150,9 @@ def build_toxicity_reversion_page(
     ``MetricTimeSeries`` rows that production callers should source from
     kdb-backed metric execution, preserves venue/horizon grouping, and renders
     deterministic SVG line charts through the standard report component model.
+    When supplied, existing normalized ``MetricComparison`` rows for the same
+    metric family are rendered as a current-versus-reference table without
+    recalculating comparisons in Python.
     """
 
     resolved_options = options or ToxicityReversionPageOptions()
@@ -166,15 +198,43 @@ def build_toxicity_reversion_page(
         list(facts),
         max_comments=resolved_options.max_comments,
     )
+    comparison_table = _build_reversion_comparison_table(
+        comparisons,
+        definitions,
+        options=resolved_options,
+    )
 
     return ReportPage(
         title=resolved_options.title.strip(),
+        metric_tables=[] if comparison_table is None else [comparison_table],
         time_series_charts=charts,
         commentary_blocks=(
             [CommentaryBlock(title="Toxicity commentary", comments=comments)]
             if comments
             else []
         ),
+    )
+
+
+def _build_reversion_comparison_table(
+    comparisons: Sequence[MetricComparison],
+    definitions: Mapping[str, MetricDefinition],
+    *,
+    options: ToxicityReversionPageOptions,
+) -> MetricTable | None:
+    reversion_comparisons = tuple(
+        comparison
+        for comparison in comparisons
+        if _is_reversion_metric(comparison.metric_name)
+    )
+    if not reversion_comparisons:
+        return None
+    return build_comparison_metric_table(
+        options.comparison_table_title,
+        reversion_comparisons,
+        definitions,
+        max_rows=options.max_comparison_rows,
+        help_text=options.comparison_table_help_text,
     )
 
 
@@ -393,7 +453,7 @@ def _curve_metric_definition(
         formula=(
             "For each venue and horizon: "
             "side * 10000 * (primary_mid[t + horizon] - primary_mid[t-]) "
-            "/ primary_mid[t-], aggregated by the upstream kdb query."
+            "/ primary_mid[t + horizon], aggregated by the upstream kdb query."
         ),
         interpretation=(
             "Positive values indicate the primary quote moved in the aggressive "
@@ -450,6 +510,11 @@ def _require_context_ranking(value: str) -> None:
             "context_ranking must be one of: "
             + ", ".join(TOXICITY_CONTEXT_RANKINGS)
         )
+
+
+def _require_non_empty(value: str, field_name: str) -> None:
+    if not value.strip():
+        raise ValueError(f"{field_name} must not be empty")
 
 
 def _require_non_empty_sequence(values: Sequence[str], field_name: str) -> None:

@@ -8,6 +8,7 @@ from numbers import Real
 from typing import Any
 
 from mmsr.kdb.client import KdbClient
+from mmsr.kdb.query_loader import render_calculation_function_bootstrap
 from mmsr.kdb.query_plan import (
     KdbMetricQueryPlanError,
     KdbMetricQueryPlanner,
@@ -34,6 +35,21 @@ class KdbMetricRunner:
         self.client = client
         self.query_planner = (
             KdbMetricQueryPlanner() if query_planner is None else query_planner
+        )
+
+    def install_calculation_functions(
+        self,
+        calculation_namespace: str = ".mmsr",
+    ) -> None:
+        """Install MMSR-owned reusable q helpers into ``calculation_namespace``.
+
+        Production source functions remain user-owned and should return raw
+        canonical rows. This method installs the package-owned calculation and
+        aggregation helpers that metric templates use inside kdb+.
+        """
+
+        self.client.execute(
+            render_calculation_function_bootstrap(calculation_namespace)
         )
 
     def plan_query(self, request: MetricRunRequest) -> RenderedMetricQuery:
@@ -73,6 +89,8 @@ class KdbMetricRunner:
                 "group_by": plan.result_group_by,
                 "required_output_columns": plan.required_output_columns,
                 "optional_output_columns": plan.optional_output_columns,
+                "source_functions": plan.source_functions,
+                "calculation_namespace": plan.calculation_namespace,
             },
         )
 

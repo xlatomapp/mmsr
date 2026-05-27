@@ -121,9 +121,11 @@ def reversion_commentary_facts_from_curve_points(
     """Build deterministic commentary facts for venue reversion curves.
 
     The headline facts highlight the largest positive primary-quote reversion
-    points because positive values indicate adverse movement in the aggressive
-    trade direction. Low-confidence points are also surfaced through caveats on
-    headline facts and separate watch-level facts for non-headline rows.
+    points because positive values indicate future primary-mid movement in the
+    aggressive trade direction under the package convention
+    ``side * (future_mid - mid_at_trade) / future_mid``. Low-confidence points
+    are also surfaced through caveats on headline facts and separate watch-level
+    facts for non-headline rows.
     """
 
     if max_headline_points < 0:
