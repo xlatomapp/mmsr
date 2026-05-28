@@ -70,7 +70,7 @@ This audit validates the implementation against `_docs/ROADMAP.md` as of 2026-05
 | `KdbClient` can be instantiated from config | `KdbConfig` and `KdbClient` exist; tests instantiate the client without importing PyKX. | Met |
 | Query templates can be loaded from package resources | `load_q_template()` reads packaged q templates and rejects non-q names, nested paths, and missing resources; tests cover this. | Met |
 | Query rendering validates required parameters | `render_template()` extracts explicit placeholders, rejects missing/unused/invalid parameters, requires string values, and fails on malformed placeholder blocks; tests cover this behavior. | Met |
-| Trading calendar data is read from a dedicated kdb calendar function | `KdbTradingCalendarSource` calls a configurable user-owned calendar function; tests assert `.sb.mmsr.getTradingCalendar[start;end]`. | Met |
+| Trading calendar data is read from a dedicated kdb calendar function | `KdbTradingCalendarSource` calls a configurable user-owned calendar function; tests assert `.sb.mmsr.getTradingCalendar`. | Met |
 | Offline tests do not require live kdb | Current tests pass without PyKX or kdb. | Met |
 
 ## Milestone 5: Metric execution interface

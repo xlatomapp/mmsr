@@ -303,7 +303,7 @@ reference_data:
 The required user q function signatures are positional and intentionally small:
 
 ```q
-.sb.mmsr.getTradingCalendar[start;end]
+.sb.mmsr.getTradingCalendar
 .sb.mmsr.getRef[date]
 .sb.mmsr.getTrade[date;ref]
 .sb.mmsr.getQuote[date;ref]
@@ -584,25 +584,24 @@ as continuous-session rows and use continuous intraday buckets; trade-side
 calculations still use auction labels where trade rows expose `session` and
 `auction`.
 
-Rendered q templates are stored as `mmsr/kdb/query_templates/*.q.j2` to avoid
-confusing them with directly loadable q libraries. The loader still accepts
-legacy `.q` template names from Python APIs and maps them to `.q.j2` resources.
+There is no separate q template directory. Metric identifiers such as
+`liquidity.q` and `activity.q` still work in Python APIs, but they are resolved
+from the single canonical q calculation library instead of per-metric q files.
 
 
 ### kdb calculation library loading
 
-MMSR keeps reusable q utilities in one package-owned library:
+MMSR keeps every package-owned q function definition in one library:
 
 ```text
 mmsr/kdb/q_lib/mmsr_calculations.q.j2
 ```
 
 `KdbMetricRunner` renders this library into the configured `calculation_namespace`
-and installs it into a real PyKX-backed kdb process before metric execution. The
-per-metric files under `mmsr/kdb/query_templates/*.q.j2` are rendered wrappers
-for configured source functions and metric-specific expressions; they no longer
-repeat shared utility definitions such as `timeBucket`, `timeBucketContinuous`,
-`sumNotional`, or `rollupMetricResult`.
+and installs it into a real PyKX-backed kdb process before metric execution.
+Metric-specific calculation functions, shared utilities such as `timeBucket`,
+`timeBucketContinuous`, `sumNotional`, and `rollupMetricResult`, and the
+request-level metric blocks all live in that one file.
 
 This keeps the runtime shape clear:
 

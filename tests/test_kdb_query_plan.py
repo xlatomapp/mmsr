@@ -772,13 +772,17 @@ def test_query_planner_renders_day_query_with_explicit_syms_and_q_rollup() -> No
     assert plan.all_symbols == ("7203", "6758")
     assert plan.chunk_size == 2
     assert "currentSymbolChunk" not in plan.query
-    assert "{[runDate;allSyms;chunkSize;requestedAggregationLevels]" in plan.query
+    assert ".desk.mmsr.runMetricDay[" in plan.query
     assert '($\"7203\";$\"6758\")' in plan.query
-    assert "chunks: $[0=count allSyms; enlist 0#`; chunkSize cut allSyms];" in plan.query
-    assert ".sb.mmsr.getTrade[runDate;0!refs]" in plan.query
-    assert ".sb.mmsr.getQuote[runDate;0!refs]" in plan.query
-    assert "rollupMetricResult[raze" in plan.query
+    assert "{[runDate;refs] .sb.mmsr.getTrade[runDate;refs]}" in plan.query
+    assert "{[runDate;refs] .sb.mmsr.getQuote[runDate;refs]}" in plan.query
+    assert "{[runDate;refs] .sb.mmsr.getRef[runDate]}" in plan.query
+    assert "{[rawSources] .desk.mmsr.calcActivity[rawSources`trades;rawSources`refs]}" in plan.query
+    assert "{[rawSources] .desk.mmsr.calcLiquidity[rawSources`quotes;rawSources`refs]}" in plan.query
+    assert 'rollupMetricResult[raze {x[$"quoted_spread_bps"]} each chunkResults;requestedAggregationLevels]' not in plan.query
+    assert 'rollupMetricResult[raze {x[$"quoted_spread_bps"]} each chunkResults;$"quoted_spread_bps";' not in plan.query
     assert "`market`market_bucket`symbol" in plan.query
+
 
 
 def test_query_planner_quote_contracts_do_not_require_tick_state() -> None:

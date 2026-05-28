@@ -46,6 +46,19 @@ def test_calculation_function_bootstrap_contains_bucket_amend_once() -> None:
     assert "labels:@[labels;where (auction = 1) & (session = `am);:;`AMO];" in bootstrap
     assert "labels[where" not in bootstrap
 
+
+def test_calculation_function_bootstrap_creates_nested_namespace() -> None:
+    bootstrap = render_calculation_function_bootstrap(".desk.mmsr")
+    assert bootstrap.startswith("\\d .desk.mmsr\n\\d .\n")
+    assert ".desk.mmsr.timeBucketContinuous:{[t;bucket]" in bootstrap
+
+
+def test_calculation_function_bootstrap_avoids_reserved_cols_assignment() -> None:
+    bootstrap = render_calculation_function_bootstrap(".desk.mmsr")
+    assert "cols: cols facts" not in bootstrap
+    assert "mmsrColumnNames: cols facts;" in bootstrap
+
+
 def test_template_for_metric_maps_initial_activity_liquidity_and_reversion_metrics() -> None:
     assert template_for_metric("turnover") == "activity.q"
     assert template_for_metric("volume") == "activity.q"

@@ -7,7 +7,6 @@ readme = "README.md"
 packages = [{ include = "mmsr" }]
 include = [
     { path = "mmsr/report/templates/**/*.j2", format = ["sdist", "wheel"] },
-    { path = "mmsr/kdb/query_templates/*.q.j2", format = ["sdist", "wheel"] },
     { path = "mmsr/kdb/q_lib/*.q.j2", format = ["sdist", "wheel"] },
     { path = "mmsr/examples/config/*.yaml", format = ["sdist", "wheel"] },
 ]

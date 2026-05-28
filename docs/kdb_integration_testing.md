@@ -176,7 +176,7 @@ configured session grid.
 The live source-function signatures are:
 
 ```q
-.sb.mmsr.getTradingCalendar[start;end]
+.sb.mmsr.getTradingCalendar
 .sb.mmsr.getRef[date]
 .sb.mmsr.getTrade[date;ref]
 .sb.mmsr.getQuote[date;ref]
@@ -232,7 +232,7 @@ trade function does not need to provide `aggressorSide` for the default live
 report. The reversion target remains the TSE/primary quote: future and at-trade
 primary mids are joined separately to calculate the reversion value. Quote rows
 should satisfy `askPrice > bidPrice`. Production calendar data must come from
-`getTradingCalendar[start;end]`; weekday-only assumptions are not valid for
+`getTradingCalendar`; weekday-only assumptions are not valid for
 production report generation.
 
 ## Production preflight path

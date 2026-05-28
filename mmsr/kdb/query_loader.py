@@ -16,26 +16,14 @@ class QueryTemplateError(ValueError):
 
 
 def load_q_template(name: str) -> str:
-    """Load a q template by filename from the query_templates package directory.
+    """Load a metric q template block by filename.
 
-    Template names must be simple ``.q.j2`` filenames. A legacy ``.q`` name is
-    accepted and mapped to ``.q.j2`` so older callers fail less abruptly, but the
-    repository stores rendered templates with the explicit template suffix.
+    Every MMSR-owned q function definition lives in the canonical
+    ``q_lib/mmsr_calculations.q.j2`` library. There is no separate
+    ``query_templates`` package; names such as ``liquidity.q`` are stable
+    metric-family identifiers that resolve to marked blocks inside that library.
     """
-    if not name:
-        raise ValueError("q template name must be non-empty")
-    if PurePath(name).name != name:
-        raise ValueError("q template name must be a filename, not a path")
-    if name.endswith(".q"):
-        name = name + ".j2"
-    if not name.endswith(".q.j2"):
-        raise ValueError("q template name must end with .q.j2")
-
-    package = "mmsr.kdb.query_templates"
-    template_path = resources.files(package).joinpath(name)
-    if not template_path.is_file():
-        raise FileNotFoundError(f"q template not found: {name}")
-    return template_path.read_text(encoding="utf-8")
+    return load_metric_q_template(name)
 
 
 
@@ -54,6 +42,35 @@ def load_q_library_template(name: str) -> str:
     if not template_path.is_file():
         raise FileNotFoundError(f"q library template not found: {name}")
     return template_path.read_text(encoding="utf-8")
+
+
+
+def load_metric_q_template(name: str) -> str:
+    """Load a metric calculation function block from the canonical q library.
+
+    All MMSR-owned q function definitions live in ``q_lib/mmsr_calculations.q.j2``.
+    Per-metric names are stable metric-family identifiers only; there are no
+    per-metric q template files with MMSR function definitions.
+    """
+
+    if not name:
+        raise ValueError("metric q template name must be non-empty")
+    if PurePath(name).name != name:
+        raise ValueError("metric q template name must be a filename, not a path")
+    if name.endswith(".q.j2"):
+        name = name[:-3]
+    if not name.endswith(".q"):
+        raise ValueError("metric q template name must end with .q or .q.j2")
+
+    library = load_q_library_template("mmsr_calculations.q.j2")
+    pattern = re.compile(
+        rf"^/ BEGIN metric_template:{re.escape(name)}\n(?P<body>.*?)^/ END metric_template:{re.escape(name)}$",
+        re.MULTILINE | re.DOTALL,
+    )
+    match = pattern.search(library)
+    if match is None:
+        raise FileNotFoundError(f"metric q template block not found in q_lib: {name}")
+    return match.group("body").strip() + "\n"
 
 def template_parameters(template: str) -> frozenset[str]:
     """Return the unique named placeholders required by ``template``.
@@ -124,6 +141,18 @@ def _is_valid_parameter_name(name: str) -> bool:
     return bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name))
 
 
+
+def _shared_q_library_template() -> str:
+    """Return q library content excluding request-rendered metric blocks."""
+
+    library = load_q_library_template("mmsr_calculations.q.j2")
+    return re.sub(
+        r"^/ BEGIN metric_template:.*?^/ END metric_template:.*?\n?",
+        "",
+        library,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+
 def render_calculation_function_bootstrap(calculation_namespace: str) -> str:
     """Render MMSR-owned reusable q helper functions for a calculation namespace.
 
@@ -141,7 +170,8 @@ def render_calculation_function_bootstrap(calculation_namespace: str) -> str:
         calculation_namespace,
     ):
         raise ValueError(f"invalid calculation_namespace: {calculation_namespace!r}")
-    return render_template(
-        load_q_library_template("mmsr_calculations.q.j2"),
+    namespace_bootstrap = f"\\d {calculation_namespace}\n\\d .\n"
+    return namespace_bootstrap + render_template(
+        _shared_q_library_template(),
         {"calculation_namespace": calculation_namespace},
     )

@@ -148,7 +148,7 @@ product scope explicitly changes.
   `.sb.mmsr.getTrade[date;syms]` and `.sb.mmsr.getQuote[date;syms]` instead of
   querying physical trade/quote tables directly. Production planning can also
   call user-owned calendar, reference-data universe, and reference-data functions such as
-  `.sb.mmsr.getTradingCalendar[start;end]`, `.sb.mmsr.getRef[date]`, and
+  `.sb.mmsr.getTradingCalendar`, `.sb.mmsr.getRef[date]`, and
   `.sb.mmsr.getRef[date;syms]` so operators control trading days, the analysis
   universe, TOPIX/cap/lot-size reference data, and taxonomy outside MMSR code.
   Trade and quote source rows carry per-tick `session`/`auction` state instead

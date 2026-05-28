@@ -52,7 +52,7 @@ should call user-owned functions with MMSR's fixed positional arguments, such as
 `.sb.mmsr.getTrade[date;syms]`, `.sb.mmsr.getQuote[date;syms]`,
 `.sb.mmsr.getPtsTrade[date;syms]`, `.sb.mmsr.getPtsQuote[date;syms]`,
 `.sb.mmsr.getRef[date;syms]`, `.sb.mmsr.getRef[date]`, and
-`.sb.mmsr.getTradingCalendar[start;end]`; those functions may internally query
+`.sb.mmsr.getTradingCalendar`; those functions may internally query
 physical tables, cleanse rows, route between HDB/RDB, or map client taxonomy.
 Production configs should not hard-code static session times. Trade and quote
 rows must carry per-tick `session` and `auction` columns so MMSR can derive
@@ -99,7 +99,7 @@ calendar assumptions are not production ready.
 
 | Required function contract | Purpose |
 | --- | --- |
-| `.sb.mmsr.getTradingCalendar[start;end]` or configured equivalent | Returns a date vector or table/dict with `date` rows for trading days between `start` and `end`, inclusive. |
+| `.sb.mmsr.getTradingCalendar` or configured equivalent | Returns a date vector or table/dict with `date` rows for trading days between `start` and `end`, inclusive. |
 | Session metadata or equivalent, if used upstream | Confirms AM/PM sessions, lunch break, and auction boundaries used by bucket grids. |
 
 ### Trade raw-data function for `activity.q` and optional `flow.q`

@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import date, time
 from typing import Any
 
-from mmsr.kdb.query_loader import load_q_template, render_template, template_parameters
+from mmsr.kdb.query_loader import load_metric_q_template, render_template, template_parameters
 from mmsr.kdb.schema_contracts import (
     QTemplateInputTableSchemaContract,
     QTemplateOutputSchemaContract,
@@ -213,7 +213,7 @@ class KdbMetricQueryPlanner:
         """Render ``request`` into a deterministic query plan."""
 
         template_name = template_for_metric(request.metric.name)
-        template = load_q_template(template_name)
+        template = load_metric_q_template(template_name)
         query_group_by = _query_group_by_for_template(template_name, request.group_by)
         result_group_by = group_by_for_metric_result(
             request.metric.name,
@@ -263,12 +263,7 @@ class KdbMetricQueryPlanner:
         self,
         requests: Sequence[MetricRunRequest],
     ) -> RenderedMetricDayQuery:
-        """Render one q query for all chunks and metrics for one trading day.
-
-        This is the production-oriented path: Python passes an explicit symbol
-        universe and chunk size, while q performs the chunk loop, source loading,
-        ``raze``/``uj`` style concatenation, and final report rollups.
-        """
+        """Render one q call that delegates day execution to the MMSR q library."""
 
         clean_requests = tuple(requests)
         if not clean_requests:
@@ -278,10 +273,6 @@ class KdbMetricQueryPlanner:
 
         representative_requests = _representative_metric_requests(clean_requests)
         metric_queries = tuple(self.render(request) for request in representative_requests)
-        batch_params = _day_source_parameters(
-            _batch_source_parameters(representative_requests),
-            clean_requests[0].period.start_date,
-        )
         source_roles = _batch_source_roles(representative_requests)
         calculation_namespace = _q_namespace(
             clean_requests[0].calculation_namespace,
@@ -299,73 +290,51 @@ class KdbMetricQueryPlanner:
             seen_templates.add(metric_query.template_name)
             template_blocks.append(
                 _render_template_with_used_params(
-                    load_q_template(metric_query.template_name),
+                    load_metric_q_template(metric_query.template_name),
                     _template_parameters_for_request(request),
                 )
             )
 
-        chunk_metric_lines: list[str] = []
-        chunk_result_symbols: list[str] = []
-        chunk_result_variables: list[str] = []
-        for index, request in enumerate(representative_requests, start=1):
-            template_name = template_for_metric(request.metric.name)
-            variable = f"chunkMetricResult{index}"
-            chunk_metric_lines.append(
-                f"            {variable}: {_metric_call_expression(template_name, calculation_namespace)};"
-            )
-            chunk_result_symbols.append(_q_symbol_from_string(request.metric.name))
-            chunk_result_variables.append(variable)
-
-        day_metric_lines: list[str] = []
-        result_symbols: list[str] = []
-        result_variables: list[str] = []
-        for index, metric_query in enumerate(metric_queries, start=1):
-            variable = f"metricResult{index}"
-            metric_symbol = _q_symbol_from_string(metric_query.metric_name)
-            result_symbols.append(metric_symbol)
-            result_variables.append(variable)
-            day_metric_lines.append(
-                "    "
-                + f"{variable}: {calculation_namespace}.rollupMetricResult["
-                + f"raze {{x[{metric_symbol}]}} each chunkResults;"
-                + f"{metric_symbol};"
-                + "requestedAggregationLevels];"
-            )
-
-        body_lines = [
-            "{[runDate;allSyms;chunkSize;requestedAggregationLevels]",
-            "    chunks: $[0=count allSyms; enlist 0#`; chunkSize cut allSyms];",
-            "    chunkResults: { [chunkSyms]",
-            f"            rawRefs: select from {batch_params['ref_table']};",
-            "            refs: `sym xkey select from rawRefs where sym in chunkSyms;",
-        ]
-        body_lines.extend("        " + line.strip() for line in _batch_source_load_lines(source_roles, batch_params))
-        body_lines.extend(chunk_metric_lines)
-        body_lines.append(
-            "            "
-            + _q_symbol_list(chunk_result_symbols)
-            + "!("
-            + ";".join(chunk_result_variables)
-            + ")"
+        loader_roles = ("reference_data", *source_roles)
+        source_loaders = _q_function_dictionary(
+            loader_roles,
+            [
+                _q_source_loader_expression(
+                    source_key=role,
+                    table_names=clean_requests[0].table_names,
+                    source_functions=clean_requests[0].source_functions,
+                )
+                for role in loader_roles
+            ],
+            label="source_loaders",
         )
-        body_lines.append("        } each chunks;")
-        body_lines.extend(day_metric_lines)
-        body_lines.append(
-            "    "
-            + _q_symbol_list(result_symbols)
-            + "!("
-            + ";".join(result_variables)
-            + ")"
+        metric_functions = _q_function_dictionary(
+            [metric_query.metric_name for metric_query in metric_queries],
+            [
+                _metric_function_expression(
+                    metric_query.template_name,
+                    metric_query.calculation_namespace,
+                )
+                for metric_query in metric_queries
+            ],
+            label="metric_functions",
         )
-        body_lines.append(
-            f"    }}[{_q_date(clean_requests[0].period.start_date)};"
-            f"{_q_symbol_vector_from_strings(all_symbols)};"
-            f"{chunk_size};"
-            f"{_q_symbol_vector(aggregation_levels, 'aggregation_levels')}]"
+
+        query = "\n".join(
+            (
+                *template_blocks,
+                f"""{calculation_namespace}.runMetricDay[
+    {_q_date(clean_requests[0].period.start_date)};
+    {_q_symbol_vector_from_strings(all_symbols)};
+    {chunk_size};
+    {_q_symbol_vector(aggregation_levels, 'aggregation_levels')};
+    {source_loaders};
+    {metric_functions}]""",
+            )
         )
 
         return RenderedMetricDayQuery(
-            query="\n".join((*template_blocks, *body_lines)),
+            query=query,
             metric_queries=metric_queries,
             all_symbols=all_symbols,
             chunk_size=chunk_size,
@@ -407,7 +376,7 @@ class KdbMetricQueryPlanner:
         ):
             params = _template_parameters_for_request(request)
             rendered_template = _render_template_with_used_params(
-                load_q_template(metric_query.template_name),
+                load_metric_q_template(metric_query.template_name),
                 params,
             )
             result_variable = f"metricResult{index}"
@@ -746,6 +715,99 @@ def _metric_call_expression(template_name: str, calculation_namespace: str) -> s
         raise KdbMetricQueryPlanError(
             f"unsupported q template for metric call: {template_name!r}"
         ) from exc
+
+def _metric_function_expression(template_name: str, calculation_namespace: str) -> str:
+    """Return an anonymous q function that runs one metric against loaded sources."""
+
+    calls = {
+        "activity.q": f"{{[rawSources] {calculation_namespace}.calcActivity[rawSources`trades;rawSources`refs]}}",
+        "liquidity.q": f"{{[rawSources] {calculation_namespace}.calcLiquidity[rawSources`quotes;rawSources`refs]}}",
+        "liquidity_ticks.q": (
+            f"{{[rawSources] {calculation_namespace}.calcLiquidityTicks[rawSources`quotes;rawSources`refs]}}"
+        ),
+        "realized_volatility.q": (
+            f"{{[rawSources] {calculation_namespace}.calcRealizedVolatility[rawSources`quotes;rawSources`refs]}}"
+        ),
+        "flow.q": f"{{[rawSources] {calculation_namespace}.calcFlow[rawSources`trades;rawSources`refs]}}",
+        "effective_spread.q": (
+            f"{{[rawSources] {calculation_namespace}.calcEffectiveSpread["
+            "rawSources`trades;rawSources`quotes;rawSources`refs]}}"
+        ),
+        "price_impact.q": (
+            f"{{[rawSources] {calculation_namespace}.calcPriceImpact["
+            "rawSources`trades;rawSources`quotes;rawSources`refs]}}"
+        ),
+        _REVERSION_TEMPLATE: (
+            f"{{[rawSources] {calculation_namespace}.calcToxicityReversion["
+            "rawSources`pts_trades;rawSources`pts_quotes;rawSources`primary_quotes;rawSources`refs]}}"
+        ),
+    }
+    try:
+        return calls[template_name]
+    except KeyError as exc:
+        raise KdbMetricQueryPlanError(
+            f"unsupported q template for metric function: {template_name!r}"
+        ) from exc
+
+
+def _q_source_loader_expression(
+    *,
+    source_key: str,
+    table_names: Mapping[str, str],
+    source_functions: Mapping[str, str],
+) -> str:
+    """Return a q function taking ``runDate`` and filtered ``refs``."""
+
+    resolved_source_key = _resolve_source_key(source_key, table_names, source_functions)
+    if resolved_source_key in source_functions:
+        function_name = _q_function_identifier(
+            source_functions[resolved_source_key],
+            f"source_functions[{resolved_source_key!r}]",
+        )
+        if source_key == "reference_data":
+            return f"{{[runDate;refs] {function_name}[runDate]}}"
+        return f"{{[runDate;refs] {function_name}[runDate;refs]}}"
+
+    if resolved_source_key in table_names:
+        table_name = _q_identifier(table_names[resolved_source_key], "table name")
+        return f"{{[runDate;refs] select from {table_name}}}"
+
+    if source_key == "reference_data":
+        return (
+            "{[runDate;refs] "
+            "([]date:0#0Nd;"
+            "sym:`symbol$();"
+            "ric:`symbol$();"
+            "topixCapGrp:`symbol$();"
+            "lotSize:0#0N)}"
+        )
+
+    raise KdbMetricQueryPlanError(
+        f"missing source_functions or table_names entry {source_key!r}"
+    )
+
+
+def _q_function_dictionary(
+    keys: Sequence[str],
+    values: Sequence[str],
+    *,
+    label: str,
+) -> str:
+    """Return a q dictionary with function values.
+
+    Function values must be enlisted one by one; otherwise q applies ``!`` to a
+    projected function list differently from a plain value list.
+    """
+
+    if len(keys) != len(values):
+        raise KdbMetricQueryPlanError(f"{label} keys and values length mismatch")
+    if not keys:
+        return "()!()"
+    rendered_keys = _q_symbol_list([_q_symbol_from_string(key) for key in keys])
+    if len(values) == 1:
+        return f"{rendered_keys}!enlist {values[0]}"
+    return f"{rendered_keys}!({';'.join(values)})"
+
 
 
 def _source_roles_for_template(template_name: str) -> tuple[str, ...]:

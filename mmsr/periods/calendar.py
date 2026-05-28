@@ -33,13 +33,20 @@ class KdbTradingCalendarSource:
     client: Any
     function: str = ".mmsr.getTradingCalendar"
     date_column: str = "date"
+    calculation_namespace: str = ".mmsr"
 
     def trading_days(self, start: date, end: date) -> list[date]:
         """Return trading days by querying the configured calendar function."""
         if start > end:
             raise ValueError("start must be on or before end")
 
-        query = f"{{[start;end] {_q_function_identifier(self.function)}[start;end]}}"
+        function_name = _q_function_identifier(self.function)
+        calculation_namespace = _q_namespace_identifier(self.calculation_namespace)
+        query = (
+            "{[start;end] "
+            f"{calculation_namespace}.callTradingCalendar[{function_name};start;end]"
+            "}"
+        )
         result = self.client.execute(query, start, end)
         return _coerce_calendar_dates(result, self.date_column)
 
@@ -86,6 +93,23 @@ def _q_function_identifier(value: str) -> str:
     for part in parts:
         if not part.replace("_", "a").isalnum() or part[0].isdigit():
             raise ValueError(f"invalid calendar function: {value!r}")
+    return value
+
+
+def _q_namespace_identifier(value: str) -> str:
+    """Validate and return a q namespace used for MMSR calendar dispatch."""
+
+    if not isinstance(value, str) or not value:
+        raise ValueError("calculation namespace must be a non-empty q namespace")
+    if not value.startswith("."):
+        raise ValueError("calculation namespace must start with '.'")
+    candidate = value[1:]
+    parts = candidate.split(".")
+    if not parts or any(part == "" for part in parts):
+        raise ValueError(f"invalid calculation namespace: {value!r}")
+    for part in parts:
+        if not part.replace("_", "a").isalnum() or part[0].isdigit():
+            raise ValueError(f"invalid calculation namespace: {value!r}")
     return value
 
 

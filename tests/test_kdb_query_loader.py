@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from mmsr.kdb.client import KdbClient, KdbConfig
@@ -10,10 +12,11 @@ from mmsr.kdb.query_loader import (
 )
 
 
-def test_load_q_template_reads_packaged_template() -> None:
-    template = load_q_template("trading_calendar.q")
+def test_load_q_template_reads_metric_block_from_calculation_library() -> None:
+    template = load_q_template("liquidity.q")
 
-    assert "{{ calendar_function }}[start;end]" in template
+    assert ".calcLiquidity" in template
+    assert "callTradingCalendar" not in template
 
 
 def test_load_q_template_rejects_paths_and_non_q_names() -> None:
@@ -24,9 +27,14 @@ def test_load_q_template_rejects_paths_and_non_q_names() -> None:
         load_q_template("trading_calendar.txt")
 
 
-def test_load_q_template_reports_missing_template() -> None:
+def test_load_q_template_reports_missing_metric_block() -> None:
     with pytest.raises(FileNotFoundError, match="missing_template.q"):
         load_q_template("missing_template.q")
+
+
+def test_trading_calendar_has_no_separate_template_file() -> None:
+    with pytest.raises(FileNotFoundError, match="trading_calendar.q"):
+        load_q_template("trading_calendar.q")
 
 
 def test_template_parameters_extracts_unique_required_parameters() -> None:
@@ -145,9 +153,14 @@ def test_render_calculation_function_bootstrap_installs_helpers_in_namespace() -
     assert ".desk.mmsr.sumNotional" in rendered
     assert ".desk.mmsr.medianQuotedSpreadBps" in rendered
     assert ".desk.mmsr.weightedAverage" in rendered
+    assert ".desk.mmsr.callTradingCalendar" in rendered
     assert "{{" not in rendered
 
 
 def test_render_calculation_function_bootstrap_validates_namespace() -> None:
     with pytest.raises(ValueError, match="must start with"):
         render_calculation_function_bootstrap("desk.mmsr")
+
+
+def test_no_separate_q_template_directory_exists() -> None:
+    assert not (Path(__file__).resolve().parents[1] / "mmsr" / "kdb" / "query_templates").exists()

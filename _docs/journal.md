@@ -7716,3 +7716,373 @@ Removed files:
 ### Open questions
 
 - Should MMSR tolerate legacy symbolic auction values during a transition period, or should production source functions convert them to integer codes before returning rows?
+
+
+## 2026-05-28 — Fix calculation namespace bootstrap for live kdb preflight
+
+### Implemented
+
+- Diagnosed the live kdb `assign` error during `mmsr preflight --metric quoted_spread_bps` as a likely namespace bootstrap failure when using nested calculation namespaces such as `.desk.mmsr`.
+- Updated the calculation-function bootstrap to enter and create the configured q namespace before assigning MMSR helper functions.
+- Added regression coverage for nested namespace bootstrap output.
+
+### Files changed
+
+- `mmsr/kdb/query_loader.py`
+- `tests/test_kdb_metric_runner.py`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Added `test_calculation_function_bootstrap_creates_nested_namespace`.
+
+### Validation
+
+- `PYTHONPATH=. pytest -q tests/test_kdb_metric_runner.py tests/test_kdb_query_plan.py tests/test_kdb_schema_contracts.py` passed.
+- `PYTHONPATH=. pytest -q` passed.
+- Python startup emitted the environment-level spreadsheet warmup warning, but pytest completed successfully.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening
+
+### Estimated milestone completion
+
+- 94%
+
+### Remaining work before milestone completion
+
+- Re-run the live kdb preflight against the user's environment to confirm the namespace creation resolves the `assign` error.
+- Add a production schema example documenting canonical source columns and integer auction semantics.
+
+### Open Questions
+
+- None.
+
+### Next deterministic step
+
+- If preflight still fails, capture and inspect the exact rendered q/query fragment and kdb stack/error line to distinguish source-function schema issues from q syntax/runtime issues.
+
+## Phase 10 Iteration 88 - Reserved q local-name fix for kdb assign error
+
+### Implemented
+
+- Corrected the previous diagnosis of the live kdb `assign` failure.
+- Identified an MMSR-owned q helper collision: `rollupMetricResult` used `cols:` as a local assignment, but `cols` is a q table keyword/reserved name and can raise `assign`.
+- Renamed the helper's internal locals to `mmsrColumnNames`, `mmsrHasBucket`, `mmsrHasSym`, `mmsrHasCap`, and `mmsr*` rollup variables.
+- Added a regression test to ensure the bootstrap no longer renders `cols: cols facts`.
+
+### Files changed
+
+- `mmsr/kdb/q_lib/mmsr_calculations.q.j2`
+- `tests/test_kdb_metric_runner.py`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Added `test_calculation_function_bootstrap_avoids_reserved_cols_assignment`.
+
+### Validation
+
+- `PYTHONPATH=. pytest -q tests/test_kdb_metric_runner.py tests/test_kdb_query_plan.py tests/test_kdb_schema_contracts.py` passed.
+- `PYTHONPATH=. pytest -q` passed.
+- Python startup emitted the environment-level spreadsheet warmup warning, but pytest completed successfully.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening
+
+### Estimated milestone completion
+
+- 95%
+
+### Remaining work before milestone completion
+
+- Re-run live kdb preflight against the user's environment to confirm the `assign` error is gone.
+- Add a production schema example documenting canonical source columns and integer auction semantics.
+- Add a broader reserved-word lint for rendered q helper local assignments if more live-kdb parse issues surface.
+
+### Open Questions
+
+- None.
+
+### Next deterministic step
+
+- Re-run the same preflight command against live kdb using the patched package; if another q parser/runtime error appears, capture the rendered q/backtrace and fix the next concrete q incompatibility.
+
+---
+
+## 2026-05-28 — Centralized MMSR q function definitions and removed rollup `$` branching
+
+### Implemented
+
+- Moved every MMSR-owned metric calculation function body out of per-metric query template files and into the single canonical q library file `mmsr/kdb/q_lib/mmsr_calculations.q.j2`.
+- Kept per-metric `query_templates/*.q.j2` files only as compatibility/documentation shims; query planning now loads metric function blocks from the q library.
+- Added `load_metric_q_template` so legacy template names such as `liquidity.q` still resolve to the q library block.
+- Changed calculation bootstrap rendering to install only shared reusable helpers from the q library, not request-specific metric functions.
+- Rewrote `rollupMetricResult` to avoid `$[...]` conditional branching and to parenthesize aggregation-level membership predicates explicitly.
+- Preserved existing metric query behavior and schema contracts while making the physical q function source single-file.
+
+### Files changed
+
+- `mmsr/kdb/q_lib/mmsr_calculations.q.j2`
+- `mmsr/kdb/query_loader.py`
+- `mmsr/kdb/query_plan.py`
+- `mmsr/kdb/query_templates/activity.q.j2`
+- `mmsr/kdb/query_templates/effective_spread.q.j2`
+- `mmsr/kdb/query_templates/flow.q.j2`
+- `mmsr/kdb/query_templates/liquidity.q.j2`
+- `mmsr/kdb/query_templates/liquidity_ticks.q.j2`
+- `mmsr/kdb/query_templates/price_impact.q.j2`
+- `mmsr/kdb/query_templates/realized_volatility.q.j2`
+- `mmsr/kdb/query_templates/toxicity_reversion.q.j2`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Existing query loader tests now continue to pass through `load_q_template(...)` because metric template names resolve to the canonical q library blocks.
+- Existing runner and query-plan tests cover that rendered metric queries still include the expected calculation functions and calls.
+
+### Validation
+
+- `PYTHONPATH=. pytest -q tests/test_kdb_metric_runner.py tests/test_kdb_query_plan.py tests/test_kdb_schema_contracts.py` passed.
+- `PYTHONPATH=. pytest -q` passed.
+- Python startup printed an environment-level spreadsheet warmup warning, but the test suite completed successfully.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening
+
+### Estimated milestone completion
+
+- 94%
+
+### Remaining work before milestone completion
+
+- Validate the rendered q against a live kdb process using the user's production source functions and capture any remaining q runtime errors with the rendered query text.
+- Add a production schema/example document for canonical source columns and integer auction semantics.
+
+### Best next deterministic step
+
+- Add a debug/preflight option that prints or saves the exact rendered q query and source contracts whenever kdb raises a runtime error.
+
+### Open questions
+
+- Need the exact live kdb `$` backtrace/query line if the centralized q library package still raises `$` after this change.
+
+## 2026-05-28 — Remove per-metric q template shims
+
+### Implemented
+
+- Removed the per-metric q template shim files from `mmsr/kdb/query_templates`.
+- Kept `mmsr/kdb/q_lib/mmsr_calculations.q.j2` as the single source for all MMSR-owned q function definitions and metric calculation blocks.
+- Updated q template loader documentation to make per-metric names stable identifiers only, not separate q files.
+- Updated README guidance to describe the single-library q layout.
+- Added a regression test asserting that no metric `.q.j2` files remain under `mmsr.kdb.query_templates`.
+
+### Files changed
+
+- `README.md`
+- `mmsr/kdb/query_loader.py`
+- `tests/test_kdb_query_loader.py`
+- Removed `mmsr/kdb/query_templates/activity.q.j2`
+- Removed `mmsr/kdb/query_templates/effective_spread.q.j2`
+- Removed `mmsr/kdb/query_templates/flow.q.j2`
+- Removed `mmsr/kdb/query_templates/liquidity.q.j2`
+- Removed `mmsr/kdb/query_templates/liquidity_ticks.q.j2`
+- Removed `mmsr/kdb/query_templates/price_impact.q.j2`
+- Removed `mmsr/kdb/query_templates/realized_volatility.q.j2`
+- Removed `mmsr/kdb/query_templates/toxicity_reversion.q.j2`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Added `test_metric_q_functions_only_live_in_calculation_library`.
+
+### Validation
+
+- `PYTHONPATH=. pytest -q tests/test_kdb_query_loader.py tests/test_kdb_query_plan.py tests/test_kdb_metric_runner.py tests/test_kdb_schema_contracts.py`
+- `PYTHONPATH=. pytest -q`
+- Both commands passed. The environment emitted the existing spreadsheet runtime warmup warning during Python startup; it did not affect test results.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening
+
+### Estimated milestone completion
+
+- 94%
+
+### Remaining work before milestone completion
+
+- Validate the generated q against the live kdb error path that raised `$` and fix the concrete expression once the backtrace/rendered line is identified.
+- Add a production schema example documenting canonical trade and quote source columns.
+
+### Open Questions
+
+- The live kdb `$` error still needs its exact rendered q line or q backtrace to identify whether it is caused by time-bucket casting, source column types, or another expression.
+
+### Single best next deterministic step
+
+- Capture/render the exact q submitted for the failing live `preflight` command and reduce the `$` error to the smallest failing q expression.
+
+---
+
+## 2026-05-28 — Remove separate calendar q template and centralize calendar dispatch
+
+### Implemented
+
+- Removed the remaining separate `mmsr/kdb/query_templates` q template directory from the package.
+- Moved the package-owned calendar dispatch helper into `mmsr/kdb/q_lib/mmsr_calculations.q.j2` as `.callTradingCalendar`.
+- Changed `KdbTradingCalendarSource` so it no longer renders a `{{ calendar_function }}[start;end]` template or emits a direct `.sb...getTradingCalendar[start;end]` call.
+- Updated production CLI paths to install the configured MMSR calculation namespace before calendar queries, so the calendar source calls the central `.callTradingCalendar` helper.
+- Updated packaging metadata and docs so only `mmsr/kdb/q_lib/*.q.j2` is packaged for kdb q logic.
+
+### Files changed
+
+- `README.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `docs/kdb_integration_testing.md`
+- `docs/production_readiness.md`
+- `pyproject.toml`
+- `mmsr/cli.py`
+- `mmsr/kdb/q_lib/mmsr_calculations.q.j2`
+- `mmsr/kdb/query_loader.py`
+- `mmsr/periods/calendar.py`
+- `tests/test_calendar.py`
+- `tests/test_kdb_query_loader.py`
+- `tests/test_production_cli.py`
+- Removed `mmsr/kdb/query_templates/__init__.py`
+- Removed `mmsr/kdb/query_templates/trading_calendar.q.j2`
+
+### Tests added or updated
+
+- Updated calendar tests to assert `.callTradingCalendar[.sb.mmsr.getTradingCalendar;start;end]` is used and the direct `.sb.mmsr.getTradingCalendar[start;end]` pattern is not emitted.
+- Updated query-loader tests to assert `trading_calendar.q` no longer exists as a separate template.
+- Updated production CLI tests for the explicit q library install query before calendar access.
+
+### Validation
+
+- `PYTHONPATH=. pytest -q` passed.
+- Python startup printed the existing environment-level spreadsheet warmup warning, but the test suite completed successfully.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening
+
+### Estimated milestone completion
+
+- 95%
+
+### Remaining work before milestone completion
+
+- Validate the generated q against the live kdb `$` error path and fix the concrete expression once the backtrace/rendered line is identified.
+- Add a production schema example documenting canonical trade and quote source columns.
+
+### Open Questions
+
+- The live kdb `$` error still needs its exact rendered q line or q backtrace to identify whether it is caused by time-bucket casting, source column types, or another expression.
+
+### Single best next deterministic step
+
+- Add a CLI/debug option that writes the exact rendered q submitted during `preflight`, then use it to isolate the live `$` error.
+
+
+---
+
+## 2026-05-28 — Remove unused metricName from q rollup API
+
+### Implemented
+
+- Removed the unused `metricName` argument from `{{ calculation_namespace }}.rollupMetricResult`.
+- Updated day-query rendering so rollup calls now pass only the fact table and requested aggregation levels.
+- Added a regression assertion that generated q does not pass a metric name into `rollupMetricResult`.
+
+### Files changed
+
+- `mmsr/kdb/q_lib/mmsr_calculations.q.j2`
+- `mmsr/kdb/query_plan.py`
+- `tests/test_kdb_query_plan.py`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Updated `tests/test_kdb_query_plan.py` to assert the new two-argument rollup call shape and prevent the removed metric-name argument from returning.
+
+### Validation
+
+- `PYTHONPATH=. pytest -q tests/test_kdb_query_plan.py tests/test_kdb_metric_runner.py` passed.
+- `PYTHONPATH=. pytest -q` passed.
+- Python startup printed the existing environment-level spreadsheet warmup warning, but the test suite completed successfully.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening
+
+### Estimated milestone completion
+
+- 96%
+
+### Remaining work before milestone completion
+
+- Validate the generated q against the live kdb `$` error path and fix the concrete expression once the backtrace/rendered line is identified.
+- Add a production schema example documenting canonical trade and quote source columns.
+
+### Open Questions
+
+- The live kdb `$` error still needs its exact rendered q line or q backtrace to identify whether it is caused by time-bucket casting, source column types, or another expression.
+
+### Single best next deterministic step
+
+- Add a CLI/debug option that writes the exact rendered q submitted during `preflight`, then use it to isolate the live `$` error.
+
+---
+
+## 2026-05-28 — Delegate production day query assembly to q runner function
+
+### Implemented
+
+- Added `{calculation_namespace}.runMetricDay` to `mmsr/kdb/q_lib/mmsr_calculations.q.j2` so kdb owns the production day chunk loop, source loading, metric dispatch, and q-side rollups.
+- Simplified `KdbMetricQueryPlanner.render_day` to render a readable top-level q function call instead of assembling the day execution body line by line in Python.
+- Added Python helpers for explicit q source-loader and metric-function dictionaries.
+- Updated production/query-plan tests to assert the new function-call shape rather than the old inline anonymous day body.
+
+### Files changed
+
+- `mmsr/kdb/q_lib/mmsr_calculations.q.j2`
+- `mmsr/kdb/query_plan.py`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_production_cli.py`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Updated day-query planner coverage to check `.runMetricDay[...]`, source loader functions, and metric function handles.
+- Updated production CLI coverage to confirm live metric execution uses `.runMetricDay[...]`.
+
+### Validation
+
+- Ran `PYTHONPATH=. pytest -q` successfully.
+- The environment still prints the spreadsheet runtime warmup warning during Python startup, but it does not affect the test result.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening
+
+### Estimated milestone completion
+
+- 95%
+
+### Remaining work before milestone completion
+
+- Continue removing request-rendered q from the execution path by parameterizing metric calculation functions directly, so metric function definitions can be installed once and production queries can be pure function calls.
+
+### Best next deterministic step
+
+- Convert `calcActivity` and `calcLiquidity` to parameterized installed q functions first, then remove their request-rendered metric template blocks from production day queries.
+
+### Open questions
+
+- None.

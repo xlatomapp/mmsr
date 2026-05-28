@@ -156,7 +156,8 @@ def test_render_production_report_file_uses_live_execution_path(
     ]
     assert len(metric_queries) == 3  # one q-side day/chunk/rollup call for target and each reference day
     assert ".sb.mmsr.getTrade" in "\n".join(FakeProductionKdbClient.queries)
-    assert "(.sb.mmsr.getTrade[runDate;" in "\n".join(metric_queries)
+    assert "{[runDate;refs] .sb.mmsr.getTrade[runDate;refs]}" in "\n".join(metric_queries)
+    assert ".desk.mmsr.runMetricDay[" in "\n".join(metric_queries)
     assert "2026.04.29" in "\n".join(metric_queries)
     assert "2026.04.30" in "\n".join(metric_queries)
 
@@ -188,8 +189,9 @@ def test_summarize_production_report_plan_queries_calendar_not_metrics(
     assert summary.target_step_count == 2
     assert summary.reference_step_count == 4
     assert summary.metric_contracts[0].template_name == "activity.q"
-    assert len(FakeProductionKdbClient.queries) == 2
-    assert all("getTradingCalendar" in query for query in FakeProductionKdbClient.queries)
+    assert len(FakeProductionKdbClient.queries) == 3
+    assert "callTradingCalendar" in FakeProductionKdbClient.queries[0]
+    assert all("getTradingCalendar" in query for query in FakeProductionKdbClient.queries[1:])
     assert "Reference-data universe function: .sb.mmsr.getRef" in "\n".join(summary.summary_lines())
     assert ".sb.mmsr.getTrade" in "\n".join(summary.summary_lines())
 
@@ -240,9 +242,10 @@ def test_preflight_production_report_executes_one_bounded_metric_step(
     assert result.rendered_query.template_name == "activity.q"
     assert "topixCapGrp" in result.rendered_query.required_output_columns
     assert result.result_row_count == 1
-    assert len(FakeProductionKdbClient.queries) == 2
-    assert "getTradingCalendar" in FakeProductionKdbClient.queries[0]
-    assert ".sb.mmsr.getTrade" in FakeProductionKdbClient.queries[1]
+    assert len(FakeProductionKdbClient.queries) == 3
+    assert "callTradingCalendar" in FakeProductionKdbClient.queries[0]
+    assert "getTradingCalendar" in FakeProductionKdbClient.queries[1]
+    assert ".sb.mmsr.getTrade" in FakeProductionKdbClient.queries[2]
 
 def test_preflight_production_report_can_select_metric(
     tmp_path,
@@ -266,8 +269,8 @@ def test_preflight_production_report_can_select_metric(
     assert result.preflight_step.metric_name == "quoted_spread_bps"
     assert result.rendered_query.template_name == "liquidity.q"
     assert "quoted_spread_bps" in result.rendered_query.required_output_columns
-    assert ".sb.mmsr.getQuote" in FakeProductionKdbClient.queries[1]
-    assert "calcLiquidity" in FakeProductionKdbClient.queries[1]
+    assert ".sb.mmsr.getQuote" in FakeProductionKdbClient.queries[2]
+    assert "calcLiquidity" in FakeProductionKdbClient.queries[2]
 
 def test_main_render_command_writes_report(tmp_path, monkeypatch, capsys) -> None:
     config_path = tmp_path / "report.yaml"
@@ -357,7 +360,7 @@ def test_main_preflight_command_accepts_metric_selection(
     output = capsys.readouterr().out
     assert "Sample metric: quoted_spread_bps" in output
     assert "Sample template: liquidity.q" in output
-    assert "calcLiquidity" in FakeProductionKdbClient.queries[1]
+    assert "calcLiquidity" in FakeProductionKdbClient.queries[2]
 
 def test_main_plan_command_prints_summary_without_metric_execution(
     tmp_path,
@@ -396,7 +399,8 @@ def test_main_plan_command_prints_summary_without_metric_execution(
     assert "Symbol chunks per trading day: 2" in output
     assert "Total metric steps: 6" in output
     assert ".sb.mmsr.getTrade" in output
-    assert all("getTradingCalendar" in query for query in FakeProductionKdbClient.queries)
+    assert "callTradingCalendar" in FakeProductionKdbClient.queries[0]
+    assert all("getTradingCalendar" in query for query in FakeProductionKdbClient.queries[1:])
 
 def test_main_help_lists_production_render_command(capsys) -> None:
     assert main([]) == 0
