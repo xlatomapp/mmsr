@@ -413,7 +413,7 @@
     };
 
 {{ calculation_namespace }}.loadReportSources:{[runDate;refs;sourceFunctions]
-    rawSources: `refs!(enlist refs);
+    rawSources: enlist[`refs]!enlist refs;
     if[`trades in key sourceFunctions;
         rawSources[`trades]: sourceFunctions[`trades][runDate;0!refs]
         ];

@@ -110,8 +110,8 @@ def test_kdb_metric_runner_renders_activity_query_and_normalizes_column_result()
 
     query = client.queries[0]
     assert "rawTrades: trade;" in query
-    assert ".mmsr.calcActivity[rawTrades;refs;`bucket`start_date`end_date!(0D00:05:00.000;2026.05.01;2026.05.02)]" in query
-    assert "`bucket`start_date`end_date!(0D00:05:00.000;2026.05.01;2026.05.02)" in query
+    assert ".mmsr.calcActivity[rawTrades;refs;(`bucket;`start_date;`end_date)!(0D00:05:00.000;2026.05.01;2026.05.02)]" in query
+    assert "(`bucket;`start_date;`end_date)!(0D00:05:00.000;2026.05.01;2026.05.02)" in query
     assert "labels:@[labels;where" not in query
     assert "labels[where" not in query
     assert "time within" not in query
@@ -170,8 +170,8 @@ def test_kdb_metric_runner_renders_liquidity_query_without_group_columns() -> No
     assert series.observations[0].group == {}
     query = client.queries[0]
     assert "rawQuotes: quote;" in query
-    assert ".mmsr.calcLiquidity[rawQuotes;refs;`bucket`start_date`end_date!(0D00:05:00.000;2026.05.01;2026.05.02)]" in query
-    assert "`bucket`start_date`end_date!(0D00:05:00.000;2026.05.01;2026.05.02)" in query
+    assert ".mmsr.calcLiquidity[rawQuotes;refs;(`bucket;`start_date;`end_date)!(0D00:05:00.000;2026.05.01;2026.05.02)]" in query
+    assert "(`bucket;`start_date;`end_date)!(0D00:05:00.000;2026.05.01;2026.05.02)" in query
     assert ".mmsr.timeBucketContinuous[time; session;" not in query
     assert ".calcLiquidity" in query
 
@@ -263,7 +263,7 @@ def test_kdb_metric_runner_renders_effective_spread_query_and_preserves_metadata
     assert "rawTradeRows: trade;" in query
     assert "rawQuoteRows: quote;" in query
     assert ".mmsr.calcEffectiveSpread[rawTradeRows;rawQuoteRows;refs;" in query
-    assert "`bucket`start_date`end_date`max_quote_age!(0D00:05:00.000;2026.05.01;2026.05.02;0D00:00:00.500)" in query
+    assert "(`bucket;`start_date;`end_date;`max_quote_age)!(0D00:05:00.000;2026.05.01;2026.05.02;0D00:00:00.500)" in query
     assert ".mmsr.calcEffectiveSpread" in query
 
 
@@ -303,7 +303,7 @@ def test_kdb_metric_runner_renders_price_impact_query_and_preserves_metadata() -
     query = client.queries[0]
     assert "rawTradeRows: trade;" in query
     assert "rawQuoteRows: quote;" in query
-    assert "`horizon`max_quote_age`max_horizon_quote_age" in query
+    assert "`horizon;`max_quote_age;`max_horizon_quote_age" in query
     assert "0D00:00:02.000" in query
     assert ".mmsr.calcPriceImpact" in query
 

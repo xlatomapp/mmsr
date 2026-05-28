@@ -820,14 +820,45 @@ def _metric_params_expression(request: MetricRunRequest) -> str:
 
 
 def _q_dictionary_expression(keys: Sequence[str], values: Sequence[str], label: str) -> str:
-    """Return q dictionary syntax for rendered symbol keys and rendered values."""
+    """Return q dictionary syntax for rendered symbol keys and rendered values.
+
+    Singleton dictionaries must use the unambiguous q shape
+    ``enlist[`key]!enlist value``. In particular, do not render
+    ``enlist `key!value`` because q associates that as ``enlist (`key!value)``
+    and produces the wrong type/shape.
+    """
 
     if len(keys) != len(values) or not keys:
         raise KdbMetricQueryPlanError(f"{label} and values must be non-empty and aligned")
-    rendered_keys = _q_symbol_vector(keys, label)
+    rendered_key_values = [_q_symbol(key, label) for key in keys]
+    rendered_keys = _q_symbol_list(rendered_key_values)
     if len(values) == 1:
-        return f"{rendered_keys}!enlist {values[0]}"
+        return _q_singleton_dictionary_expression(rendered_keys, values[0])
     return f"{rendered_keys}!(" + ";".join(values) + ")"
+
+
+def _q_singleton_dictionary_expression(rendered_single_key_list: str, value: str) -> str:
+    """Return q syntax for a one-pair dictionary.
+
+    ``rendered_single_key_list`` must already be an enlisted one-item symbol list,
+    for example ``enlist[`refs]`` or ``enlist[`$"7203"]``. Composite values are
+    parenthesized so q enlists the value itself rather than part of a right-side
+    expression.
+    """
+
+    return f"{rendered_single_key_list}!enlist {_q_singleton_dictionary_value(value)}"
+
+
+def _q_singleton_dictionary_value(value: str) -> str:
+    stripped = value.strip()
+    if (
+        "!" in stripped
+        or stripped.startswith("enlist ")
+        or stripped.startswith("enlist[")
+        or ";" in stripped
+    ):
+        return f"({stripped})"
+    return stripped
 
 
 def _q_source_loader_expression(
@@ -876,16 +907,17 @@ def _q_function_dictionary(
     """Return a q dictionary with function values.
 
     Function values must be enlisted one by one; otherwise q applies ``!`` to a
-    projected function list differently from a plain value list.
+    projected function list differently from a plain value list. Singleton keys
+    are rendered as ``enlist[`key]`` so q does not enlist the dictionary result.
     """
 
     if len(keys) != len(values):
         raise KdbMetricQueryPlanError(f"{label} keys and values length mismatch")
     if not keys:
         return "()!()"
-    rendered_keys = _q_symbol_list([_q_symbol_from_string(key) for key in keys])
+    rendered_keys = _q_symbol_list([_q_symbol(key, label) for key in keys])
     if len(values) == 1:
-        return f"{rendered_keys}!enlist {values[0]}"
+        return _q_singleton_dictionary_expression(rendered_keys, values[0])
     return f"{rendered_keys}!({';'.join(values)})"
 
 
@@ -1486,12 +1518,17 @@ def _symbol_filter_values(parameters: Mapping[str, Any]) -> tuple[str, ...]:
 
 
 def _q_symbol_list(rendered_symbols: Sequence[str]) -> str:
-    """Return a q symbol list from already-rendered q symbol expressions."""
+    """Return a q symbol list from already-rendered q symbol expressions.
+
+    The singleton form uses bracket application so expressions like
+    ``enlist[`refs]!enlist refs`` are parsed as a dictionary keyed by ``refs``,
+    not as ``enlist (`refs!enlist refs)``.
+    """
 
     if not rendered_symbols:
         return "0#`"
     if len(rendered_symbols) == 1:
-        return f"enlist {rendered_symbols[0]}"
+        return f"enlist[{rendered_symbols[0]}]"
     return "(" + ";".join(rendered_symbols) + ")"
 
 

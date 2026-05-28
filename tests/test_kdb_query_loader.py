@@ -149,3 +149,9 @@ def test_kdb_client_uses_empty_strings_for_missing_credentials(monkeypatch: pyte
 
     assert captured["username"] == ""
     assert captured["password"] == ""
+
+def test_q_library_uses_safe_singleton_dictionary_key_enlistment() -> None:
+    template = load_q_library_template("mmsr_calculations.q.j2")
+
+    assert "rawSources: enlist[`refs]!enlist refs;" in template
+    assert "rawSources: `refs!(enlist refs);" not in template

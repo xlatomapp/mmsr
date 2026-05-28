@@ -780,12 +780,12 @@ def test_query_planner_renders_day_query_with_explicit_syms_and_q_rollup() -> No
     assert ".sb.mmsr.getTrade" in plan.query
     assert ".sb.mmsr.getQuote" in plan.query
     assert ".sb.mmsr.getRef" in plan.query
-    assert "enlist `symbols!" in plan.query
+    assert "enlist[`symbols]!" in plan.query
     assert 'rollupMetricResult[raze {x[$"quoted_spread_bps"]} each chunkResults;requestedAggregationLevels]' not in plan.query
     assert 'rollupMetricResult[raze {x[$"quoted_spread_bps"]} each chunkResults;$"quoted_spread_bps";' not in plan.query
     assert "`market`market_bucket`symbol" in plan.query
 
-    assert '`$"reference_data"' in plan.query
+    assert '`reference_data' in plan.query
     assert '`$"quoted_spread_bps"' in plan.query
     assert '`$"7203"' in plan.query
     assert re.search(r'(?<!`)\\$"reference_data"', plan.query) is None
@@ -849,3 +849,40 @@ def test_render_day_uses_canonical_q_library_blocks_not_removed_template_files()
     assert "{[rawSources]" not in plan.query
     assert "query_templates" not in plan.query
     assert "liquidity.q.j2" not in plan.query
+
+def test_render_day_singleton_metric_dictionaries_enlist_keys_before_bang() -> None:
+    registry = build_default_registry()
+    planner = KdbMetricQueryPlanner()
+    base_period = _period()
+    period = ReportPeriod(
+        start_date=date(2026, 5, 1),
+        end_date=date(2026, 5, 1),
+        sessions=base_period.sessions,
+        bucket=base_period.bucket,
+    )
+
+    plan = planner.render_day(
+        [
+            MetricRunRequest(
+                metric=registry.get("quoted_spread_bps"),
+                period=period,
+                group_by=["sym"],
+                parameters={
+                    "symbols": ("7203",),
+                    "aggregation_levels": ("symbol",),
+                },
+                source_functions={
+                    "quotes": ".sb.mmsr.getQuote",
+                    "reference_data": ".sb.mmsr.getRef",
+                },
+                calculation_namespace=".desk.mmsr",
+            )
+        ]
+    )
+
+    assert "enlist[`quoted_spread_bps]!enlist ((`bucket;`start_date;`end_date)!" in plan.query
+    assert "enlist `quoted_spread_bps!" not in plan.query
+    assert "enlist[`symbols]!enlist (enlist `$\"7203\")" in plan.query
+    assert "enlist `symbols!" not in plan.query
+    assert "enlist `$\"reference_data\"!" not in plan.query
+    assert re.search(r"enlist\s+`[^\[\s]+!", plan.query) is None

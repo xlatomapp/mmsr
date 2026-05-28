@@ -8419,3 +8419,108 @@ Removed files:
 ### Open questions
 
 - Should explicit CLI `--symbol` filters be passed as PyKX query arguments instead of rendered q literals in a later hardening step?
+
+---
+
+## 2026-05-28 — Fix q singleton dictionary rendering and rawSources key enlistment
+
+### Implemented
+
+- Fixed q dictionary rendering for singleton keys so Python emits `enlist[`key]!enlist value` instead of `enlist `key!enlist value`.
+- Applied the safe singleton-key rendering to metric parameter dictionaries and universe filter dictionaries used by `runReportDay`.
+- Updated the q library `loadReportSources` initialization from `` `refs!(enlist refs)`` to `enlist[`refs]!enlist refs`.
+- Added regression tests for singleton metric dictionaries, universe filter dictionaries, and the q-library raw source initialization shape.
+- Updated legacy query tests to accept parenthesized multi-key dictionaries such as ``(`bucket;`start_date;`end_date)!...``.
+
+### Files changed
+
+- `mmsr/kdb/query_plan.py`
+- `mmsr/kdb/q_lib/mmsr_calculations.q.j2`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_kdb_query_loader.py`
+- `tests/test_kdb_metric_runner.py`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Added `test_render_day_singleton_metric_dictionaries_enlist_keys_before_bang`.
+- Added `test_q_library_uses_safe_singleton_dictionary_key_enlistment`.
+- Updated kdb metric runner string expectations for the safer parenthesized q dictionary syntax.
+
+### Validation
+
+- `PYTHONPATH=. pytest -q tests/test_kdb_query_plan.py tests/test_kdb_query_loader.py` passed.
+- `PYTHONPATH=. pytest -q` passed.
+- The environment still prints an unrelated spreadsheet warmup warning during Python startup, but tests passed.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening
+
+### Estimated milestone completion
+
+- 98%
+
+### Remaining work before milestone completion
+
+- Run `mmsr preflight --verbose --metric quoted_spread_bps` against live kdb and fix any remaining q runtime issue in the `runReportDay` path.
+- Continue replacing rendered literals with PyKX argument passing where practical.
+
+### Best next deterministic step
+
+- Validate the corrected `runReportDay` query against live kdb with a one-symbol `quoted_spread_bps` preflight.
+
+### Open questions
+
+- None.
+
+---
+
+## 2026-05-28 — Enforce safe singleton q dictionary rendering
+
+### Implemented
+
+- Reviewed singleton q dictionary construction in Python query rendering and the central q library.
+- Added a shared singleton dictionary renderer so one-pair q dictionaries consistently use the safe `enlist[`key]!enlist value` shape.
+- Parenthesized composite singleton dictionary values in rendered q so kdb enlists the full value expression, not a partial right-hand expression.
+- Updated function-handle dictionary rendering to use the same singleton dictionary helper.
+- Kept `loadReportSources` initialized as `rawSources: enlist[`refs]!enlist refs;` in `mmsr_calculations.q.j2`.
+- Added/updated regression tests for singleton `metricParams` and `universeFilters` rendering.
+
+### Files changed
+
+- `mmsr/kdb/query_plan.py`
+- `tests/test_kdb_query_plan.py`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Updated `test_render_day_singleton_metric_dictionaries_enlist_keys_before_bang` to assert the exact safe singleton dictionary forms for metric parameters and symbol filters.
+- Updated day-rendering assertions to accept simple q symbol keys such as `reference_data` while retaining checks against bare `$"..."` forms.
+
+### Validation
+
+- `PYTHONPATH=. pytest -q tests/test_kdb_query_plan.py tests/test_kdb_query_loader.py` passed.
+- `PYTHONPATH=. pytest -q` passed.
+- The environment still prints the unrelated spreadsheet runtime warmup warning during Python startup, but the test commands completed successfully.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening.
+
+### Estimated milestone completion
+
+- 98%.
+
+### Remaining work before milestone completion
+
+- Run the new `runReportDay` query against live kdb with `--verbose` and fix any remaining q runtime issue from the actual kdb backtrace.
+- Consider moving explicit CLI filter dictionaries from rendered q literals to PyKX arguments if live debugging shows additional parser friction.
+
+### Best next deterministic step
+
+- Run `mmsr preflight --verbose --metric quoted_spread_bps` against live kdb using this package and patch the first concrete q error from the logged `runReportDay` call.
+
+### Open questions
+
+- None.
