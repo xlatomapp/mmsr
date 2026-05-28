@@ -6,7 +6,10 @@ PyKX is imported lazily so unit tests and docs can run without installing PyKX.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from typing import Any
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -28,6 +31,7 @@ class KdbClient:
 
     def connect(self) -> None:
         """Open the PyKX connection."""
+        LOGGER.info("Connecting to kdb+ at %s:%s", self.config.host, self.config.port)
         try:
             import pykx as kx  # type: ignore[import-not-found]
         except ImportError as exc:
@@ -42,10 +46,19 @@ class KdbClient:
             username=self.config.username,
             password=self.config.password,
         )
+        LOGGER.info("Connected to kdb+ at %s:%s", self.config.host, self.config.port)
 
     def execute(self, query: str, *args: Any) -> Any:
         """Execute a q query."""
         if self._connection is None:
             self.connect()
         assert self._connection is not None
-        return self._connection(query, *args)
+        LOGGER.info("Executing kdb query with %s argument(s)", len(args))
+        LOGGER.debug("Rendered q query:\n%s", query)
+        try:
+            result = self._connection(query, *args)
+        except Exception:
+            LOGGER.exception("kdb query failed")
+            raise
+        LOGGER.info("kdb query completed")
+        return result

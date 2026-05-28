@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+import logging
 from datetime import date, datetime, time
 from numbers import Real
 from typing import Any
@@ -23,6 +24,8 @@ from mmsr.metrics.results import MetricObservation, MetricTimeSeries
 
 
 KdbMetricRunnerError = KdbMetricQueryPlanError
+
+LOGGER = logging.getLogger(__name__)
 
 
 class KdbMetricRunner:
@@ -51,8 +54,10 @@ class KdbMetricRunner:
         aggregation helpers that metric templates use inside kdb+.
         """
 
+        LOGGER.info("Installing MMSR q calculations into %s", calculation_namespace)
         self.client.execute(render_calculation_function_bootstrap(calculation_namespace))
         self._installed_calculation_namespaces.add(calculation_namespace)
+        LOGGER.info("Installed MMSR q calculations into %s", calculation_namespace)
 
 
 
@@ -105,8 +110,15 @@ class KdbMetricRunner:
         """Run one full trading-day query with q-side chunking and rollups."""
 
         plan = self.plan_day(requests)
+        LOGGER.info(
+            "Running kdb day query: metrics=%s symbols=%s chunk_size=%s",
+            ", ".join(plan.metric_names),
+            len(plan.all_symbols),
+            plan.chunk_size,
+        )
         self.ensure_calculation_functions(plan.metric_queries[0].calculation_namespace)
         raw_result = self.client.execute(plan.query)
+        LOGGER.info("Received kdb day result for metrics=%s", ", ".join(plan.metric_names))
         result_by_metric = _coerce_batch_result(
             raw_result,
             fallback_metric_name=plan.metric_names[0] if len(plan.metric_names) == 1 else None,
@@ -121,6 +133,7 @@ class KdbMetricRunner:
                 )
             metric_result = result_by_metric[metric_query.metric_name]
             metric_query.validate_result_schema(metric_result)
+            LOGGER.debug("Validated day result schema for metric=%s", metric_query.metric_name)
             series_by_metric.append(
                 normalize_metric_result(
                     metric_name=metric_query.metric_name,
@@ -151,8 +164,10 @@ class KdbMetricRunner:
         """Run one day/chunk batch query and normalize each returned metric table."""
 
         plan = self.plan_batch(requests)
+        LOGGER.info("Running kdb batch query: metrics=%s", ", ".join(plan.metric_names))
         self.ensure_calculation_functions(plan.metric_queries[0].calculation_namespace)
         raw_result = self.client.execute(plan.query)
+        LOGGER.info("Received kdb batch result for metrics=%s", ", ".join(plan.metric_names))
         result_by_metric = _coerce_batch_result(
             raw_result,
             fallback_metric_name=plan.metric_names[0] if len(plan.metric_names) == 1 else None,
@@ -167,6 +182,7 @@ class KdbMetricRunner:
                 )
             metric_result = result_by_metric[metric_query.metric_name]
             metric_query.validate_result_schema(metric_result)
+            LOGGER.debug("Validated batch result schema for metric=%s", metric_query.metric_name)
             series_by_metric.append(
                 normalize_metric_result(
                     metric_name=metric_query.metric_name,
@@ -196,9 +212,15 @@ class KdbMetricRunner:
         """
 
         plan = self.plan_query(request)
+        LOGGER.info(
+            "Running kdb metric query: metric=%s template=%s",
+            request.metric.name,
+            plan.template_name,
+        )
         self.ensure_calculation_functions(plan.calculation_namespace)
         raw_result = self.client.execute(plan.query)
         plan.validate_result_schema(raw_result)
+        LOGGER.debug("Validated metric result schema for metric=%s", request.metric.name)
         return normalize_metric_result(
             metric_name=request.metric.name,
             result=raw_result,

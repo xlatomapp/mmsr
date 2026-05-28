@@ -137,6 +137,34 @@ production executor boundary but executes only one planned
 trading-day/chunk/metric step for the default or selected metric.
 
 
+Production commands support Python status logging for live debugging. Use
+`--log-level INFO` for stage-by-stage progress or `--verbose` / `-v` for DEBUG
+logs including the rendered q text sent to kdb:
+
+```bash
+mmsr preflight \
+  --config config/report.production_minimal.yaml \
+  --kdb-host localhost \
+  --kdb-port 5001 \
+  --symbol 7203 \
+  --metric quoted_spread_bps \
+  --log-level INFO
+
+mmsr render \
+  --config config/report.production_minimal.yaml \
+  --output report.html \
+  --kdb-host localhost \
+  --kdb-port 5001 \
+  --symbol 7203 \
+  --verbose
+```
+
+The logs report config loading, calendar and symbol-universe calls, q-library
+installation, plan size, day-batch execution, kdb query start/completion, schema
+validation, comparison building, and HTML write status. Password values are not
+logged.
+
+
 ## Development workflow
 
 Before implementing anything, read:

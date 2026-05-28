@@ -8086,3 +8086,107 @@ Removed files:
 ### Open questions
 
 - None.
+
+---
+
+## 2026-05-28 — Revert q namespace directory bootstrap
+
+### Implemented
+
+- Reverted the calculation namespace `\d` bootstrap added in the previous iteration.
+- Restored q library installation to render absolute namespace-qualified assignments only, such as `.desk.mmsr.timeBucket:{...}`.
+- Updated the bootstrap regression test so `render_calculation_function_bootstrap` fails if `\d` directory changes are reintroduced.
+
+### Files changed
+
+- `mmsr/kdb/query_loader.py`
+- `tests/test_kdb_metric_runner.py`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Updated `test_calculation_function_bootstrap_uses_absolute_assignments_only` to assert the rendered bootstrap contains no `\d` directory commands.
+
+### Validation
+
+- `PYTHONPATH=. pytest -q tests/test_kdb_metric_runner.py tests/test_kdb_query_plan.py` passed.
+- `PYTHONPATH=. pytest -q` passed.
+- Python startup still printed the unrelated spreadsheet runtime warmup warning from the execution environment, but it did not fail the tests.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening.
+
+### Estimated milestone completion
+
+- 94%
+
+### Remaining work before milestone completion
+
+- Continue simplifying live kdb execution so Python submits compact function calls and q owns calculation control flow.
+- Validate the centralized q runner against a real kdb process using production-like source functions and exact live error traces.
+
+### Best next deterministic step
+
+- Reproduce the reported live `$` error with the current centralized q query and remove the failing q construct from `mmsr_calculations.q.j2`.
+
+### Open questions
+
+- What exact q backtrace is produced by the remaining live `$` error after the namespace bootstrap revert?
+
+---
+
+## 2026-05-28 — Add production execution logging controls
+
+### Implemented
+
+- Added `mmsr.logging.configure_logging` for CLI-controlled Python logging.
+- Added `--verbose` / `-v` and `--log-level` options to production `plan`, `preflight`, and `render` commands.
+- Added status logs for config loading, kdb connection/query execution, q-library installation, calendar calls, symbol-universe calls, plan sizing, day-batch execution, preflight sample execution, comparison building, report rendering, and HTML output writing.
+- Added DEBUG logging of the exact rendered q sent through `KdbClient.execute` when verbose mode is enabled.
+- Documented production logging usage in `README.md`.
+
+### Files changed
+
+- `README.md`
+- `mmsr/cli.py`
+- `mmsr/kdb/client.py`
+- `mmsr/kdb/production.py`
+- `mmsr/kdb/runner.py`
+- `mmsr/logging.py`
+- `mmsr/periods/calendar.py`
+- `mmsr/periods/symbols.py`
+- `tests/test_logging.py`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Added `tests/test_logging.py` to verify production CLI logging options and logging configuration behavior.
+
+### Validation
+
+- `PYTHONPATH=. pytest -q tests/test_logging.py` passed.
+- `PYTHONPATH=. pytest -q` passed.
+- `python -m black mmsr tests` could not run because `black` is not installed in this execution environment.
+- Python startup still printed the unrelated spreadsheet runtime warmup warning from the execution environment, but it did not fail the tests.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening.
+
+### Estimated milestone completion
+
+- 95%
+
+### Remaining work before milestone completion
+
+- Validate verbose live-kdb logs against the reported `$` failure and use the rendered q/backtrace to remove the failing q construct.
+- Continue simplifying production q submission so Python submits compact function calls and q owns calculation control flow.
+
+### Best next deterministic step
+
+- Run `mmsr preflight --verbose` against the live kdb endpoint and fix the concrete `$` error using the logged rendered q and kdb backtrace.
+
+### Open questions
+
+- What exact rendered q line and q backtrace correspond to the remaining live `$` error under verbose logging?

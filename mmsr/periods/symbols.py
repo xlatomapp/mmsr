@@ -9,8 +9,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+import logging
 import re
 from typing import Any, Protocol
+
+LOGGER = logging.getLogger(__name__)
 
 
 class SymbolUniverseSource(Protocol):
@@ -36,8 +39,15 @@ class KdbSymbolUniverseSource:
         """Return analysis symbols by querying the configured reference function."""
 
         query = f"{{[date] {_q_function_identifier(self.function)}[date]}}"
+        LOGGER.info(
+            "Calling kdb reference-data universe function %s for %s",
+            self.function,
+            day,
+        )
         result = self.client.execute(query, day)
-        return _coerce_symbol_values(result, self.symbol_column)
+        symbols = _coerce_symbol_values(result, self.symbol_column)
+        LOGGER.info("Reference-data universe returned %s symbol(s)", len(symbols))
+        return symbols
 
 
 def _coerce_symbol_values(result: Any, symbol_column: str) -> list[str]:

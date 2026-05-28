@@ -11,7 +11,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta
+import logging
 from typing import Any, Protocol
+
+LOGGER = logging.getLogger(__name__)
 
 
 class TradingCalendarSource(Protocol):
@@ -47,8 +50,16 @@ class KdbTradingCalendarSource:
             f"{calculation_namespace}.callTradingCalendar[{function_name};start;end]"
             "}"
         )
+        LOGGER.info(
+            "Calling kdb trading calendar function %s for %s..%s",
+            self.function,
+            start,
+            end,
+        )
         result = self.client.execute(query, start, end)
-        return _coerce_calendar_dates(result, self.date_column)
+        days = _coerce_calendar_dates(result, self.date_column)
+        LOGGER.info("Trading calendar returned %s day(s)", len(days))
+        return days
 
 
 def _coerce_calendar_dates(result: Any, date_column: str) -> list[date]:

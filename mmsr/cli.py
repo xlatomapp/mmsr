@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Sequence
+import logging
 
 import typer
 
@@ -22,6 +23,7 @@ from mmsr.kdb.production import (
     KdbProductionPreflightResult,
 )
 from mmsr.kdb.runner import KdbMetricRunner
+from mmsr.logging import configure_logging
 from mmsr.metrics.registry import build_default_registry
 from mmsr.metrics.results import MetricComparison, MetricObservation, MetricTimeSeries
 from mmsr.periods.calendar import KdbTradingCalendarSource
@@ -46,6 +48,9 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
+
+LOGGER = logging.getLogger(__name__)
+
 
 
 def build_cli_app() -> typer.Typer:
@@ -319,9 +324,22 @@ def _plan_command(
             "multiple symbols; configured symbol_chunk_size is applied."
         ),
     ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose DEBUG logging for production execution diagnostics.",
+    ),
+    log_level: str | None = typer.Option(
+        None,
+        "--log-level",
+        help="Explicit Python log level: DEBUG, INFO, WARNING, ERROR, or CRITICAL.",
+    ),
 ) -> int:
     """Print target/reference execution scope without running metric q."""
 
+    configure_logging(verbose=verbose, log_level=log_level)
+    LOGGER.info("Starting production plan command")
     summary = summarize_production_report_plan(
         config_path=config,
         kdb_host=kdb_host,
@@ -390,9 +408,22 @@ def _render_command(
         "--template-dir",
         help="Optional directory containing report.html.j2 and partial templates.",
     ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose DEBUG logging for production execution diagnostics.",
+    ),
+    log_level: str | None = typer.Option(
+        None,
+        "--log-level",
+        help="Explicit Python log level: DEBUG, INFO, WARNING, ERROR, or CRITICAL.",
+    ),
 ) -> int:
     """Render a production report by executing configured kdb source functions."""
 
+    configure_logging(verbose=verbose, log_level=log_level)
+    LOGGER.info("Starting production render command")
     output_path = render_production_report_file(
         output,
         config_path=config,
@@ -460,9 +491,22 @@ def _preflight_command(
             "configured metric."
         ),
     ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose DEBUG logging for production execution diagnostics.",
+    ),
+    log_level: str | None = typer.Option(
+        None,
+        "--log-level",
+        help="Explicit Python log level: DEBUG, INFO, WARNING, ERROR, or CRITICAL.",
+    ),
 ) -> int:
     """Run one bounded production metric step and print diagnostics."""
 
+    configure_logging(verbose=verbose, log_level=log_level)
+    LOGGER.info("Starting production preflight command")
     result = preflight_production_report(
         config_path=config,
         kdb_host=kdb_host,
@@ -515,7 +559,15 @@ def summarize_production_report_plan(
 ) -> KdbProductionPlanSummary:
     """Return a production execution summary without executing metric q."""
 
+    LOGGER.info("Loading production config from %s", config_path)
     report_config, period = load_report_config_file(config_path)
+    LOGGER.info(
+        "Loaded config title=%r period=%s..%s metrics=%s",
+        report_config.title,
+        period.start_date,
+        period.end_date,
+        ", ".join(report_config.metrics),
+    )
     client = KdbClient(
         KdbConfig(
             host=kdb_host,
@@ -552,7 +604,15 @@ def preflight_production_report(
 ) -> KdbProductionPreflightResult:
     """Run a bounded production preflight against the configured kdb endpoint."""
 
+    LOGGER.info("Loading production config from %s", config_path)
     report_config, period = load_report_config_file(config_path)
+    LOGGER.info(
+        "Loaded config title=%r period=%s..%s metrics=%s",
+        report_config.title,
+        period.start_date,
+        period.end_date,
+        ", ".join(report_config.metrics),
+    )
     client = KdbClient(
         KdbConfig(
             host=kdb_host,
@@ -599,7 +659,16 @@ def render_production_report_file(
     """
 
     resolved_output_path = _validated_output_path(output_path)
+    LOGGER.info("Loading production config from %s", config_path)
     report_config, period = load_report_config_file(config_path)
+    LOGGER.info(
+        "Loaded config title=%r period=%s..%s metrics=%s output=%s",
+        report_config.title,
+        period.start_date,
+        period.end_date,
+        ", ".join(report_config.metrics),
+        resolved_output_path,
+    )
 
     client = KdbClient(
         KdbConfig(
@@ -618,11 +687,13 @@ def render_production_report_file(
         calendar_source=calendar,
         symbol_source=symbol_source,
     )
+    LOGGER.info("Running target-period metric execution")
     current_series = executor.run(
         config=report_config,
         period=period,
         symbols=symbols,
     )
+    LOGGER.info("Running reference-period metric execution")
     reference_series = executor.run_reference(
         config=report_config,
         period=period,
@@ -634,6 +705,7 @@ def render_production_report_file(
         metric_name: registry.get(metric_name)
         for metric_name in report_config.metrics
     }
+    LOGGER.info("Building reference comparisons")
     comparisons = _compare_production_series(
         report_config=report_config,
         current_series=current_series,
@@ -655,10 +727,12 @@ def render_production_report_file(
             include_toxicity_reversion_page=report_config.toxicity.enabled,
         ),
     )
+    LOGGER.info("Rendering HTML report")
     html = render_report(document, template_dir=template_dir)
 
     resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
     resolved_output_path.write_text(html, encoding="utf-8")
+    LOGGER.info("Wrote HTML report to %s", resolved_output_path)
     return resolved_output_path
 
 
@@ -738,6 +812,7 @@ def render_offline_demo_report_file(
     resolved_output_path = _validated_output_path(output_path)
 
     document = build_offline_demo_report(options=options)
+    LOGGER.info("Rendering HTML report")
     html = render_report(document, template_dir=template_dir)
 
     resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -761,6 +836,7 @@ def render_mock_kdb_demo_report_file(
     resolved_output_path = _validated_output_path(output_path)
 
     document = build_mock_kdb_integration_demo_report(options=options)
+    LOGGER.info("Rendering HTML report")
     html = render_report(document, template_dir=template_dir)
 
     resolved_output_path.parent.mkdir(parents=True, exist_ok=True)

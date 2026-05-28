@@ -170,8 +170,7 @@ def render_calculation_function_bootstrap(calculation_namespace: str) -> str:
         calculation_namespace,
     ):
         raise ValueError(f"invalid calculation_namespace: {calculation_namespace!r}")
-    namespace_bootstrap = f"\\d {calculation_namespace}\n\\d .\n"
-    return namespace_bootstrap + render_template(
+    return render_template(
         _shared_q_library_template(),
         {"calculation_namespace": calculation_namespace},
     )

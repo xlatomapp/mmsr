@@ -47,9 +47,10 @@ def test_calculation_function_bootstrap_contains_bucket_amend_once() -> None:
     assert "labels[where" not in bootstrap
 
 
-def test_calculation_function_bootstrap_creates_nested_namespace() -> None:
+def test_calculation_function_bootstrap_uses_absolute_assignments_only() -> None:
     bootstrap = render_calculation_function_bootstrap(".desk.mmsr")
-    assert bootstrap.startswith("\\d .desk.mmsr\n\\d .\n")
+    assert "\\d " not in bootstrap
+    assert bootstrap.startswith("/ MMSR reusable q utility library.")
     assert ".desk.mmsr.timeBucketContinuous:{[t;bucket]" in bootstrap
 
 

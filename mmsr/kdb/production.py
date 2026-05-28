@@ -13,6 +13,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+import logging
 from datetime import date, timedelta
 from typing import Any
 
@@ -25,6 +26,8 @@ from mmsr.metrics.results import MetricObservation, MetricTimeSeries
 from mmsr.periods.calendar import TradingCalendarSource
 from mmsr.periods.models import ReportPeriod
 from mmsr.periods.symbols import SymbolUniverseSource
+
+LOGGER = logging.getLogger(__name__)
 
 
 class KdbProductionExecutionError(ValueError):
@@ -311,10 +314,16 @@ class KdbProductionExecutor:
     ) -> KdbProductionRunPlan:
         """Build the target-period execution plan using the configured calendar."""
 
+        LOGGER.info(
+            "Fetching target trading days from calendar: %s..%s",
+            period.start_date,
+            period.end_date,
+        )
         trading_days = self.calendar_source.trading_days(
             period.start_date,
             period.end_date,
         )
+        LOGGER.info("Calendar returned %s target trading day(s)", len(trading_days))
         return self.planner.build_plan(
             config=config,
             period=period,
@@ -370,6 +379,7 @@ class KdbProductionExecutor:
     ) -> KdbProductionPlanSummary:
         """Summarize target/reference production execution without metric IO."""
 
+        LOGGER.info("Building target production plan summary")
         target_plan = self.build_plan(
             config=config,
             period=period,
@@ -420,6 +430,12 @@ class KdbProductionExecutor:
             period=period,
             symbols=symbols,
         )
+        LOGGER.info(
+            "Target production plan built: days=%s metrics=%s steps=%s",
+            len(plan.trading_days),
+            ", ".join(plan.metric_names),
+            len(plan.steps),
+        )
         return self._run_plan(config=config, plan=plan, execution_role="target")
 
     def run_reference(
@@ -431,7 +447,14 @@ class KdbProductionExecutor:
     ) -> tuple[MetricTimeSeries, ...]:
         """Execute bounded reference observations before the target period."""
 
+        LOGGER.info("Building reference window")
         window = self.build_reference_window(config=config, period=period)
+        LOGGER.info(
+            "Reference window built: %s day(s), period=%s..%s",
+            len(window.trading_days),
+            window.period.start_date,
+            window.period.end_date,
+        )
         plan = self.planner.build_plan(
             config=config,
             period=window.period,
@@ -459,13 +482,20 @@ class KdbProductionExecutor:
             return None
         if self.symbol_source is None:
             return None
-        return {
-            trading_day: _clean_string_tuple(
+        symbols_by_day: dict[date, tuple[str, ...]] = {}
+        for trading_day in trading_days:
+            LOGGER.info("Fetching symbol universe for %s", trading_day.isoformat())
+            day_symbols = _clean_string_tuple(
                 self.symbol_source.symbols_for_day(trading_day),
                 f"symbols for {trading_day.isoformat()}",
             )
-            for trading_day in trading_days
-        }
+            LOGGER.info(
+                "Symbol universe for %s contains %s symbol(s)",
+                trading_day.isoformat(),
+                len(day_symbols),
+            )
+            symbols_by_day[trading_day] = day_symbols
+        return symbols_by_day
 
     def _run_plan(
         self,
@@ -477,9 +507,29 @@ class KdbProductionExecutor:
     ) -> tuple[MetricTimeSeries, ...]:
         observations_by_metric: dict[str, list[MetricObservation]] = defaultdict(list)
         child_metadata_by_metric: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        day_batches = _metric_step_day_batches(plan.steps)
+        LOGGER.info(
+            "Executing %s production day batch(es) for role=%s",
+            len(day_batches),
+            execution_role,
+        )
 
-        for day_steps in _metric_step_day_batches(plan.steps):
+        for day_index, day_steps in enumerate(day_batches, start=1):
+            LOGGER.info(
+                "Executing day batch %s/%s: day=%s metrics=%s symbols=%s",
+                day_index,
+                len(day_batches),
+                day_steps[0].trading_day.isoformat(),
+                ", ".join(_dedupe_strings(step.metric_name for step in day_steps)),
+                len(_symbols_for_day_steps(day_steps)),
+            )
             day_series = self._run_metric_step_day(day_steps)
+            LOGGER.info(
+                "Completed day batch %s/%s: day=%s",
+                day_index,
+                len(day_batches),
+                day_steps[0].trading_day.isoformat(),
+            )
             representative_steps = _representative_steps_by_metric(day_steps)
             for step, series in zip(representative_steps, day_series, strict=True):
                 observations_by_metric[step.metric_name].extend(series.observations)
@@ -661,10 +711,12 @@ class KdbProductionPreflight:
     ) -> KdbProductionPreflightResult:
         """Execute one bounded metric step and return preflight diagnostics."""
 
+        LOGGER.info("Starting production preflight")
         selected_metric_names = _preflight_metric_selection(
             metric_name=metric_name,
             configured_metrics=config.metrics,
         )
+        LOGGER.info("Preflight metric selection: %s", ", ".join(selected_metric_names))
         source_functions = tuple(sorted(config.kdb.source_functions().items()))
         checks = [
             KdbProductionPreflightCheck(
@@ -690,9 +742,15 @@ class KdbProductionPreflight:
             ),
         ]
 
+        LOGGER.info(
+            "Fetching preflight trading days from calendar: %s..%s",
+            period.start_date,
+            period.end_date,
+        )
         trading_days = tuple(
             self.calendar_source.trading_days(period.start_date, period.end_date)
         )
+        LOGGER.info("Calendar returned %s preflight trading day(s)", len(trading_days))
         checks.append(
             KdbProductionPreflightCheck(
                 name="calendar_access",
@@ -727,6 +785,12 @@ class KdbProductionPreflight:
             symbols=symbols,
             symbols_by_day=symbols_by_day,
         )
+        LOGGER.info(
+            "Preflight plan built: days=%s metrics=%s steps=%s",
+            len(plan.trading_days),
+            ", ".join(plan.metric_names),
+            len(plan.steps),
+        )
         if not plan.steps:
             raise KdbProductionExecutionError(
                 "production preflight could not build any metric execution steps"
@@ -735,6 +799,14 @@ class KdbProductionPreflight:
         step = _select_preflight_step(
             plan=plan,
             metric_names=selected_metric_names,
+        )
+        LOGGER.info(
+            "Selected preflight step: metric=%s day=%s chunk=%s/%s symbols=%s",
+            step.metric_name,
+            step.trading_day.isoformat(),
+            step.symbol_chunk_id,
+            step.symbol_chunk_count,
+            len(step.symbols),
         )
         rendered_query = self.runner.plan_query(step.request)
         checks.append(
@@ -748,7 +820,12 @@ class KdbProductionPreflight:
             )
         )
 
+        LOGGER.info("Executing preflight sample metric query")
         series = self.runner.run(step.request)
+        LOGGER.info(
+            "Preflight sample query returned %s observation(s)",
+            len(series.observations),
+        )
         checks.append(
             KdbProductionPreflightCheck(
                 name="sample_result_schema",
@@ -779,13 +856,20 @@ class KdbProductionPreflight:
             return None
         if self.symbol_source is None:
             return None
-        return {
-            trading_day: _clean_string_tuple(
+        symbols_by_day: dict[date, tuple[str, ...]] = {}
+        for trading_day in trading_days:
+            LOGGER.info("Fetching symbol universe for %s", trading_day.isoformat())
+            day_symbols = _clean_string_tuple(
                 self.symbol_source.symbols_for_day(trading_day),
                 f"symbols for {trading_day.isoformat()}",
             )
-            for trading_day in trading_days
-        }
+            LOGGER.info(
+                "Symbol universe for %s contains %s symbol(s)",
+                trading_day.isoformat(),
+                len(day_symbols),
+            )
+            symbols_by_day[trading_day] = day_symbols
+        return symbols_by_day
 
 
 def _preflight_metric_selection(
