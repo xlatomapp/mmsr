@@ -50,6 +50,7 @@ source functions, calculation namespace, and metric parameters. Treat the plan
 as the source of truth for the Python-facing kdb boundary. Production plans
 should call user-owned functions with MMSR's fixed positional arguments, such as
 `.sb.mmsr.getTrade[date;syms]`, `.sb.mmsr.getQuote[date;syms]`,
+`.sb.mmsr.getPtsTrade[date;syms]`, `.sb.mmsr.getPtsQuote[date;syms]`,
 `.sb.mmsr.getRef[date;syms]`, `.sb.mmsr.getRef[date]`, and
 `.sb.mmsr.getTradingCalendar[start;end]`; those functions may internally query
 physical tables, cleanse rows, route between HDB/RDB, or map client taxonomy.
@@ -59,7 +60,7 @@ continuous intraday buckets and auction buckets inside kdb.
 
 | Requirement | Why it matters | Minimum evidence |
 | --- | --- | --- |
-| Raw source-function contract reviewed | User-owned source functions can use client-specific table names internally, but required canonical columns must still be returned before MMSR filtering, joining, or grouping. The default report requires activity, displayed-liquidity, and primary-quote reversion fields. Trade and quote rows must include `session`, `auction`, and `venue`; reversion side is inferred by matching each trade to the prevailing same-venue/same-symbol quote. | `RenderedMetricQuery.input_contracts` reviewed against `meta .sb.mmsr.getTrade[date;syms]`, `meta .sb.mmsr.getQuote[date;syms]`, or equivalent schema evidence. |
+| Raw source-function contract reviewed | User-owned source functions can use client-specific table names internally, but required canonical columns must still be returned before MMSR filtering, joining, or grouping. The default report requires activity, displayed-liquidity, and primary-quote reversion fields. Trade and quote rows must include `session`, `auction`, and `venue`; reversion side is inferred by matching each PTS trade to the prevailing same-PTS-venue/same-symbol PTS quote. | `RenderedMetricQuery.input_contracts` reviewed against `meta .sb.mmsr.getTrade[date;syms]`, `meta .sb.mmsr.getQuote[date;syms]`, `meta .sb.mmsr.getPtsTrade[date;syms]`, `meta .sb.mmsr.getPtsQuote[date;syms]`, or equivalent schema evidence. |
 | Reference-data universe function confirmed | Operators should control the report universe without editing MMSR code or raw source functions. | Configured `.sb.mmsr.getRef[date]` returns the intended liquid/security universe for each target and reference trading day. | 
 | Reference-data function confirmed | TOPIX capitalization group, lot size, and any configured grouping taxonomy should come from a user-owned source of truth. | Configured `.sb.mmsr.getRef[date;syms]` returns `date`, `sym`, `topixCapGrp`, `lotSize`, and any additional configured grouping columns. |
 | Daily execution scope confirmed | Full-market target and reference periods must not request multi-day raw trade/quote windows. | `KdbProductionExecutor` or `KdbProductionExecutionPlanner` shows one `MetricRunRequest` per trading day for both `run()` and `run_reference()`; each raw request is scoped to one `date` and one `syms` vector. |
@@ -125,7 +126,7 @@ calendar assumptions are not production ready.
 | `askSize` | Top-of-book depth metrics. |
 | `tick_size` | Required only for `quoted_spread_ticks` / `liquidity_ticks.q`; may be supplied by a symbol-metadata or tick-ladder join inside the user quote function. |
 
-### Venue trade raw-data function for `toxicity_reversion.q`
+### PTS trade raw-data function for `toxicity_reversion.q`
 
 | Required field | Purpose |
 | --- | --- |
@@ -135,7 +136,18 @@ calendar assumptions are not production ready.
 | `venue` | Cross-venue series grouping. |
 | `tradePrice` | Reversion denominator and execution anchor. |
 | `tradeSize` | Sample-size and notional diagnostics. |
-| `aggressorSide` | Not required from the raw source for reversion; MMSR calculates it from the matched same-venue/same-symbol prevailing quote with inferred buy=1 and sell=-1. Reversion then uses that side against the TSE/primary mid path. |
+| `aggressorSide` | Not required from the raw source for reversion; MMSR calculates it from the matched same-PTS-venue/same-symbol PTS quote with inferred buy=1 and sell=-1. Reversion then uses that side against the TSE/primary mid path. |
+
+### PTS quote raw-data function for `toxicity_reversion.q`
+
+| Required field | Purpose |
+| --- | --- |
+| `date` | Report-period filtering and reference comparison grouping. |
+| `time` | Prevailing quote timestamp used for aggressor-side inference. |
+| `sym` | Symbol-level and metadata joins. |
+| `venue` | PTS venue identifier matched to the PTS trade venue. |
+| `bidPrice` | PTS midpoint calculation for trade-side inference. |
+| `askPrice` | PTS midpoint calculation; rows should satisfy `askPrice > bidPrice`. |
 
 ### Primary quote raw-data function for `toxicity_reversion.q`
 

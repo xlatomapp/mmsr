@@ -53,14 +53,24 @@ def _as_non_empty_tuple(
     values: tuple[str, ...] | list[str],
     field_name: str,
 ) -> tuple[str, ...]:
+    result = _as_string_tuple(values, field_name)
+    if not result:
+        raise ValueError(f"{field_name} must contain at least one value")
+    return result
+
+
+def _as_string_tuple(
+    values: tuple[str, ...] | list[str],
+    field_name: str,
+) -> tuple[str, ...]:
     if isinstance(values, tuple):
         result = values
     elif isinstance(values, list):
         result = tuple(values)
     else:
-        raise ValueError(f"{field_name} must be a non-empty sequence of strings")
+        raise ValueError(f"{field_name} must be a sequence of strings")
 
-    if not result or any(not isinstance(value, str) or not value for value in result):
+    if any(not isinstance(value, str) or not value for value in result):
         raise ValueError(f"{field_name} must contain only non-empty strings")
     return result
 
@@ -193,23 +203,44 @@ class KdbRawDataFunctionsConfig:
     namespace: str = ".mmsr"
     trade: str = "getTrade"
     quote: str = "getQuote"
-    venue_trade: str | None = None
+    pts_trade: str | None = None
+    pts_quote: str | None = None
     primary_quote: str | None = None
     reference_data: str = "getRef"
+    # Backward-compatible aliases accepted from earlier configs. New production
+    # configs should use ``pts_trade`` and ``pts_quote`` for toxicity-only PTS
+    # trade/quote sources.
+    venue_trade: str | None = None
+    venue_quote: str | None = None
 
     def __post_init__(self) -> None:
         _validate_q_namespace(self.namespace, "raw_data_functions.namespace")
         _validate_q_function(self.trade, "raw_data_functions.trade")
         _validate_q_function(self.quote, "raw_data_functions.quote")
-        if self.venue_trade is not None:
+        if self.pts_trade is not None:
             _validate_q_function(
-                self.venue_trade,
-                "raw_data_functions.venue_trade",
+                self.pts_trade,
+                "raw_data_functions.pts_trade",
+            )
+        if self.pts_quote is not None:
+            _validate_q_function(
+                self.pts_quote,
+                "raw_data_functions.pts_quote",
             )
         if self.primary_quote is not None:
             _validate_q_function(
                 self.primary_quote,
                 "raw_data_functions.primary_quote",
+            )
+        if self.venue_trade is not None:
+            _validate_q_function(
+                self.venue_trade,
+                "raw_data_functions.venue_trade",
+            )
+        if self.venue_quote is not None:
+            _validate_q_function(
+                self.venue_quote,
+                "raw_data_functions.venue_quote",
             )
         _validate_q_function(
             self.reference_data,
@@ -219,7 +250,16 @@ class KdbRawDataFunctionsConfig:
     def to_source_functions(self) -> dict[str, str]:
         """Return source-function names keyed by logical template source role."""
 
-        venue_trade = self.trade if self.venue_trade is None else self.venue_trade
+        pts_trade = (
+            self.pts_trade
+            if self.pts_trade is not None
+            else self.venue_trade if self.venue_trade is not None else self.trade
+        )
+        pts_quote = (
+            self.pts_quote
+            if self.pts_quote is not None
+            else self.venue_quote if self.venue_quote is not None else self.quote
+        )
         primary_quote = self.quote if self.primary_quote is None else self.primary_quote
         return {
             "trades": _qualified_q_function(
@@ -232,10 +272,15 @@ class KdbRawDataFunctionsConfig:
                 self.quote,
                 "raw_data_functions.quote",
             ),
-            "venue_trades": _qualified_q_function(
+            "pts_trades": _qualified_q_function(
                 self.namespace,
-                venue_trade,
-                "raw_data_functions.venue_trade",
+                pts_trade,
+                "raw_data_functions.pts_trade",
+            ),
+            "pts_quotes": _qualified_q_function(
+                self.namespace,
+                pts_quote,
+                "raw_data_functions.pts_quote",
             ),
             "primary_quotes": _qualified_q_function(
                 self.namespace,
@@ -265,6 +310,7 @@ class KdbExecutionConfig:
     )
     enforce_daily_raw_scope: bool = True
     symbol_chunk_size: int | None = None
+    symbol_chunk_group_by: tuple[str, ...] | list[str] = ("sym",)
 
     def __post_init__(self) -> None:
         _validate_q_namespace(
@@ -273,6 +319,11 @@ class KdbExecutionConfig:
         )
         if self.symbol_chunk_size is not None and self.symbol_chunk_size < 1:
             raise ValueError("kdb.symbol_chunk_size must be positive when provided")
+        chunk_group_by = _as_string_tuple(
+            self.symbol_chunk_group_by,
+            "kdb.symbol_chunk_group_by",
+        )
+        object.__setattr__(self, "symbol_chunk_group_by", chunk_group_by)
 
     def source_functions(self) -> dict[str, str]:
         """Return the configured raw data source-function mapping."""
@@ -360,9 +411,12 @@ class ToxicityFiltersConfig:
     exclude_auction: bool = True
     exclude_stale_primary_quote: bool = True
     max_primary_quote_age: str = "1s"
+    max_pts_quote_age: str | None = None
 
     def __post_init__(self) -> None:
         _validate_duration(self.max_primary_quote_age, "filters.max_primary_quote_age")
+        if self.max_pts_quote_age is not None:
+            _validate_duration(self.max_pts_quote_age, "filters.max_pts_quote_age")
 
 
 @dataclass(frozen=True)
@@ -438,6 +492,11 @@ class ToxicityConfig:
         params: dict[str, Any] = {
             "primary_venue": self.primary_venue,
             "max_primary_quote_age": self.filters.max_primary_quote_age,
+            "max_pts_quote_age": (
+                self.filters.max_pts_quote_age
+                if self.filters.max_pts_quote_age is not None
+                else self.filters.max_primary_quote_age
+            ),
             "side_source": self.side_source,
             "event_clustering_enabled": self.event_clustering.enabled,
             "event_clustering_window": self.event_clustering.window,

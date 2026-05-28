@@ -15,11 +15,19 @@ data:
     calculation_namespace: ".desk.mmsr"
     enforce_daily_raw_scope: true
     symbol_chunk_size: 500
+    # Chunk raw source calls by stocks and aggregate by symbol before
+    # concatenating chunk outputs, avoiding full-universe trade/quote scans.
+    symbol_chunk_group_by:
+      - sym
     raw_data_functions:
       namespace: ".sb.mmsr"
       trade: "getTrade"
       quote: "getQuote"
-      venue_trade: "getTrade"
+      # Toxicity-only PTS trade source; activity metrics continue to use getTrade.
+      pts_trade: "getPtsTrade"
+      # Toxicity-only PTS quote source; used to infer aggressorSide per PTS venue/symbol.
+      pts_quote: "getPtsQuote"
+      # Primary quotes provide the TSE/primary at-trade and future mids.
       primary_quote: "getQuote"
       reference_data: "getRef"
 
@@ -117,6 +125,7 @@ toxicity:
     exclude_auction: true
     exclude_stale_primary_quote: true
     max_primary_quote_age: "1s"
+    max_pts_quote_age: "1s"
   confidence:
     min_trade_count: 100
     min_notional: 100000000

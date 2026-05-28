@@ -88,7 +88,8 @@ _METRIC_TABLE_PARAMETER_MAP = {
         ("reference_data", "ref_table"),
     ),
     _REVERSION_TEMPLATE: (
-        ("venue_trades", "venue_trades_table"),
+        ("pts_trades", "pts_trades_table"),
+        ("pts_quotes", "pts_quotes_table"),
         ("primary_quotes", "primary_quotes_table"),
         ("reference_data", "ref_table"),
     ),
@@ -387,8 +388,13 @@ def _input_contracts_for_template(
         )
     if template_name == _REVERSION_TEMPLATE:
         return toxicity_reversion_input_schema_contracts(
-            venue_trades_table=_source_label(
-                "venue_trades",
+            pts_trades_table=_source_label(
+                "pts_trades",
+                table_names,
+                source_functions,
+            ),
+            pts_quotes_table=_source_label(
+                "pts_quotes",
                 table_names,
                 source_functions,
             ),
@@ -415,8 +421,6 @@ def _source_extra_columns(
     if _symbol_filter_values(parameters):
         extra.append("sym")
     return tuple(_dedupe(extra))
-
-
 
 
 def _raw_source_extra_columns(parameters: Mapping[str, Any]) -> tuple[str, ...]:
@@ -458,17 +462,18 @@ def _q_source_expression(
     source_functions: Mapping[str, str],
     request: MetricRunRequest,
 ) -> str:
-    if source_key in source_functions:
+    resolved_source_key = _resolve_source_key(source_key, table_names, source_functions)
+    if resolved_source_key in source_functions:
         function_name = _q_function_identifier(
-            source_functions[source_key],
-            f"source_functions[{source_key!r}]",
+            source_functions[resolved_source_key],
+            f"source_functions[{resolved_source_key!r}]",
         )
         if source_key == "reference_data":
             return f"({function_name}[{_q_date(request.period.start_date)}])"
         return f"({function_name}[{_q_date(request.period.start_date)};0!refs])"
 
-    if source_key in table_names:
-        return _q_identifier(table_names[source_key], "table name")
+    if resolved_source_key in table_names:
+        return _q_identifier(table_names[resolved_source_key], "table name")
 
     if source_key == "reference_data":
         return (
@@ -490,10 +495,28 @@ def _source_label(
     table_names: Mapping[str, str],
     source_functions: Mapping[str, str],
 ) -> str:
-    if source_key in source_functions:
-        return source_functions[source_key]
-    if source_key in table_names:
-        return table_names[source_key]
+    resolved_source_key = _resolve_source_key(source_key, table_names, source_functions)
+    if resolved_source_key in source_functions:
+        return source_functions[resolved_source_key]
+    if resolved_source_key in table_names:
+        return table_names[resolved_source_key]
+    return source_key
+
+
+def _resolve_source_key(
+    source_key: str,
+    table_names: Mapping[str, str],
+    source_functions: Mapping[str, str],
+) -> str:
+    if source_key in source_functions or source_key in table_names:
+        return source_key
+    legacy_aliases = {
+        "pts_trades": "venue_trades",
+        "pts_quotes": "venue_quotes",
+    }
+    alias = legacy_aliases.get(source_key)
+    if alias is not None and (alias in source_functions or alias in table_names):
+        return alias
     return source_key
 
 
@@ -550,28 +573,29 @@ def _reversion_template_parameters(request: MetricRunRequest) -> dict[str, str]:
     primary_venue = _required_string_parameter(request, "primary_venue")
     venues = _optional_string_sequence_parameter(request, "venues")
     max_primary_quote_age = request.parameters.get("max_primary_quote_age", "1s")
-    max_venue_quote_age = request.parameters.get(
-        "max_venue_quote_age",
-        max_primary_quote_age,
+    max_pts_quote_age = request.parameters.get(
+        "max_pts_quote_age",
+        request.parameters.get("max_venue_quote_age", max_primary_quote_age),
     )
     if not isinstance(max_primary_quote_age, str):
         raise KdbMetricQueryPlanError(
             "parameter 'max_primary_quote_age' must be a string"
         )
-    if not isinstance(max_venue_quote_age, str):
+    if not isinstance(max_pts_quote_age, str):
         raise KdbMetricQueryPlanError(
-            "parameter 'max_venue_quote_age' must be a string"
+            "parameter 'max_pts_quote_age' must be a string"
         )
 
     exclude_auction = bool(request.parameters.get("exclude_auction", False))
 
+    primary_venue_symbol = _q_symbol(primary_venue, "primary_venue")
     return {
         "value_column": _q_identifier(request.metric.name, "metric value column"),
-        "primary_venue": _q_symbol(primary_venue, "primary_venue"),
+        "primary_venue": primary_venue_symbol,
         "venue_filter": (
             f"venue in {_q_symbol_vector(venues, 'venues')}"
             if venues
-            else "not null venue"
+            else f"(not null venue) & venue <> {primary_venue_symbol}"
         ),
         "auction_filter": "null auction" if exclude_auction else "1b",
         "horizon": _q_duration(horizon, "horizon"),
@@ -581,9 +605,9 @@ def _reversion_template_parameters(request: MetricRunRequest) -> dict[str, str]:
             max_primary_quote_age,
             "max_primary_quote_age",
         ),
-        "max_venue_quote_age": _q_duration(
-            max_venue_quote_age,
-            "max_venue_quote_age",
+        "max_pts_quote_age": _q_duration(
+            max_pts_quote_age,
+            "max_pts_quote_age",
         ),
     }
 

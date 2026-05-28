@@ -129,7 +129,8 @@ def test_docs_document_production_readiness_checklist() -> None:
         "Trading calendar function",
         "Trade raw-data function for `activity.q`",
         "Quote raw-data function for `liquidity.q`",
-        "Venue trade raw-data function for `toxicity_reversion.q`",
+        "PTS trade raw-data function for `toxicity_reversion.q`",
+        "PTS quote raw-data function for `toxicity_reversion.q`",
         "Primary quote raw-data function for `toxicity_reversion.q`",
         "bounded validation slice",
         "market-data owner",
@@ -145,6 +146,7 @@ def test_docs_document_production_readiness_checklist() -> None:
     assert "docs/production_readiness.md" in roadmap
     assert "production kdb source-function boundary" in roadmap
     assert ".sb.mmsr.getTrade" in readme
+    assert ".sb.mmsr.getPtsQuote" in readme
 
 
 def test_docs_define_report_scope_guardrails() -> None:

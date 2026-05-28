@@ -255,12 +255,19 @@ data:
   kdb:
     calculation_namespace: ".desk.mmsr"
     enforce_daily_raw_scope: true
+    # Process reference symbols in bounded chunks and keep symbol-level
+    # aggregation inside each chunk before unioning chunk results.
     symbol_chunk_size: 500
+    symbol_chunk_group_by: [sym]
     raw_data_functions:
       namespace: ".sb.mmsr"
       trade: "getTrade"
       quote: "getQuote"
-      venue_trade: "getTrade"
+      # Toxicity-only PTS source; falls back to trade when omitted.
+      pts_trade: "getPtsTrade"
+      # Same-PTS quote source used to infer aggressorSide per venue/sym.
+      pts_quote: "getPtsQuote"
+      # Primary/TSE quote source used as the reversion target.
       primary_quote: "getQuote"
       reference_data: "getRef"
 
@@ -285,14 +292,19 @@ The required user q function signatures are positional and intentionally small:
 .sb.mmsr.getRef[date]
 .sb.mmsr.getTrade[date;ref]
 .sb.mmsr.getQuote[date;ref]
+.sb.mmsr.getPtsTrade[date;ref]
+.sb.mmsr.getPtsQuote[date;ref]
 ```
 
 `getRef[date]` controls the active universe for the date and returns one row per
 analysis symbol with at least `date`, `sym`, `ric`, `topixCapGrp`, and `lotSize`.
 MMSR filters that reference table for CLI `--symbol` runs or configured symbol
-chunks, then passes the filtered table into `getTrade` and `getQuote`. This lets
-source functions filter by `sym`, `ric`, or any other user-owned reference
-column without MMSR knowing the raw vendor schema.
+chunks, then passes the filtered table into each configured raw source function:
+main `getTrade`/`getQuote` for activity and liquidity, `getPtsTrade`/`getPtsQuote`
+for toxicity-side inference, and `getQuote` or another configured primary quote
+function for TSE/primary mids. This lets source functions filter by `sym`, `ric`,
+or any other user-owned reference column without MMSR knowing the raw vendor
+schema.
 
 Trade and quote rows must carry per-tick market-state columns. `session` should
 identify the market session, for example `am` or `pm`. `auction` should identify
@@ -304,11 +316,11 @@ instead of relying on a static configured session-time grid.
 Canonical trade rows should expose `date`, `time`, `sym`, `ric`, `session`,
 `auction`, `venue`, `tradePrice`, and `tradeSize`. Canonical quote rows should
 expose `date`, `time`, `sym`, `ric`, `session`, `auction`, `venue`, `bidPrice`,
-`askPrice`, `bidSize`, and `askSize`. MMSR derives `aggressorSide` in q for
-reversion/price-impact-style calculations by joining each trade to the prevailing
-same-venue/same-symbol quote and comparing trade price to that venue midpoint;
-source functions do not need to provide `aggressorSide` for the default live
-report.
+`askPrice`, `bidSize`, and `askSize`. MMSR derives `aggressorSide` in q for reversion by joining each PTS trade to
+the prevailing same-PTS-venue/same-symbol PTS quote and comparing trade price to
+that PTS midpoint; source functions do not need to provide `aggressorSide` for
+the default live report. TSE/primary quotes are used separately only for the
+at-trade and future reversion mids.
 
 Market-cap group is intentionally not required by the live starter boundary. Add
 any additional grouping columns, such as `sector` or `market_segment`, to
@@ -501,7 +513,7 @@ This skeleton is designed to be copied into or generated alongside a ppw project
 
 The production report includes a dedicated `Cross-Venue Toxicity` page when normalized kdb-backed primary-quote reversion rows are present. Production analysis targets TSE through `toxicity.primary_venue: TSE`; the reversion q then discovers the trade/quote venues present in the source rows, unless `toxicity.venues` is explicitly configured as a narrow filter. It renders deterministic SVG venue reversion curves with horizon progression on the x-axis, reversion in bps on the y-axis, and one line per venue such as TSE, SBIJ, and ODX. The page consumes already-computed `MetricTimeSeries` rows and does not query kdb+, calculate raw-tick metrics, or call an LLM in the report layer.
 
-When production output contains many date, intraday bucket, sector, segment, or symbol contexts, the toxicity page ranks contexts deterministically before applying the chart limit. The default ranking surfaces the contexts with the largest positive reversion first because positive values indicate future TSE/primary-mid movement in the direction of the aggressor inferred from each trade's own venue quote under `aggressorSide * (future_primary_mid - primary_mid_at_trade) / future_primary_mid * 10000`. Production callers can set `MarketReportOptions.toxicity_reversion_context_ranking` to `max_positive_reversion`, `max_absolute_reversion`, `lowest_confidence`, `context_sort_order`, or `chronological`. When normalized kdb-backed rows include optional `context_sort_order` metadata, `context_sort_order` ranks smaller numeric values first, then falls back to adverse reversion and chronological ordering for ties or missing values.
+When production output contains many date, intraday bucket, sector, segment, or symbol contexts, the toxicity page ranks contexts deterministically before applying the chart limit. The default ranking surfaces the contexts with the largest positive reversion first because positive values indicate future TSE/primary-mid movement in the direction of the aggressor inferred from each trade's own PTS quote under `aggressorSide * (future_primary_mid - primary_mid_at_trade) / future_primary_mid * 10000`. Production callers can set `MarketReportOptions.toxicity_reversion_context_ranking` to `max_positive_reversion`, `max_absolute_reversion`, `lowest_confidence`, `context_sort_order`, or `chronological`. When normalized kdb-backed rows include optional `context_sort_order` metadata, `context_sort_order` ranks smaller numeric values first, then falls back to adverse reversion and chronological ordering for ties or missing values.
 
 By default, when the dedicated `Cross-Venue Toxicity` page is present, `build_market_monitor_report()` suppresses the `primary_quote_reversion_*_bps` family from the generic `Intraday Detail` page so the same venue/horizon curves are not duplicated. Production callers that explicitly want both displays can set `MarketReportOptions.include_toxicity_reversion_metrics_in_detail_page=True`; if the dedicated toxicity page is disabled or absent, the generic detail page still renders any supplied reversion series.
 

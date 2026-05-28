@@ -35,12 +35,16 @@ def test_production_minimal_config_loads_supported_kdb_metrics() -> None:
         "liquidity.q",
         "toxicity_reversion.q",
     }
-    assert config.kdb.raw_data_functions.to_source_functions()["venue_trades"] == (
-        ".sb.mmsr.getTrade"
+    assert config.kdb.raw_data_functions.to_source_functions()["pts_trades"] == (
+        ".sb.mmsr.getPtsTrade"
+    )
+    assert config.kdb.raw_data_functions.to_source_functions()["pts_quotes"] == (
+        ".sb.mmsr.getPtsQuote"
     )
     assert config.kdb.raw_data_functions.to_source_functions()["primary_quotes"] == (
         ".sb.mmsr.getQuote"
     )
+    assert config.kdb.symbol_chunk_group_by == ("sym",)
 
 
 def test_example_config_uses_market_monitoring_metrics() -> None:

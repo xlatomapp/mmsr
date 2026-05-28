@@ -109,7 +109,8 @@ def test_packaged_toxicity_reversion_template_parameters_are_strict() -> None:
 
     assert template_parameters(template) == frozenset(
         {
-            "venue_trades_table",
+            "pts_trades_table",
+            "pts_quotes_table",
             "primary_quotes_table",
             "ref_table",
             "ref_filter",
@@ -124,7 +125,7 @@ def test_packaged_toxicity_reversion_template_parameters_are_strict() -> None:
             "horizon_label",
             "horizon_sort_order",
             "max_primary_quote_age",
-            "max_venue_quote_age",
+            "max_pts_quote_age",
             "value_column",
         }
     )
@@ -139,8 +140,8 @@ def test_toxicity_reversion_template_uses_future_mid_denominator() -> None:
     )
     assert "postMid > 0" in template
     assert "% primaryMid" not in template
-    assert "`date`sym`venue`time xasc venueQuotes" in template
-    assert "inferAggressorSide[tradePrice; venueMid]" in template
+    assert "`date`sym`venue`time xasc ptsQuotes" in template
+    assert "inferAggressorSide[tradePrice; ptsMid]" in template
 
 
 def test_render_calculation_function_bootstrap_installs_helpers_in_namespace() -> None:

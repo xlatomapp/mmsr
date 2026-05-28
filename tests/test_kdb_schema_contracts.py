@@ -586,16 +586,22 @@ def test_flow_contract_rejects_non_flow_metric() -> None:
 
 
 def test_toxicity_reversion_input_contracts_list_required_source_columns() -> None:
-    venue_contract, quote_contract, reference_contract = toxicity_reversion_input_schema_contracts(
-        venue_trades_table="trade_venue_l1",
+    (
+        pts_contract,
+        pts_quote_contract,
+        primary_quote_contract,
+        reference_contract,
+    ) = toxicity_reversion_input_schema_contracts(
+        pts_trades_table="trade_pts_l1",
+        pts_quotes_table="quote_pts_l1",
         primary_quotes_table="quote_primary_l1",
         reference_table="ref_l1",
     )
 
-    assert venue_contract.template_name == "toxicity_reversion.q"
-    assert venue_contract.table_role == "venue_trades"
-    assert venue_contract.table_name == "trade_venue_l1"
-    assert venue_contract.required_columns == (
+    assert pts_contract.template_name == "toxicity_reversion.q"
+    assert pts_contract.table_role == "pts_trades"
+    assert pts_contract.table_name == "trade_pts_l1"
+    assert pts_contract.required_columns == (
         "date",
         "time",
         "sym",
@@ -605,30 +611,39 @@ def test_toxicity_reversion_input_contracts_list_required_source_columns() -> No
         "tradePrice",
         "tradeSize",
     )
-    assert "same-venue/same-symbol prevailing quote" in venue_contract.assumptions[0]
+    assert "same-PTS-venue/same-symbol prevailing quote" in pts_contract.assumptions[0]
 
-    assert quote_contract.table_role == "primary_quotes"
-    assert quote_contract.table_name == "quote_primary_l1"
-    assert quote_contract.required_columns == (
+    assert pts_quote_contract.table_role == "pts_quotes"
+    assert pts_quote_contract.table_name == "quote_pts_l1"
+    assert pts_quote_contract.required_columns == (
         "date",
         "time",
         "sym",
-        "session",
-        "auction",
+        "venue",
+        "bidPrice",
+        "askPrice",
+    )
+    assert primary_quote_contract.table_role == "primary_quotes"
+    assert primary_quote_contract.table_name == "quote_primary_l1"
+    assert primary_quote_contract.required_columns == (
+        "date",
+        "time",
+        "sym",
         "venue",
         "bidPrice",
         "askPrice",
     )
     assert reference_contract.table_role == "reference_data"
     assert reference_contract.table_name == "ref_l1"
-    assert "askPrice > bidPrice" in quote_contract.assumptions[1]
+    assert "askPrice > bidPrice" in primary_quote_contract.assumptions[1]
 
 
 def test_toxicity_reversion_input_contracts_validate_extra_columns() -> None:
     validate_toxicity_reversion_input_schemas(
-        venue_trades_table="trade_venue_l1",
+        pts_trades_table="trade_pts_l1",
+        pts_quotes_table="quote_pts_l1",
         primary_quotes_table="quote_primary_l1",
-        venue_trades_columns=(
+        pts_trades_columns=(
             "date",
             "time",
             "sym",
@@ -640,12 +655,20 @@ def test_toxicity_reversion_input_contracts_validate_extra_columns() -> None:
             "aggressorSide",
             "exec_id",
         ),
+        pts_quotes_columns=(
+            "date",
+            "time",
+            "sym",
+            "venue",
+            "bidPrice",
+            "askPrice",
+            "bidSize",
+            "askSize",
+        ),
         primary_quotes_columns=(
             "date",
             "time",
             "sym",
-            "session",
-            "auction",
             "venue",
             "bidPrice",
             "askPrice",
@@ -658,7 +681,7 @@ def test_toxicity_reversion_input_contracts_validate_extra_columns() -> None:
 def test_toxicity_reversion_input_contracts_reject_missing_venue() -> None:
     with pytest.raises(OutputSchemaContractError, match="venue"):
         validate_toxicity_reversion_input_schemas(
-            venue_trades_columns=(
+            pts_trades_columns=(
                 "date",
                 "time",
                 "sym",
@@ -667,12 +690,18 @@ def test_toxicity_reversion_input_contracts_reject_missing_venue() -> None:
                 "tradePrice",
                 "tradeSize",
             ),
+            pts_quotes_columns=(
+                "date",
+                "time",
+                "sym",
+                "venue",
+                "bidPrice",
+                "askPrice",
+            ),
             primary_quotes_columns=(
                 "date",
                 "time",
                 "sym",
-                "session",
-                "auction",
                 "venue",
                 "bidPrice",
                 "askPrice",
@@ -681,7 +710,7 @@ def test_toxicity_reversion_input_contracts_reject_missing_venue() -> None:
 
 
 def test_toxicity_reversion_input_contracts_reject_string_column_argument() -> None:
-    venue_contract, _, _ = toxicity_reversion_input_schema_contracts()
+    venue_contract, _, _, _ = toxicity_reversion_input_schema_contracts()
 
     with pytest.raises(OutputSchemaContractError, match="sequence of column names"):
         venue_contract.validate_columns("date,time,sym")

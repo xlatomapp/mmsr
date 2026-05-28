@@ -102,6 +102,7 @@ class FakeProductionKdbClient:
                     "date": row_date,
                     "time_bucket": "09:00-09:05",
                     "topixCapGrp": "Large",
+                    "sym": "7203",
                     "quoted_spread_bps": 3.5,
                     "top_of_book_depth": 2500,
                 }
@@ -112,6 +113,7 @@ class FakeProductionKdbClient:
                 "date": row_date,
                 "time_bucket": "09:00-09:05",
                 "topixCapGrp": "Large",
+                "sym": "7203",
                 "volume": volume,
                 "turnover": 987654321,
                 "trade_count": 42,

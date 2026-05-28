@@ -156,6 +156,7 @@ def test_toxicity_config_populates_metric_run_parameters() -> None:
         "primary_venue": "TSE",
         "venues": ("TSE", "SBIJ"),
         "max_primary_quote_age": "500ms",
+        "max_pts_quote_age": "500ms",
         "side_source": "inferred",
         "event_clustering_enabled": False,
         "event_clustering_window": "250ms",
@@ -178,11 +179,13 @@ def test_kdb_config_defaults_to_namespace_scoped_raw_data_functions() -> None:
     assert config.kdb.calculation_namespace == ".mmsr"
     assert config.kdb.enforce_daily_raw_scope is True
     assert config.kdb.symbol_chunk_size is None
+    assert config.kdb.symbol_chunk_group_by == ("sym",)
     assert config.kdb.source_functions() == {
         "trades": ".mmsr.getTrade",
         "quotes": ".mmsr.getQuote",
         "reference_data": ".mmsr.getRef",
-        "venue_trades": ".mmsr.getTrade",
+        "pts_trades": ".mmsr.getTrade",
+        "pts_quotes": ".mmsr.getQuote",
         "primary_quotes": ".mmsr.getQuote",
     }
     assert isinstance(config.symbols, SymbolUniverseConfig)
@@ -196,7 +199,8 @@ def test_kdb_raw_data_functions_allow_user_namespace_and_role_overrides() -> Non
             namespace=".sb.mmsr",
             trade="getCleanTrade",
             quote="getCleanQuote",
-            venue_trade=".feed.route.getVenueTrade",
+            pts_trade=".feed.route.getPtsTrade",
+            pts_quote="getPtsQuote",
             primary_quote="getPrimaryQuote",
         ),
     )
@@ -205,7 +209,8 @@ def test_kdb_raw_data_functions_allow_user_namespace_and_role_overrides() -> Non
         "trades": ".sb.mmsr.getCleanTrade",
         "quotes": ".sb.mmsr.getCleanQuote",
         "reference_data": ".sb.mmsr.getRef",
-        "venue_trades": ".feed.route.getVenueTrade",
+        "pts_trades": ".feed.route.getPtsTrade",
+        "pts_quotes": ".sb.mmsr.getPtsQuote",
         "primary_quotes": ".sb.mmsr.getPrimaryQuote",
     }
 

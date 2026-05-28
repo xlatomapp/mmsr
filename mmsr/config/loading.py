@@ -226,15 +226,22 @@ def _kdb_config(
             namespace=str(raw_functions.get("namespace", ".mmsr")),
             trade=str(raw_functions.get("trade", "getTrade")),
             quote=str(raw_functions.get("quote", "getQuote")),
-            venue_trade=_optional_string(raw_functions.get("venue_trade")),
+            pts_trade=_optional_string(raw_functions.get("pts_trade")),
+            pts_quote=_optional_string(raw_functions.get("pts_quote")),
             primary_quote=_optional_string(raw_functions.get("primary_quote")),
             reference_data=str(reference_function),
+            venue_trade=_optional_string(raw_functions.get("venue_trade")),
+            venue_quote=_optional_string(raw_functions.get("venue_quote")),
         ),
         enforce_daily_raw_scope=bool(section.get("enforce_daily_raw_scope", True)),
         symbol_chunk_size=(
             None
             if section.get("symbol_chunk_size") is None
             else int(section["symbol_chunk_size"])
+        ),
+        symbol_chunk_group_by=_string_sequence(
+            section.get("symbol_chunk_group_by", ["sym"]),
+            "data.kdb.symbol_chunk_group_by",
         ),
     )
 
@@ -275,6 +282,7 @@ def _toxicity_config(section: Mapping[str, Any]) -> ToxicityConfig:
             exclude_auction=bool(filters.get("exclude_auction", True)),
             exclude_stale_primary_quote=bool(filters.get("exclude_stale_primary_quote", True)),
             max_primary_quote_age=str(filters.get("max_primary_quote_age", "1s")),
+            max_pts_quote_age=_optional_string(filters.get("max_pts_quote_age")),
         ),
         confidence=ToxicityConfidenceConfig(
             min_trade_count=int(confidence.get("min_trade_count", 100)),
@@ -289,6 +297,15 @@ def _mapping(value: Any, field_name: str) -> Mapping[str, Any]:
     if not isinstance(value, Mapping):
         raise ConfigLoadError(f"{field_name} must be a mapping")
     return value
+
+
+def _string_sequence(value: Any, field_name: str) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        raise ConfigLoadError(f"{field_name} must be a list of strings")
+    result = tuple(str(item) for item in value)
+    if any(not item for item in result):
+        raise ConfigLoadError(f"{field_name} must contain only non-empty strings")
+    return result
 
 
 def _parse_date(value: Any, field_name: str) -> date:

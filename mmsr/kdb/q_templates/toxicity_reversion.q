@@ -1,7 +1,8 @@
 / Primary-quote reversion query template.
 / Expected params:
-/   `venue_trades_table`: raw-data function expression/table returning venue trades
-/   `primary_quotes_table`: raw-data function expression/table returning primary quotes
+/   `pts_trades_table`: raw-data function expression/table returning PTS venue trades
+/   `pts_quotes_table`: raw-data function expression/table returning PTS quotes
+/   `primary_quotes_table`: raw-data function expression/table returning primary/TSE quotes
 /   `ref_table`: expression/table returning day reference data
 /   `calculation_namespace`: namespace where MMSR installs calculation functions
 /   `date_filter`
@@ -15,11 +16,11 @@
 /   `horizon_label`
 /   `horizon_sort_order`
 /   `max_primary_quote_age`
-/   `max_venue_quote_age`
+/   `max_pts_quote_age`
 /   `value_column`
 /
 / Reversion convention: inferred aggressorSide * (future TSE/primary mid - primary mid at trade) / future TSE/primary mid * 10000.
-/ Aggressor side is inferred from each trade's own venue/symbol prevailing quote.
+/ Aggressor side is inferred from each trade's own PTS venue/symbol prevailing quote.
 
 {{ calculation_namespace }}.weightedAverage:{[weights;values] wavg[weights; values]};
 {{ calculation_namespace }}.positiveRatio:{[values] avg values > 0};
@@ -38,10 +39,11 @@
 {{ calculation_namespace }}.calcToxicityReversion:{
     rawRefs: select from {{ ref_table }};
     refs: `sym xkey select from rawRefs where {{ ref_filter }};
-    rawVenueTrades: {{ venue_trades_table }} lj refs;
-    rawQuotes: {{ primary_quotes_table }} lj refs;
+    rawPtsTrades: {{ pts_trades_table }} lj refs;
+    rawPtsQuotes: {{ pts_quotes_table }} lj refs;
+    rawPrimaryQuotes: {{ primary_quotes_table }} lj refs;
 
-    venueTrades:
+    ptsTrades:
         select
             date,
             time,
@@ -52,7 +54,7 @@
             tradePrice,
             tradeSize,
             notional: tradePrice * tradeSize
-        from rawVenueTrades
+        from rawPtsTrades
         where {{ date_filter }},
               {{ venue_filter }},
               {{ auction_filter }},
@@ -60,15 +62,15 @@
               tradePrice > 0,
               not null venue;
 
-    venueQuotes:
+    ptsQuotes:
         select
             date,
             time,
-            venueQuoteTime: time,
+            ptsQuoteTime: time,
             sym,
             venue,
-            venueMid: (bidPrice + askPrice) % 2
-        from rawQuotes
+            ptsMid: (bidPrice + askPrice) % 2
+        from rawPtsQuotes
         where {{ date_filter }},
               {{ venue_filter }},
               bidPrice > 0,
@@ -84,31 +86,31 @@
             bidPrice,
             askPrice,
             primaryMid: (bidPrice + askPrice) % 2
-        from rawQuotes
+        from rawPrimaryQuotes
         where {{ date_filter }},
               venue = {{ primary_venue }},
               bidPrice > 0,
               askPrice > bidPrice;
 
-    tradeWithVenueQuote:
+    tradeWithPtsQuote:
         aj[
             `date`sym`venue`time;
-            `date`sym`venue`time xasc venueTrades;
-            `date`sym`venue`time xasc venueQuotes
+            `date`sym`venue`time xasc ptsTrades;
+            `date`sym`venue`time xasc ptsQuotes
         ];
 
     tradeWithPreMid:
         aj[
             `date`sym`time;
-            `date`sym`time xasc tradeWithVenueQuote;
+            `date`sym`time xasc tradeWithPtsQuote;
             `date`sym`time xasc primaryQuotes
         ];
 
     tradeForHorizon:
         update
-            aggressorSide: {{ calculation_namespace }}.inferAggressorSide[tradePrice; venueMid],
+            aggressorSide: {{ calculation_namespace }}.inferAggressorSide[tradePrice; ptsMid],
             horizonTime: time + {{ horizon }},
-            venueQuoteAge: time - venueQuoteTime,
+            ptsQuoteAge: time - ptsQuoteTime,
             primaryQuoteAge: time - primaryQuoteTime
         from tradeWithPreMid;
 
@@ -129,7 +131,7 @@
             horizon_sort_order: {{ horizon_sort_order }},
             valid_primary_quote: (primaryQuoteAge <= {{ max_primary_quote_age }}) &
                 (horizonTime - postQuoteTime) <= {{ max_primary_quote_age }},
-            valid_venue_quote: venueQuoteAge <= {{ max_venue_quote_age }}
+            valid_pts_quote: ptsQuoteAge <= {{ max_pts_quote_age }}
         from tradeWithPostMid;
 
     select
@@ -142,9 +144,9 @@
     by date, time_bucket: {{ bucket_expr }}, venue, horizon: {{ horizon_label }}{{ group_by }}
     from scored
     where valid_primary_quote,
-          valid_venue_quote,
+          valid_pts_quote,
           aggressorSide in (1 -1),
-          not null venueMid,
+          not null ptsMid,
           not null primaryMid,
           not null postMid,
           postMid > 0

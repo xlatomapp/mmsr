@@ -85,8 +85,9 @@ environment is ready.
 
 The production report path should call user-defined q functions rather than
 directly querying physical trade, quote, calendar, or reference tables. Configure
-functions such as `.sb.mmsr.getTrade`, `.sb.mmsr.getQuote`, `.sb.mmsr.getRef`,
-`.sb.mmsr.getRef`, and `.sb.mmsr.getTradingCalendar`; those functions can
+functions such as `.sb.mmsr.getTrade`, `.sb.mmsr.getQuote`,
+`.sb.mmsr.getPtsTrade`, `.sb.mmsr.getPtsQuote`, `.sb.mmsr.getRef`,
+and `.sb.mmsr.getTradingCalendar`; those functions can
 route between HDB/RDB, cleanse rows, return client-approved reference-data universes,
 and normalize canonical columns to MMSR q.
 
@@ -125,8 +126,9 @@ They are intentionally not required by the default test suite.
 | `MMSR_KDB_REF_FUNCTION` | No | User reference-data function; defaults to `.sb.mmsr.getRef`. |
 | `MMSR_KDB_CALENDAR_FUNCTION` | Yes | User trading-calendar function for production date selection. |
 | `MMSR_KDB_SYMBOL_FUNCTION` | Production runs | User reference-data universe function for selecting analysis symbols by trading date. |
-| `MMSR_KDB_VENUE_TRADE_FUNCTION` | Reversion only | Venue trade source function for `toxicity_reversion.q`. |
-| `MMSR_KDB_PRIMARY_QUOTE_FUNCTION` | Reversion only | Primary quote source function for `toxicity_reversion.q`. |
+| `MMSR_KDB_PTS_TRADE_FUNCTION` | Reversion only | PTS trade source function for `toxicity_reversion.q`. |
+| `MMSR_KDB_PTS_QUOTE_FUNCTION` | Reversion only | PTS quote source function for `toxicity_reversion.q` aggressor-side inference. |
+| `MMSR_KDB_PRIMARY_QUOTE_FUNCTION` | Reversion only | Primary/TSE quote source function for `toxicity_reversion.q` reversion mids. |
 | `MMSR_KDB_TEST_DATE` | Yes | A single known-good trading date for bounded smoke checks. |
 | `MMSR_KDB_TEST_SYMBOL` | Optional | A liquid symbol used to limit live smoke-query size. |
 

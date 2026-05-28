@@ -65,7 +65,8 @@ def test_production_execution_planner_splits_into_daily_symbol_chunked_requests(
         "trades": ".sb.mmsr.getTrade",
         "quotes": ".sb.mmsr.getQuote",
         "reference_data": ".sb.mmsr.getRef",
-        "venue_trades": ".sb.mmsr.getTrade",
+        "pts_trades": ".sb.mmsr.getTrade",
+        "pts_quotes": ".sb.mmsr.getQuote",
         "primary_quotes": ".sb.mmsr.getQuote",
     }
     assert first.request.calculation_namespace == ".desk.mmsrCalc"
@@ -76,6 +77,30 @@ def test_production_execution_planner_splits_into_daily_symbol_chunked_requests(
     third = plan.steps[2]
     assert third.symbol_chunk_id == 2
     assert third.symbols == ("9984",)
+
+
+def test_symbol_chunked_market_groups_add_per_symbol_aggregation_key() -> None:
+    config = ReportConfig(
+        title="Daily Monitor",
+        metrics=["turnover"],
+        group_by=["topixCapGrp"],
+        kdb=KdbExecutionConfig(symbol_chunk_size=2),
+    )
+
+    plan = KdbProductionExecutionPlanner().build_plan(
+        config=config,
+        period=_period(),
+        trading_days=[date(2026, 5, 1)],
+        symbols=["7203", "6758", "9984"],
+    )
+
+    request = plan.steps[0].request
+    assert request.group_by == ["topixCapGrp", "sym"]
+
+    query_plan = KdbMetricQueryPlanner().render(request)
+    assert "by date, time_bucket:" in query_plan.query
+    assert ", topixCapGrp, sym" in query_plan.query
+
 
 def test_production_query_requests_are_daily_and_use_date_syms_source_args() -> None:
     config = ReportConfig(
@@ -199,6 +224,7 @@ def test_production_plan_summary_reports_scope_and_contracts() -> None:
     assert summary.metric_names == ("volume", "quoted_spread_bps")
     assert summary.metric_count == 2
     assert summary.symbol_chunk_count == 2
+    assert summary.symbol_chunk_group_by == ("sym",)
     assert summary.target_step_count == 8
     assert summary.reference_step_count == 8
     assert summary.total_step_count == 16
@@ -216,6 +242,7 @@ def test_production_plan_summary_reports_scope_and_contracts() -> None:
     assert "Target trading days: 2 (2026-05-01, 2026-05-04)" in lines
     assert "Reference trading days: 2 (2026-04-28, 2026-04-30)" in lines
     assert "Symbol chunks per trading day: 2" in lines
+    assert "Chunk aggregation groups: sym" in lines
     assert "Reference-data universe function: none" in lines
     assert ".sb.mmsr.getTrade" in lines
     assert "outputs: date, time_bucket, sym, volume, turnover, trade_count" in lines
@@ -230,7 +257,7 @@ def test_production_plan_summary_reports_scope_and_contracts() -> None:
         (
             "primary_quote_reversion_10ms_bps",
             "toxicity_reversion.q",
-            "venue_trades",
+            "pts_trades",
         ),
     ],
 )

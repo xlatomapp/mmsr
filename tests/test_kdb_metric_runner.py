@@ -266,7 +266,8 @@ def test_kdb_metric_runner_renders_reversion_query_and_normalizes_venue_horizon(
             period=_period(),
             group_by=["sym"],
             table_names={
-                "venue_trades": "venue_trade",
+                "pts_trades": "pts_trade",
+                "pts_quotes": "pts_quote",
                 "primary_quotes": "quote",
             },
             parameters=config.metric_parameters_for(metric_name),
@@ -292,17 +293,18 @@ def test_kdb_metric_runner_renders_reversion_query_and_normalizes_venue_horizon(
     assert series.metadata["group_by"] == ("venue", "horizon", "sym")
 
     query = client.queries[0]
-    assert "rawVenueTrades: venue_trade lj refs" in query
-    assert "rawQuotes: quote lj refs" in query
+    assert "rawPtsTrades: pts_trade lj refs" in query
+    assert "rawPtsQuotes: pts_quote lj refs" in query
+    assert "rawPrimaryQuotes: quote lj refs" in query
     assert "venue in `TSE`SBIJ" in query
     assert "venue = `TSE" in query
     assert "time + 0D00:00:00.100" in query
     assert "horizon: $\"100ms\"" in query
     assert "horizon_sort_order: 2" in query
     assert "primaryQuoteAge <= 0D00:00:00.500" in query
-    assert "venueQuoteAge <= 0D00:00:00.500" in query
-    assert "`date`sym`venue`time xasc venueQuotes" in query
-    assert "inferAggressorSide[tradePrice; venueMid]" in query
+    assert "ptsQuoteAge <= 0D00:00:00.500" in query
+    assert "`date`sym`venue`time xasc ptsQuotes" in query
+    assert "inferAggressorSide[tradePrice; ptsMid]" in query
     assert "primary_quote_reversion_100ms_bps: .mmsr.weightedAverage[notional; reversion_bps]" in query
     assert "by date, time_bucket:" in query
     assert ", venue, horizon:" in query
@@ -391,7 +393,8 @@ def test_reversion_runner_validates_output_schema_before_normalization() -> None
                 period=_period(),
                 group_by=[],
                 table_names={
-                    "venue_trades": "venue_trade",
+                    "pts_trades": "pts_trade",
+                    "pts_quotes": "pts_quote",
                     "primary_quotes": "quote",
                 },
                 parameters=config.metric_parameters_for(metric_name),
@@ -410,7 +413,8 @@ def test_reversion_runner_requires_venue_parameters_before_execution() -> None:
                 period=_period(),
                 group_by=[],
                 table_names={
-                    "venue_trades": "venue_trade",
+                    "pts_trades": "pts_trade",
+                    "pts_quotes": "pts_quote",
                     "primary_quotes": "quote",
                 },
             )

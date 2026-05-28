@@ -149,7 +149,7 @@ STARTER_METRICS: list[MetricDefinition] = [
             "askPrice",
         ],
         caveats=[
-            "MMSR infers trade direction from the matched prevailing quote midpoint.",
+            "MMSR infers trade direction from the matched prevailing PTS quote midpoint.",
             "Requires horizon-specific same-symbol quote alignment.",
         ],
     ),
@@ -225,7 +225,7 @@ for horizon, label in PRIMARY_QUOTE_REVERSION_HORIZONS:
             default_aggregation="notional_weighted_mean",
             supports_intraday=True,
             supports_symbol_level=True,
-            required_tables=["venue_trades", "primary_quotes"],
+            required_tables=["pts_trades", "pts_quotes", "primary_quotes"],
             required_columns=[
                 "time",
                 "sym",
@@ -236,9 +236,9 @@ for horizon, label in PRIMARY_QUOTE_REVERSION_HORIZONS:
                 "askPrice",
             ],
             caveats=[
-                "MMSR infers aggressor side per venue and symbol from the matched prevailing quote midpoint.",
+                "MMSR infers aggressor side per PTS venue and symbol from the matched prevailing PTS quote midpoint.",
                 "Short horizons such as 10ms and 100ms are sensitive to timestamp synchronization and feed latency.",
-                "Results should be filtered for stale, crossed, locked, or unavailable primary and venue quotes.",
+                "Results should be filtered for stale, crossed, locked, or unavailable primary and PTS quotes.",
                 "Small sample sizes by venue, symbol, or bucket should be flagged in the report.",
             ],
         )

@@ -57,6 +57,7 @@ class KdbProductionPlanSummary:
     reference_trading_days: tuple[date, ...]
     metric_names: tuple[str, ...]
     symbol_chunk_count: int
+    symbol_chunk_group_by: tuple[str, ...]
     target_step_count: int
     reference_step_count: int
     calculation_namespace: str
@@ -92,6 +93,10 @@ class KdbProductionPlanSummary:
             ),
             f"Metrics: {self.metric_count} ({', '.join(self.metric_names)})",
             f"Symbol chunks per trading day: {self.symbol_chunk_count}",
+            (
+                "Chunk aggregation groups: "
+                + _format_group_columns(self.symbol_chunk_group_by)
+            ),
             f"Target metric steps: {self.target_step_count}",
             f"Reference metric steps: {self.reference_step_count}",
             f"Total metric steps: {self.total_step_count}",
@@ -243,6 +248,11 @@ class KdbProductionExecutionPlanner:
                 for metric_name in config.metrics:
                     metric = self.registry.get(metric_name)
                     parameters = dict(config.metric_parameters_for(metric_name))
+                    request_group_by = _chunk_safe_group_by(
+                        config.group_by,
+                        chunk_size=config.kdb.symbol_chunk_size,
+                        chunk_group_by=config.kdb.symbol_chunk_group_by,
+                    )
                     if chunk_symbols:
                         parameters["symbols"] = chunk_symbols
                     steps.append(
@@ -255,7 +265,7 @@ class KdbProductionExecutionPlanner:
                             request=MetricRunRequest(
                                 metric=metric,
                                 period=daily_period,
-                                group_by=list(config.group_by),
+                                group_by=list(request_group_by),
                                 parameters=parameters,
                                 source_functions=config.kdb.source_functions(),
                                 calculation_namespace=config.kdb.calculation_namespace,
@@ -381,6 +391,9 @@ class KdbProductionExecutor:
             reference_trading_days=reference_plan.trading_days,
             metric_names=target_plan.metric_names,
             symbol_chunk_count=_symbol_chunk_count(target_plan),
+            symbol_chunk_group_by=tuple(config.kdb.symbol_chunk_group_by)
+            if config.kdb.symbol_chunk_size is not None
+            else (),
             target_step_count=len(target_plan.steps),
             reference_step_count=len(reference_plan.steps),
             calculation_namespace=config.kdb.calculation_namespace,
@@ -487,6 +500,9 @@ class KdbProductionExecutor:
             "trading_days": plan.trading_days,
             "source_functions": tuple(sorted(config.kdb.source_functions().items())),
             "calculation_namespace": config.kdb.calculation_namespace,
+            "symbol_chunk_group_by": tuple(config.kdb.symbol_chunk_group_by)
+            if config.kdb.symbol_chunk_size is not None
+            else (),
         }
         if reference_window is not None:
             base_metadata.update(
@@ -745,6 +761,35 @@ def _metric_contracts_from_plan(
             optional_output_columns=rendered_query.optional_output_columns,
         )
     return tuple(contracts_by_metric[metric_name] for metric_name in plan.metric_names)
+
+
+def _chunk_safe_group_by(
+    group_by: Sequence[str],
+    *,
+    chunk_size: int | None,
+    chunk_group_by: Sequence[str],
+) -> tuple[str, ...]:
+    """Return group columns that can be safely concatenated across symbol chunks.
+
+    When production execution splits a day into symbol chunks, q templates should
+    aggregate at least by symbol before Python concatenates chunk results. This
+    avoids emitting duplicate market/sector rows from each chunk that cannot be
+    safely unioned without a second weighted rollup.
+    """
+
+    base = _clean_string_tuple(group_by, "group_by")
+    if chunk_size is None:
+        return base
+    return _dedupe_strings(
+        (*base, *_clean_string_tuple(chunk_group_by, "symbol_chunk_group_by"))
+    )
+
+
+def _format_group_columns(group_by: Sequence[str]) -> str:
+    columns = tuple(group_by)
+    if not columns:
+        return "none"
+    return ", ".join(columns)
 
 
 def _symbols_by_trading_day(

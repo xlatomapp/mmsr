@@ -7106,3 +7106,209 @@ Removed files:
 ### Open questions
 
 - None.
+
+
+## 2026-05-28 — Iteration 79: Dedicated PTS toxicity source and chunk-safe symbol aggregation
+
+### Implemented
+
+- Split the toxicity-only PTS trade source out from the main production trade
+  source by adding the first-class `raw_data_functions.pts_trade` role.
+- Added separate reversion input roles for `pts_trades`, `venue_quotes`, and
+  `primary_quotes`. Reversion now calls the configured PTS trade source for PTS
+  prints, same-venue quote source for aggressor-side inference, and primary/TSE
+  quote source for reversion measurement.
+- Kept backward-compatible parsing for the older `venue_trade` config key, but
+  updated packaged production/example configs and README guidance to use
+  `pts_trade`.
+- Added `data.kdb.symbol_chunk_group_by`, defaulting to `[sym]`, so configured
+  symbol chunking calculates at a per-symbol grain inside each chunk before
+  MMSR concatenates chunk outputs.
+- Updated the production planner so when `symbol_chunk_size` is set it appends
+  the configured chunk aggregation columns to each request's q `group_by` list.
+  This avoids unsafe duplicate market/sector aggregates from independently
+  processed chunks.
+- Added plan-summary and execution metadata for chunk aggregation columns.
+- Updated q-template schema contracts, metric definitions, config loading, and
+  tests to reflect dedicated PTS trade sourcing and chunk-safe symbol
+  aggregation.
+
+### Files changed
+
+- `README.md`
+- `_docs/journal.md`
+- `config/report.example.yaml`
+- `config/report.production_minimal.yaml`
+- `mmsr/config/loading.py`
+- `mmsr/config/models.py`
+- `mmsr/examples/config/live_kdb_report.yaml`
+- `mmsr/kdb/production.py`
+- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/kdb/query_plan.py`
+- `mmsr/kdb/schema_contracts.py`
+- `mmsr/metrics/starter_definitions.py`
+- `tests/test_config_files.py`
+- `tests/test_config_models.py`
+- `tests/test_kdb_metric_runner.py`
+- `tests/test_kdb_production_execution.py`
+- `tests/test_kdb_query_loader.py`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_kdb_schema_contracts.py`
+- `tests/test_production_cli.py`
+
+### Tests added or updated
+
+- Updated config-model and config-file tests for `pts_trade`,
+  `venue_quote`, `primary_quote`, and `symbol_chunk_group_by`.
+- Updated query-loader, query-plan, runner, and schema-contract tests for the
+  new reversion source roles and template parameters.
+- Added a production-planner test confirming market/grouped chunked execution
+  appends `sym` to request groupings before q aggregation.
+- Updated production CLI fake results to include `sym` when chunk-safe grouping
+  is enabled.
+
+### Validation performed
+
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest -q -ra --tb=short --color=no`: passed with 1 expected
+  live-schema skip.
+- Ran `python -m black --check .`: not run successfully because Black is not
+  installed in this execution environment.
+- Ran `python -m ruff check .`: not run successfully because Ruff is not
+  installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before
+  Python validation commands, but compileall and pytest returned success.
+
+### Current milestone progress
+
+- Dedicated PTS source-role separation and chunk-safe per-symbol aggregation are
+  complete for this implementation slice: 100%.
+- Milestone 10 is approximately 99.99% complete for a first market-monitoring
+  live run.
+
+### Remaining work before milestone completion
+
+- Live production validation remains pending until a real kdb+ process,
+  credentials, configured `getTradingCalendar`, `getRef`, `getTrade`,
+  `getPtsTrade`, `getQuote`, and production-like schemas are available.
+- If operators need chunked market-wide or sector-wide totals rather than
+  per-symbol chunk outputs, a second-stage weighted rollup should be implemented
+  after the per-symbol chunk union.
+
+### Best next deterministic step
+
+- Run a bounded production preflight for one known-good trading day and one small
+  symbol chunk using the configured `getPtsTrade`, venue quote, and primary quote
+  functions to validate live reversion schema compatibility.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 79.
+- Delivery archive name: `mmsr_phase10_iteration79.zip`.
+
+### Open questions
+
+- None.
+
+---
+
+## 2026-05-28 — Iteration 80: Dedicated PTS quote source for reversion side inference
+
+### Implemented
+
+- Added a first-class `raw_data_functions.pts_quote` configuration role for
+  toxicity/reversion so PTS trade side inference no longer defaults to the main
+  TSE/displayed-liquidity quote source in production configs.
+- Renamed the reversion q source role from `venue_quotes` to `pts_quotes` and
+  updated `toxicity_reversion.q` to load `rawPtsQuotes`, as-of join PTS trades to
+  PTS quotes by `date`, `sym`, `venue`, and `time`, and infer `aggressorSide`
+  from `ptsMid`.
+- Kept backward-compatible parsing for the older `venue_quote` config key and
+  `venue_quotes` source role so earlier local configs still render, while packaged
+  configs now use `pts_quote: getPtsQuote`.
+- Added `toxicity.filters.max_pts_quote_age`, defaulting to the primary quote-age
+  threshold when omitted, and rendered it as `max_pts_quote_age` in q.
+- Updated source-function schema contracts, metric definitions, production docs,
+  README guidance, and tests to distinguish PTS trades, PTS quotes, and
+  primary/TSE quotes.
+
+### Files changed
+
+- `README.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/journal.md`
+- `config/report.example.yaml`
+- `config/report.production_minimal.yaml`
+- `docs/kdb_integration_testing.md`
+- `docs/production_readiness.md`
+- `mmsr/config/loading.py`
+- `mmsr/config/models.py`
+- `mmsr/examples/config/live_kdb_report.yaml`
+- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/kdb/query_plan.py`
+- `mmsr/kdb/schema_contracts.py`
+- `mmsr/metrics/starter_definitions.py`
+- `tests/test_config_files.py`
+- `tests/test_config_models.py`
+- `tests/test_docs_governance.py`
+- `tests/test_kdb_metric_runner.py`
+- `tests/test_kdb_production_execution.py`
+- `tests/test_kdb_query_loader.py`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_kdb_schema_contracts.py`
+
+### Tests added or updated
+
+- Updated config-model and config-file tests for `pts_quote`, `pts_quotes`, and
+  `max_pts_quote_age`.
+- Updated q-template loader, runner, and query-plan tests to assert
+  `pts_quotes_table`, `rawPtsQuotes`, `ptsMid`, and `ptsQuoteAge`.
+- Updated schema-contract tests so reversion has distinct `pts_trades`,
+  `pts_quotes`, `primary_quotes`, and `reference_data` input contracts.
+- Updated docs-governance tests to require the new PTS quote production-readiness
+  checklist section.
+
+### Validation performed
+
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest -q -ra --tb=short --color=no`: passed with 1 expected
+  live-kdb schema skip.
+- Ran `python -m black --check .`: not run successfully because Black is not
+  installed in this execution environment.
+- Ran `python -m ruff check .`: not run successfully because Ruff is not
+  installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before
+  Python validation commands, but compileall and pytest returned success.
+
+### Current milestone progress
+
+- Dedicated PTS quote sourcing and PTS quote-based `aggressorSide` inference are
+  complete for this implementation slice: 100%.
+- Milestone 10 is approximately 99.99% complete for a first market-monitoring
+  live run.
+
+### Remaining work before milestone completion
+
+- Live production validation remains pending until a real kdb+ process,
+  credentials, configured `getTradingCalendar`, `getRef`, `getTrade`, `getQuote`,
+  `getPtsTrade`, `getPtsQuote`, and production-like schemas are available.
+- If operators need chunked market-wide or sector-wide totals rather than
+  per-symbol chunk outputs, a second-stage weighted rollup should be implemented
+  after the per-symbol chunk union.
+
+### Best next deterministic step
+
+- Run a bounded production preflight for one known-good trading day and one small
+  symbol chunk using a reversion metric, validating `getPtsTrade`, `getPtsQuote`,
+  and primary/TSE `getQuote` schema compatibility together.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 80.
+- Delivery archive name: `mmsr_phase10_iteration80.zip`.
+
+### Open questions
+
+- None.

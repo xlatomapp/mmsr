@@ -183,7 +183,7 @@ REVERSION_OUTPUT_BASE_COLUMNS: tuple[str, ...] = (
     "time_bucket",
     *REVERSION_REQUIRED_GROUP_COLUMNS,
 )
-REVERSION_VENUE_TRADES_REQUIRED_COLUMNS: tuple[str, ...] = (
+REVERSION_PTS_TRADES_REQUIRED_COLUMNS: tuple[str, ...] = (
     "date",
     "time",
     "sym",
@@ -192,22 +192,33 @@ REVERSION_VENUE_TRADES_REQUIRED_COLUMNS: tuple[str, ...] = (
     "tradePrice",
     "tradeSize",
 )
-REVERSION_PRIMARY_QUOTES_REQUIRED_COLUMNS: tuple[str, ...] = (
+REVERSION_PTS_QUOTES_REQUIRED_COLUMNS: tuple[str, ...] = (
     "date",
     "time",
     "sym",
-    *TICK_STATE_REQUIRED_COLUMNS,
     "venue",
     "bidPrice",
     "askPrice",
 )
-REVERSION_VENUE_TRADES_ASSUMPTIONS: tuple[str, ...] = (
-    "MMSR infers aggressorSide from the same-venue/same-symbol prevailing quote midpoint",
+REVERSION_PRIMARY_QUOTES_REQUIRED_COLUMNS: tuple[str, ...] = (
+    "date",
+    "time",
+    "sym",
+    "venue",
+    "bidPrice",
+    "askPrice",
+)
+REVERSION_PTS_TRADES_ASSUMPTIONS: tuple[str, ...] = (
+    "MMSR infers aggressorSide from the same-PTS-venue/same-symbol prevailing quote midpoint",
     "tradePrice and tradeSize are positive for included trades",
     "requested group_by columns must be present after the template join/aggregation",
 )
+REVERSION_PTS_QUOTES_ASSUMPTIONS: tuple[str, ...] = (
+    "venue identifies the PTS quote source used for same-venue aggressor-side inference",
+    "bidPrice and askPrice are positive numeric prices with askPrice > bidPrice",
+)
 REVERSION_PRIMARY_QUOTES_ASSUMPTIONS: tuple[str, ...] = (
-    "venue identifies the quote source; both primary exchange and PTS venue quotes may be present",
+    "venue identifies the primary quote source; rows for the configured primary venue are used for TSE/primary mids",
     "bidPrice and askPrice are positive numeric prices with askPrice > bidPrice",
 )
 
@@ -221,8 +232,9 @@ class QTemplateInputTableSchemaContract:
     """Required raw source columns for a q template.
 
     ``table_role`` is the logical role used by the template, for example
-    ``venue_trades`` or ``primary_quotes``. ``table_name`` is the configured production table or raw function name to
-display in validation errors.
+    ``pts_trades``, ``pts_quotes``, or ``primary_quotes``. ``table_name`` is
+    the configured production table or raw function name to display in
+    validation errors.
     """
 
     template_name: str
@@ -794,11 +806,13 @@ def validate_flow_output_schema(
 
 def toxicity_reversion_input_schema_contracts(
     *,
-    venue_trades_table: str = "venue_trades",
+    pts_trades_table: str = "pts_trades",
+    pts_quotes_table: str = "pts_quotes",
     primary_quotes_table: str = "primary_quotes",
     reference_table: str = "reference_data",
     extra_required_columns: Sequence[str] = (),
 ) -> tuple[
+    QTemplateInputTableSchemaContract,
     QTemplateInputTableSchemaContract,
     QTemplateInputTableSchemaContract,
     QTemplateInputTableSchemaContract,
@@ -813,12 +827,19 @@ def toxicity_reversion_input_schema_contracts(
     return (
         QTemplateInputTableSchemaContract(
             template_name="toxicity_reversion.q",
-            table_role="venue_trades",
-            table_name=venue_trades_table,
+            table_role="pts_trades",
+            table_name=pts_trades_table,
             required_columns=_dedupe(
-                (*REVERSION_VENUE_TRADES_REQUIRED_COLUMNS, *extra_required_columns)
+                (*REVERSION_PTS_TRADES_REQUIRED_COLUMNS, *extra_required_columns)
             ),
-            assumptions=REVERSION_VENUE_TRADES_ASSUMPTIONS,
+            assumptions=REVERSION_PTS_TRADES_ASSUMPTIONS,
+        ),
+        QTemplateInputTableSchemaContract(
+            template_name="toxicity_reversion.q",
+            table_role="pts_quotes",
+            table_name=pts_quotes_table,
+            required_columns=REVERSION_PTS_QUOTES_REQUIRED_COLUMNS,
+            assumptions=REVERSION_PTS_QUOTES_ASSUMPTIONS,
         ),
         QTemplateInputTableSchemaContract(
             template_name="toxicity_reversion.q",
@@ -837,19 +858,28 @@ def toxicity_reversion_input_schema_contracts(
 
 def validate_toxicity_reversion_input_schemas(
     *,
-    venue_trades_columns: Sequence[str],
+    pts_trades_columns: Sequence[str],
+    pts_quotes_columns: Sequence[str],
     primary_quotes_columns: Sequence[str],
-    venue_trades_table: str = "venue_trades",
+    pts_trades_table: str = "pts_trades",
+    pts_quotes_table: str = "pts_quotes",
     primary_quotes_table: str = "primary_quotes",
 ) -> None:
     """Validate raw-source columns for ``toxicity_reversion.q``."""
 
-    venue_contract, quote_contract, _reference_contract = toxicity_reversion_input_schema_contracts(
-        venue_trades_table=venue_trades_table,
+    (
+        pts_contract,
+        pts_quote_contract,
+        primary_quote_contract,
+        _reference_contract,
+    ) = toxicity_reversion_input_schema_contracts(
+        pts_trades_table=pts_trades_table,
+        pts_quotes_table=pts_quotes_table,
         primary_quotes_table=primary_quotes_table,
     )
-    venue_contract.validate_columns(venue_trades_columns)
-    quote_contract.validate_columns(primary_quotes_columns)
+    pts_contract.validate_columns(pts_trades_columns)
+    pts_quote_contract.validate_columns(pts_quotes_columns)
+    primary_quote_contract.validate_columns(primary_quotes_columns)
 
 
 def toxicity_reversion_output_schema_contract(
