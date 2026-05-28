@@ -989,7 +989,14 @@ def extract_result_columns(result: Any) -> tuple[str, ...]:
     converted = _maybe_to_python(result)
 
     if isinstance(converted, Mapping):
+        keyed_columns = _columns_from_keyed_table_mapping(converted)
+        if keyed_columns is not None:
+            return keyed_columns
         return tuple(str(column) for column in converted)
+
+    dataframe_columns = _columns_from_dataframe_like(converted)
+    if dataframe_columns is not None:
+        return dataframe_columns
 
     if isinstance(converted, Sequence) and not isinstance(
         converted,
@@ -1010,6 +1017,55 @@ def extract_result_columns(result: Any) -> tuple[str, ...]:
         "result must be a dict of columns, one row dict, a list of row dicts, "
         "or a PyKX-like object with .py()"
     )
+
+
+
+
+def _columns_from_keyed_table_mapping(result: Mapping[Any, Any]) -> tuple[str, ...] | None:
+    """Return columns for common keyed-table Python representations.
+
+    Some PyKX keyed table conversions preserve key/value parts separately.
+    Schema validation must treat the key columns as ordinary table columns,
+    equivalent to q ``0!keyedTable``.
+    """
+
+    keys_part: Any | None = None
+    values_part: Any | None = None
+    for key_name in ("key", "keys"):
+        if key_name in result:
+            keys_part = result[key_name]
+            break
+    for value_name in ("value", "values"):
+        if value_name in result:
+            values_part = result[value_name]
+            break
+
+    if not isinstance(keys_part, Mapping) or not isinstance(values_part, Mapping):
+        return None
+
+    return _dedupe(
+        (
+            *tuple(str(column) for column in keys_part),
+            *tuple(str(column) for column in values_part),
+        )
+    )
+
+
+def _columns_from_dataframe_like(result: Any) -> tuple[str, ...] | None:
+    """Return columns for pandas/polars-like table objects without importing them."""
+
+    columns = getattr(result, "columns", None)
+    if columns is None:
+        return None
+
+    names: list[str] = []
+    index = getattr(result, "index", None)
+    index_names = getattr(index, "names", None)
+    if index_names is not None:
+        names.extend(str(name) for name in index_names if name is not None)
+
+    names.extend(str(column) for column in columns)
+    return tuple(_dedupe(tuple(names)))
 
 
 def _maybe_to_python(result: Any) -> Any:

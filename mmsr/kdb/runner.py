@@ -331,7 +331,14 @@ def _maybe_to_python(result: Any) -> Any:
 
 def _coerce_rows(result: Any) -> list[dict[str, Any]]:
     if isinstance(result, Mapping):
+        keyed_mapping = _unkey_mapping(result)
+        if keyed_mapping is not None:
+            return _rows_from_column_mapping(keyed_mapping)
         return _rows_from_column_mapping(result)
+
+    dataframe_rows = _rows_from_dataframe_like(result)
+    if dataframe_rows is not None:
+        return dataframe_rows
 
     if isinstance(result, Sequence) and not isinstance(result, (str, bytes, bytearray)):
         rows: list[dict[str, Any]] = []
@@ -347,6 +354,56 @@ def _coerce_rows(result: Any) -> list[dict[str, Any]]:
     raise KdbMetricRunnerError(
         "metric result must be a dict of columns or a list of row dictionaries"
     )
+
+
+
+
+def _unkey_mapping(result: Mapping[Any, Any]) -> dict[str, Any] | None:
+    """Merge common keyed-table mapping representations into column mappings."""
+
+    keys_part: Any | None = None
+    values_part: Any | None = None
+    for key_name in ("key", "keys"):
+        if key_name in result:
+            keys_part = result[key_name]
+            break
+    for value_name in ("value", "values"):
+        if value_name in result:
+            values_part = result[value_name]
+            break
+
+    if not isinstance(keys_part, Mapping) or not isinstance(values_part, Mapping):
+        return None
+
+    merged: dict[str, Any] = {}
+    merged.update({str(column): values for column, values in keys_part.items()})
+    merged.update({str(column): values for column, values in values_part.items()})
+    return merged
+
+
+def _rows_from_dataframe_like(result: Any) -> list[dict[str, Any]] | None:
+    """Convert pandas-like DataFrames, including keyed-table indexes, to rows."""
+
+    columns = getattr(result, "columns", None)
+    if columns is None:
+        return None
+
+    index = getattr(result, "index", None)
+    index_names = tuple(
+        str(name) for name in getattr(index, "names", ()) if name is not None
+    )
+    reset_index = getattr(result, "reset_index", None)
+    if index_names and callable(reset_index):
+        result = reset_index()
+        columns = getattr(result, "columns", columns)
+
+    to_dict = getattr(result, "to_dict", None)
+    if callable(to_dict):
+        records = to_dict("records")
+        if isinstance(records, list):
+            return [dict(row) for row in records]
+
+    return None
 
 
 def _rows_from_column_mapping(columns: Mapping[str, Any]) -> list[dict[str, Any]]:

@@ -8524,3 +8524,57 @@ Removed files:
 ### Open questions
 
 - None.
+
+## 2026-05-28 — Return unkeyed kdb metric tables from runReportDay
+
+### Implemented
+
+- Investigated the live `OutputSchemaContractError` where kdb returned a dictionary keyed by `quoted_spread_bps` and the metric value was a keyed table.
+- Updated all MMSR q metric calculation functions in `mmsr/kdb/q_lib/mmsr_calculations.q.j2` to return unkeyed tables with `0!result`.
+- Updated `rollupMetricResult` to return unkeyed tables for normal, empty-input, and no-rollup paths.
+- Added defensive Python handling for common keyed-table Python representations by merging key/value columns during schema validation and result normalization.
+- Added defensive handling for pandas-like keyed-table conversions by including index names during schema extraction and resetting named indexes during normalization.
+
+### Files changed
+
+- `mmsr/kdb/q_lib/mmsr_calculations.q.j2`
+- `mmsr/kdb/schema_contracts.py`
+- `mmsr/kdb/runner.py`
+- `tests/test_kdb_query_loader.py`
+- `tests/test_kdb_schema_contracts.py`
+- `tests/test_kdb_metric_runner.py`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Added q-library regression coverage that metric functions and rollups return unkeyed tables.
+- Added output-schema validation coverage for keyed-table mapping representations.
+- Added day-runner normalization coverage for a metric dictionary whose value is a keyed-table mapping representation.
+
+### Validation
+
+- `PYTHONPATH=. pytest -q tests/test_kdb_query_loader.py tests/test_kdb_schema_contracts.py tests/test_kdb_metric_runner.py` passed.
+- `PYTHONPATH=. pytest -q` passed.
+- The environment still prints the unrelated spreadsheet runtime warmup warning during Python startup, but the test commands completed successfully.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening.
+
+### Estimated milestone completion
+
+- 99%.
+
+### Remaining work before milestone completion
+
+- Run `mmsr preflight --verbose --metric quoted_spread_bps` against live kdb and confirm Python now sees `date`, `time_bucket`, `sym`, `topixCapGrp`, `quoted_spread_bps`, and `top_of_book_depth`.
+- If live PyKX still preserves keyed-table structure in a different shape, add that shape to the defensive unkeying adapter.
+
+### Best next deterministic step
+
+- Validate the corrected unkeyed `runReportDay` output against live kdb with the failing `quoted_spread_bps` command.
+
+### Open questions
+
+- None.
+

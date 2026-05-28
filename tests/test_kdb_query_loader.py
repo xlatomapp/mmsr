@@ -155,3 +155,13 @@ def test_q_library_uses_safe_singleton_dictionary_key_enlistment() -> None:
 
     assert "rawSources: enlist[`refs]!enlist refs;" in template
     assert "rawSources: `refs!(enlist refs);" not in template
+
+
+def test_q_metric_functions_return_unkeyed_tables_for_python_schema_validation() -> None:
+    template = load_q_library_template("mmsr_calculations.q.j2")
+
+    assert "if[0=count facts; :0!facts];" in template
+    assert "0!raze mmsrRollups" in template
+    assert template.count("0!result") >= 8
+    assert "    result\n    };" not in template
+

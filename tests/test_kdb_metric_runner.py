@@ -494,6 +494,10 @@ def test_reversion_runner_requires_venue_parameters_before_execution() -> None:
                     "pts_quotes": "pts_quote",
                     "primary_quotes": "quote",
                 },
+                source_functions={
+                    "reference_data": ".sb.mmsr.getRef",
+                    "quotes": ".sb.mmsr.getQuote",
+                },
             )
         )
 
@@ -632,3 +636,62 @@ def test_kdb_metric_runner_installs_calculation_functions() -> None:
     assert len(client.queries) == 1
     assert ".desk.mmsr.sumNotional" in client.queries[0]
     assert ".desk.mmsr.medianTopOfBookDepth" in client.queries[0]
+
+
+
+def test_day_runner_normalizes_keyed_table_mapping_metric_result() -> None:
+    registry = build_default_registry()
+    client = FakeKdbClient(
+        {
+            "quoted_spread_bps": {
+                "key": {
+                    "date": [date(2026, 5, 1)],
+                    "time_bucket": ["09:00"],
+                    "sym": ["7203"],
+                    "topixCapGrp": ["Large70"],
+                },
+                "value": {
+                    "quoted_spread_bps": [12.5],
+                    "top_of_book_depth": [5000],
+                    "aggregationLevel": ["symbol_bucket"],
+                    "groupType": ["sym"],
+                    "groupValue": ["7203"],
+                },
+            }
+        }
+    )
+    runner = KdbMetricRunner(client)  # type: ignore[arg-type]
+
+    series = runner.run_day(
+        [
+            MetricRunRequest(
+                metric=registry.get("quoted_spread_bps"),
+                period=ReportPeriod(
+                    start_date=date(2026, 5, 1),
+                    end_date=date(2026, 5, 1),
+                    sessions=_period().sessions,
+                    bucket=_period().bucket,
+                ),
+                group_by=["sym", "topixCapGrp"],
+                table_names={
+                    "quotes": "quote",
+                    "reference_data": "ref",
+                    "trades": "trade",
+                    "pts_trades": "ptsTrade",
+                    "pts_quotes": "ptsQuote",
+                    "primary_quotes": "quote",
+                },
+                source_functions={
+                    "reference_data": ".sb.mmsr.getRef",
+                    "quotes": ".sb.mmsr.getQuote",
+                },
+            )
+        ]
+    )
+
+    assert series[0].values == (12.5,)
+    assert series[0].observations[0].group == {
+        "sym": "7203",
+        "topixCapGrp": "Large70",
+    }
+    assert series[0].observations[0].metadata["top_of_book_depth"] == 5000

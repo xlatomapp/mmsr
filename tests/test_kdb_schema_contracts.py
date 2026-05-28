@@ -869,3 +869,27 @@ def test_live_toxicity_reversion_query_matches_output_schema_contract() -> None:
     raise AssertionError(
         "configure live kdb schema validation for toxicity_reversion.q"
     )
+
+
+
+def test_output_schema_validation_accepts_keyed_table_mapping_representation() -> None:
+    validate_output_schema_for_template(
+        template_name="liquidity.q",
+        metric_name="quoted_spread_bps",
+        group_by=("sym", "topixCapGrp"),
+        result={
+            "key": {
+                "date": [date(2026, 5, 1)],
+                "time_bucket": ["09:00"],
+                "sym": ["7203"],
+                "topixCapGrp": ["Large70"],
+            },
+            "value": {
+                "quoted_spread_bps": [12.5],
+                "top_of_book_depth": [5000],
+                "aggregationLevel": ["symbol_bucket"],
+                "groupType": ["sym"],
+                "groupValue": ["7203"],
+            },
+        },
+    )
