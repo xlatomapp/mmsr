@@ -8,11 +8,12 @@
 /   `symbol_filter`
 /   `bucket_expr`
 /   `group_by`
+/
+/ The final expression returns the aggregated table to PyKX; no result table is
+/ persisted in kdb.
 
-{{ calculation_namespace }}.calcRealizedVolatility:{
-    rawRefs: select from {{ ref_table }};
-    refs: `sym xkey select from rawRefs where {{ ref_filter }};
-    quotes: {{ quotes_table }} lj refs;
+{{ calculation_namespace }}.calcRealizedVolatility:{[rawQuoteRows;refs]
+    quotes: rawQuoteRows lj refs;
 
     cleanQuotes:
         select from quotes
@@ -32,14 +33,14 @@
         by date, sym
         from `date`sym`time xasc update log_mid: log mid from quoteMids;
 
-    select
+    result: select
         realized_volatility: 10000 * sqrt avg log_return * log_return,
         return_count: count i,
         first_mid: first mid,
         last_mid: last mid
     by date, time_bucket: {{ bucket_expr }}{{ group_by }}
     from quoteReturns
-    where not null log_return
+    where not null log_return;
+    result
     };
 
-{{ calculation_namespace }}.calcRealizedVolatility[]

@@ -1,11 +1,11 @@
 / Effective-spread transaction-cost compatibility template.
 / Source functions receive `date` and the filtered reference table.
+/ The final expression returns the aggregated table to PyKX; no result table is
+/ persisted in kdb.
 
-{{ calculation_namespace }}.calcEffectiveSpread:{
-    rawRefs: select from {{ ref_table }};
-    refs: `sym xkey select from rawRefs where {{ ref_filter }};
-    rawTrades: {{ trades_table }} lj refs;
-    rawQuotes: {{ quotes_table }} lj refs;
+{{ calculation_namespace }}.calcEffectiveSpread:{[rawTradeRows;rawQuoteRows;refs]
+    rawTrades: rawTradeRows lj refs;
+    rawQuotes: rawQuoteRows lj refs;
 
     trades:
         select
@@ -42,7 +42,7 @@
             effective_spread_bps: 20000 * abs[tradePrice - mid] % mid
         from tradeWithMid;
 
-    select
+    result: select
         effective_spread_bps: med effective_spread_bps,
         trade_count: count i,
         notional: sum notional
@@ -50,7 +50,7 @@
     from scored
     where quoteAge <= {{ max_quote_age }},
           not null mid,
-          mid > 0
+          mid > 0;
+    result
     };
 
-{{ calculation_namespace }}.calcEffectiveSpread[]

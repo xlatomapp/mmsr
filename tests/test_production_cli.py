@@ -154,10 +154,11 @@ def test_render_production_report_file_uses_live_execution_path(
         for query in FakeProductionKdbClient.queries
         if "calcActivity" in query or "calcLiquidity" in query
     ]
-    assert len(metric_queries) == 6  # 2 target chunks + 2 reference days * 2 chunks
+    assert len(metric_queries) == 3  # one q-side day/chunk/rollup call for target and each reference day
     assert ".sb.mmsr.getTrade" in "\n".join(FakeProductionKdbClient.queries)
-    assert "(.sb.mmsr.getTrade[2026.04.29;" in "\n".join(metric_queries)
-    assert "(.sb.mmsr.getTrade[2026.04.30;" in "\n".join(metric_queries)
+    assert "(.sb.mmsr.getTrade[runDate;" in "\n".join(metric_queries)
+    assert "2026.04.29" in "\n".join(metric_queries)
+    assert "2026.04.30" in "\n".join(metric_queries)
 
 def test_summarize_production_report_plan_queries_calendar_not_metrics(
     tmp_path,

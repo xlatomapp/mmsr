@@ -95,9 +95,11 @@ MMSR calculation templates are rendered into the configured calculation
 namespace, such as `.desk.mmsr`, and should not write intermediate calculations
 to the global namespace. MMSR-owned helpers include `.desk.mmsr.timeBucket`,
 which derives continuous buckets plus `AMO`/`AMC`/`PMO`/`PMC` auction buckets
-from per-tick `session` and `auction` columns. Production configs should not
-hard-code static session start/end times because those can vary by symbol and
-day.
+from per-trade `session` and `auction` columns. Quote rows are continuous-session
+rows and use `.desk.mmsr.timeBucketContinuous[time;bucket]`; quote source
+functions are not expected to return an `auction` column. Production configs
+should not hard-code static session start/end times because those can vary by
+symbol and day.
 
 `KdbProductionExecutor` builds the production execution path from the trading
 calendar: one date-bounded `MetricRunRequest` per trading day, metric, and

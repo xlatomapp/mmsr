@@ -36,7 +36,7 @@ ACTIVITY_TRADES_REQUIRED_COLUMNS: tuple[str, ...] = (
 ACTIVITY_TRADES_ASSUMPTIONS: tuple[str, ...] = (
     "tradePrice and tradeSize are positive for included trades",
     "optional symbol filtering requires a sym column",
-    "session uses `am/`pm and auction uses `open/`close or null for continuous ticks",
+    "session uses `am`pm symbols and auction uses integer codes: 1=open, 2=close, 0=continuous",
     "requested group_by columns may be supplied by the reference-data source",
 )
 ACTIVITY_OUTPUT_AGGREGATE_COLUMNS: tuple[str, ...] = (
@@ -49,7 +49,6 @@ LIQUIDITY_QUOTES_REQUIRED_COLUMNS: tuple[str, ...] = (
     "date",
     "time",
     "sym",
-    *TICK_STATE_REQUIRED_COLUMNS,
     "bidPrice",
     "askPrice",
     "bidSize",
@@ -59,7 +58,7 @@ LIQUIDITY_QUOTES_ASSUMPTIONS: tuple[str, ...] = (
     "bidPrice and askPrice are positive numeric prices with askPrice > bidPrice",
     "bidSize and askSize are numeric top-of-book displayed sizes",
     "optional symbol filtering requires a sym column",
-    "session uses `am/`pm and auction uses `open/`close or null for continuous ticks",
+    "quotes are continuous-session rows and do not require an auction column",
     "requested group_by columns may be supplied by the reference-data source",
 )
 LIQUIDITY_OUTPUT_AGGREGATE_COLUMNS: tuple[str, ...] = (
@@ -80,7 +79,6 @@ REALIZED_VOLATILITY_QUOTES_REQUIRED_COLUMNS: tuple[str, ...] = (
     "date",
     "time",
     "sym",
-    *TICK_STATE_REQUIRED_COLUMNS,
     "bidPrice",
     "askPrice",
 )
@@ -133,7 +131,6 @@ TRANSACTION_COST_QUOTES_REQUIRED_COLUMNS: tuple[str, ...] = (
     "date",
     "time",
     "sym",
-    *TICK_STATE_REQUIRED_COLUMNS,
     "bidPrice",
     "askPrice",
 )

@@ -19,6 +19,14 @@ data:
     # concatenating chunk outputs, avoiding full-universe trade/quote scans.
     symbol_chunk_group_by:
       - sym
+    # q-side rollups generated from razed chunk outputs.
+    aggregation_levels:
+      - market
+      - market_bucket
+      - topix_cap_group
+      - topix_cap_group_bucket
+      - symbol
+      - symbol_bucket
     raw_data_functions:
       namespace: ".sb.mmsr"
       trade: "getTrade"

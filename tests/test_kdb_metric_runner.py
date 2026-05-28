@@ -3,6 +3,7 @@ from datetime import date, time
 import pytest
 
 from mmsr.config.models import ReportConfig, ToxicityConfig, ToxicityFiltersConfig
+from mmsr.kdb.query_loader import render_calculation_function_bootstrap
 from mmsr.kdb.runner import (
     KdbMetricRunner,
     KdbMetricRunnerError,
@@ -36,6 +37,14 @@ def _period() -> ReportPeriod:
         bucket=IntradayBucketSpec("5m"),
     )
 
+
+
+
+def test_calculation_function_bootstrap_contains_bucket_amend_once() -> None:
+    bootstrap = render_calculation_function_bootstrap(".mmsr")
+    assert "MMSR reusable q utility library" in bootstrap
+    assert "labels:@[labels;where (auction = 1) & (session = `am);:;`AMO];" in bootstrap
+    assert "labels[where" not in bootstrap
 
 def test_template_for_metric_maps_initial_activity_liquidity_and_reversion_metrics() -> None:
     assert template_for_metric("turnover") == "activity.q"
@@ -85,9 +94,12 @@ def test_kdb_metric_runner_renders_activity_query_and_normalizes_column_result()
     }
 
     query = client.queries[0]
-    assert "trades: trade lj refs" in query
+    assert "rawTrades: trade;" in query
+    assert ".mmsr.calcActivity[rawTrades;refs]" in query
     assert "date within (2026.05.01;2026.05.02)" in query
     assert ".mmsr.timeBucket[time; session; auction; 0D00:05:00.000]" in query
+    assert "labels:@[labels;where" not in query
+    assert "labels[where" not in query
     assert "market_segment" in query
     assert "time within" not in query
 
@@ -143,8 +155,62 @@ def test_kdb_metric_runner_renders_liquidity_query_without_group_columns() -> No
 
     assert series.values == (12.5,)
     assert series.observations[0].group == {}
-    assert "quotes: quote lj refs" in client.queries[0]
-    assert "by date, time_bucket:" in client.queries[0]
+    query = client.queries[0]
+    assert "rawQuotes: quote;" in query
+    assert ".mmsr.calcLiquidity[rawQuotes;refs]" in query
+    assert ".mmsr.timeBucketContinuous[time; 0D00:05:00.000]" in query
+    assert ".mmsr.timeBucketContinuous[time; session;" not in query
+    assert "by date, time_bucket:" in query
+
+
+def test_kdb_metric_runner_batch_loads_sources_once_and_returns_metric_tables() -> None:
+    registry = build_default_registry()
+    client = FakeKdbClient(
+        {
+            "turnover": {
+                "date": [date(2026, 5, 1)],
+                "time_bucket": ["09:00"],
+                "sym": ["7203"],
+                "turnover": [1000.0],
+                "volume": [100],
+                "trade_count": [3],
+            },
+            "quoted_spread_bps": {
+                "date": [date(2026, 5, 1)],
+                "time_bucket": ["09:00"],
+                "sym": ["7203"],
+                "quoted_spread_bps": [12.5],
+                "top_of_book_depth": [5000],
+            },
+        }
+    )
+    runner = KdbMetricRunner(client)  # type: ignore[arg-type]
+    common = {
+        "period": _period(),
+        "group_by": ["sym"],
+        "table_names": {"trades": "trade", "quotes": "quote"},
+        "parameters": {"symbols": ("7203",)},
+    }
+
+    series = runner.run_batch(
+        [
+            MetricRunRequest(metric=registry.get("turnover"), **common),
+            MetricRunRequest(metric=registry.get("quoted_spread_bps"), **common),
+        ]
+    )
+
+    assert [item.metric_name for item in series] == [
+        "turnover",
+        "quoted_spread_bps",
+    ]
+    assert series[0].values == (1000.0,)
+    assert series[1].values == (12.5,)
+    query = client.queries[0]
+    assert query.count("rawTrades: trade;") == 1
+    assert query.count("rawQuotes: quote;") == 1
+    assert "refs: `sym xkey select from rawRefs where sym = $\"7203\";" in query
+    assert "(`$" not in query
+    assert '($"turnover";$"quoted_spread_bps")!(metricResult1;metricResult2)' in query
 
 
 def test_kdb_metric_runner_renders_effective_spread_query_and_preserves_metadata() -> None:
@@ -181,8 +247,8 @@ def test_kdb_metric_runner_renders_effective_spread_query_and_preserves_metadata
     assert series.metadata["template"] == "effective_spread.q"
 
     query = client.queries[0]
-    assert "rawTrades: trade lj refs" in query
-    assert "rawQuotes: quote lj refs" in query
+    assert "rawTradeRows: trade;" in query
+    assert "rawQuoteRows: quote;" in query
     assert "aj[`date`sym`time" in query
     assert "quoteAge <= 0D00:00:00.500" in query
     assert "effective_spread_bps: med" in query
@@ -222,8 +288,8 @@ def test_kdb_metric_runner_renders_price_impact_query_and_preserves_metadata() -
     assert series.metadata["template"] == "price_impact.q"
 
     query = client.queries[0]
-    assert "rawTrades: trade lj refs" in query
-    assert "rawQuotes: quote lj refs" in query
+    assert "rawTradeRows: trade;" in query
+    assert "rawQuoteRows: quote;" in query
     assert "horizonTime: time + 0D00:00:30.000" in query
     assert "horizonQuoteAge <= 0D00:00:02.000" in query
     assert "price_impact_30s_bps: med" in query
@@ -293,9 +359,9 @@ def test_kdb_metric_runner_renders_reversion_query_and_normalizes_venue_horizon(
     assert series.metadata["group_by"] == ("venue", "horizon", "sym")
 
     query = client.queries[0]
-    assert "rawPtsTrades: pts_trade lj refs" in query
-    assert "rawPtsQuotes: pts_quote lj refs" in query
-    assert "rawPrimaryQuotes: quote lj refs" in query
+    assert "rawPtsTradeRows: pts_trade;" in query
+    assert "rawPtsQuoteRows: pts_quote;" in query
+    assert "rawPrimaryQuoteRows: quote;" in query
     assert "venue in `TSE`SBIJ" in query
     assert "venue = `TSE" in query
     assert "time + 0D00:00:00.100" in query

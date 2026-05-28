@@ -7312,3 +7312,407 @@ Removed files:
 ### Open questions
 
 - None.
+
+---
+
+## 2026-05-28 — Clarified live q return path and explicit raw-table calc arguments
+
+### Implemented
+
+- Reviewed the rendered q-template execution model after operator feedback that
+  functions such as `calcFlow` did not visibly receive source tables or persist
+  results.
+- Refactored production q templates so each MMSR `calc*` function now accepts
+  explicit raw table arguments plus the filtered `refs` table, for example
+  `.desk.mmsr.calcFlow[rawTrades;refs]`.
+- Wrapped the source-loading block in a local q lambda so temporary variables such
+  as `rawRefs`, `refs`, and `rawTrades` do not leak into the kdb global namespace.
+- Kept the intended result path: the last q expression is the aggregated table,
+  PyKX returns that table to Python through `KdbClient.execute`, and
+  `KdbMetricRunner` validates and normalizes it into `MetricTimeSeries`; MMSR
+  does not persist result tables in kdb by default.
+- Updated README production documentation to describe the exact live data path,
+  symbol-chunk source calls, PyKX return boundary, and non-persistent result
+  behavior.
+
+### Files changed
+
+- `README.md`
+- `_docs/journal.md`
+- `mmsr/kdb/q_templates/activity.q`
+- `mmsr/kdb/q_templates/effective_spread.q`
+- `mmsr/kdb/q_templates/flow.q`
+- `mmsr/kdb/q_templates/liquidity.q`
+- `mmsr/kdb/q_templates/liquidity_ticks.q`
+- `mmsr/kdb/q_templates/price_impact.q`
+- `mmsr/kdb/q_templates/realized_volatility.q`
+- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `tests/test_kdb_metric_runner.py`
+- `tests/test_kdb_production_execution.py`
+- `tests/test_kdb_query_plan.py`
+
+### Tests added or updated
+
+- Updated q-template runner and query-plan tests to assert explicit raw table
+  source assignments and explicit `calc*` calls.
+- Preserved tests that validate daily symbol chunking calls source functions with
+  `[date;0!refs]` for the current chunk.
+
+### Validation performed
+
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest -q -ra --tb=short --color=no`: passed with 1 expected
+  live-kdb schema skip.
+- Ran `python -m black --check .`: not run successfully because Black is not
+  installed in this execution environment.
+- Ran `python -m ruff check .`: not run successfully because Ruff is not
+  installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before
+  Python validation commands, but compileall and pytest returned success.
+
+### Current milestone progress
+
+- Explicit source-table passing and PyKX return-path documentation are complete
+  for this implementation slice: 100%.
+- Milestone 10 remains approximately 99.99% complete for a first
+  market-monitoring live run.
+
+### Remaining work before milestone completion
+
+- Live production validation remains pending against the real kdb+ functions and
+  schemas.
+- If operators want kdb-side persisted metric results, add a separate optional
+  sink/export step; the current report path intentionally returns aggregates to
+  Python without saving intermediate or final tables in kdb.
+
+### Best next deterministic step
+
+- Run `mmsr preflight` for one liquid symbol and one reversion metric against the
+  live kdb process, then inspect the rendered query/result row count to confirm
+  source calls and PyKX returned aggregate rows.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 81.
+- Delivery archive name: `mmsr_phase10_iteration81.zip`.
+
+### Open questions
+
+- Should MMSR add an optional kdb sink function for operators who want aggregated
+  metric tables persisted in kdb in addition to the HTML report?
+
+---
+
+## 2026-05-28 — Batch kdb source loading and explicit q returns
+
+### Implemented
+
+- Refactored metric q templates so they define argument-taking calculation functions only; top-level source loading is now owned by the query planner.
+- Made every calculation function explicitly assign its aggregate `select` to `result` and return `result` as the final expression.
+- Added single-metric query wrappers that build the day/chunk `refs` table, load raw source rows, pass them into the calculation function, and return the result table as the final q expression.
+- Added `RenderedMetricBatchQuery` and `KdbMetricRunner.run_batch()` so production execution can load each source role once per trading day/symbol chunk and return a q dictionary of metric result tables keyed by metric name.
+- Updated production execution to batch metrics by `(trading_day, symbol_chunk_id)` instead of reloading trade/quote data for every report section.
+- Preserved PTS toxicity separation: PTS trades and PTS quotes are loaded only for reversion metrics; primary/TSE quotes are loaded separately for the benchmark mids.
+- Documented the corrected live data path in `README.md`.
+
+### Files changed
+
+- `mmsr/kdb/q_templates/activity.q`
+- `mmsr/kdb/q_templates/flow.q`
+- `mmsr/kdb/q_templates/liquidity.q`
+- `mmsr/kdb/q_templates/liquidity_ticks.q`
+- `mmsr/kdb/q_templates/realized_volatility.q`
+- `mmsr/kdb/q_templates/effective_spread.q`
+- `mmsr/kdb/q_templates/price_impact.q`
+- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/kdb/query_plan.py`
+- `mmsr/kdb/runner.py`
+- `mmsr/kdb/production.py`
+- `README.md`
+- `tests/test_kdb_metric_runner.py`
+- `tests/test_kdb_production_execution.py`
+- `tests/test_kdb_query_loader.py`
+
+### Tests added or updated
+
+- Added a runner batch test proving one query can return multiple metric tables and source tables are loaded once.
+- Added a production executor test proving metrics are batched by day and symbol chunk.
+- Updated q-template parameter tests for the new argument-only template contract.
+
+### Validation
+
+- `python -m compileall -q mmsr tests` passed.
+- `python -m pytest -q -ra --tb=short --color=no` passed with one expected live-kdb schema skip.
+- The environment emitted the known spreadsheet runtime warmup warning before Python commands, but the validation commands completed successfully.
+
+### Current milestone
+
+- Phase 10 / first live-kdb market-report readiness
+
+### Estimated milestone completion
+
+- 99.99%
+
+### Remaining work before milestone completion
+
+- Validate the new day/chunk batch query against live kdb+ for one small symbol chunk.
+- Confirm q dictionary return conversion from PyKX for the production kdb version in use.
+
+### Best next deterministic step
+
+- Run `mmsr preflight` and then a one-day/two-symbol `mmsr render` against live kdb+ to validate the batched q return path.
+
+### Open questions
+
+- Should MMSR add an optional configured kdb result sink after the Python report path is live-validated?
+
+---
+
+## 2026-05-28 — q-side day chunk rollups and continuous quote contract
+
+### Implemented
+
+- Moved the production execution shape from Python day/chunk batches to one q-side trading-day wrapper.
+- Added `RenderedMetricDayQuery`, `KdbMetricQueryPlanner.render_day()`, `KdbMetricRunner.plan_day()`, and `KdbMetricRunner.run_day()`.
+- Production execution now groups real kdb runs by trading day, passes explicit `allSyms` and `chunkSize` into q, cuts symbol chunks inside q, loads raw sources once per chunk, razes chunk outputs inside q, and returns metric result tables keyed by metric name.
+- Added configurable `data.kdb.aggregation_levels` with defaults for market, market bucket, TOPIX cap group, TOPIX cap group bucket, symbol, and symbol bucket.
+- Added q-side `rollupMetricResult` and scope metadata columns (`aggregationLevel`, `groupType`, `groupValue`) for day-level rollup output.
+- Renamed rendered q resources from `mmsr/kdb/q_templates/*.q` to `mmsr/kdb/query_templates/*.q.j2`; the Python loader still accepts legacy `.q` names and maps them to `.q.j2` resources.
+- Removed the `auction` requirement from quote source contracts. Quotes are treated as continuous-session quote rows and use `timeBucketContinuous`; trade rows still use auction-aware buckets.
+- Updated production/example configs and README with the new q-side execution path and aggregation-level configuration.
+
+### Files changed
+
+- `mmsr/kdb/query_templates/*.q.j2`
+- `mmsr/kdb/query_loader.py`
+- `mmsr/kdb/query_plan.py`
+- `mmsr/kdb/runner.py`
+- `mmsr/kdb/production.py`
+- `mmsr/kdb/schema_contracts.py`
+- `mmsr/config/models.py`
+- `mmsr/config/loading.py`
+- `config/report.example.yaml`
+- `config/report.production_minimal.yaml`
+- `mmsr/examples/config/live_kdb_report.yaml`
+- `pyproject.toml`
+- `README.md`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_kdb_schema_contracts.py`
+- `tests/test_production_cli.py`
+
+### Tests added or updated
+
+- Added planner coverage proving a day query has explicit `allSyms`, q-side chunk cutting, `runDate` source calls, and q-side `rollupMetricResult` calls.
+- Added quote-source contract coverage proving `auction` is no longer required for quote data.
+- Updated production CLI expectations for one q-side day query per target/reference trading day instead of one query per Python chunk.
+
+### Validation
+
+- `python -m compileall -q mmsr tests` passed.
+- `python -m pytest -q -ra --tb=short --color=no` passed with one expected live-kdb schema skip.
+- The environment emitted the known spreadsheet runtime warmup warning before Python commands, but the validation commands completed successfully.
+
+### Current milestone
+
+- Phase 10 / first live-kdb market-report readiness.
+
+### Estimated milestone completion
+
+- 99.99%.
+
+### Remaining work before milestone completion
+
+- Live validate q syntax and PyKX conversion for the new one-day q wrapper against real kdb+.
+- Refine metric-family-specific q rollups for weighted liquidity and reversion if live validation shows the generic scope rollup is insufficient for production reporting.
+
+### Best next deterministic step
+
+- Run a one-day/two-symbol live preflight and render against real kdb+ to validate `run_day`, q-side chunk cutting, quote contracts without `auction`, and returned metric dictionaries.
+
+### Open questions
+
+- Should the generic q-side `rollupMetricResult` be replaced by fully metric-family-specific weighted rollup functions before the first full-universe production run?
+
+---
+
+## 2026-05-28 — Clarify trade and quote bucket q helpers
+
+### Implemented
+
+- Replaced ambiguous indexed assignment in `.timeBucket` with q functional amend
+  (`@[labels;where ...;:;label]`) so auction bucket overrides are explicit and
+  reviewable.
+- Kept auction bucket logic trade-only: `AMO`, `AMC`, `PMO`, and `PMC` are
+  derived from trade `session` and `auction` columns.
+- Changed `.timeBucketContinuous` to accept only `time` and `bucket`, and updated
+  quote metric bucket expressions to call `timeBucketContinuous[time;bucket]`.
+- Documented that quote source functions are continuous-session quote sources
+  and are not expected to return `auction`.
+- Added tests that assert rendered activity q uses functional amend and rendered
+  liquidity q does not pass `session` or `auction` into quote bucketing.
+
+### Files changed
+
+- `mmsr/kdb/query_templates/calculation_functions.q.j2`
+- `mmsr/kdb/query_templates/activity.q.j2`
+- `mmsr/kdb/query_templates/liquidity.q.j2`
+- `mmsr/kdb/query_templates/toxicity_reversion.q.j2`
+- `mmsr/kdb/query_plan.py`
+- `tests/test_kdb_metric_runner.py`
+- `README.md`
+- `docs/kdb_integration_testing.md`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Updated `tests/test_kdb_metric_runner.py` coverage for trade auction bucket
+  helper rendering and quote continuous bucket helper rendering.
+
+### Validation
+
+- `python -m compileall -q mmsr tests` passed.
+- `python -m pytest -q -ra --tb=short --color=no` passed with one expected
+  live-kdb schema skip.
+- `python -m black --check .` could not run because Black is not installed.
+- `python -m ruff check .` could not run because Ruff is not installed.
+
+### Current milestone
+
+- Phase 10 / first live-kdb market-report readiness.
+
+### Estimated milestone completion
+
+- 99.99%
+
+### Remaining work before milestone completion
+
+- Live validation of the q syntax and returned schemas against a real kdb+
+  process, especially the day-level chunk loop and q-side rollup path.
+
+### Best next deterministic step
+
+- Run one live day with two liquid symbols and activity plus liquidity metrics to
+  validate `.timeBucket`, `.timeBucketContinuous`, and the day-level q wrapper
+  inside kdb+.
+
+### Open questions
+
+- None.
+
+
+## 2026-05-28 — Centralized q calculation library install
+
+### Implemented
+
+- Added `mmsr/kdb/q_lib/mmsr_calculations.q.j2` as the single package-owned reusable q utility library.
+- Updated the q library loader so MMSR renders reusable functions from `q_lib` rather than repeating helper definitions across metric query templates.
+- Removed repeated utility function definitions from metric query templates; templates now reference the installed calculation namespace.
+- Updated `KdbMetricRunner` with an `ensure_calculation_functions` path that installs the q library once per namespace for real `KdbClient` / PyKX-backed executions before metric queries run.
+- Kept deterministic non-PyKX test doubles from requiring library installation, while preserving explicit `install_calculation_functions()` for direct validation.
+- Documented the runtime contract: install q utilities once, then run q-side day/chunk source loading, chunk calculation, raze/rollup, and PyKX result return.
+
+### Files changed
+
+- `mmsr/kdb/q_lib/__init__.py`
+- `mmsr/kdb/q_lib/mmsr_calculations.q.j2`
+- `mmsr/kdb/query_loader.py`
+- `mmsr/kdb/query_plan.py`
+- `mmsr/kdb/runner.py`
+- `mmsr/kdb/query_templates/*.q.j2`
+- `mmsr/examples/mock_kdb_demo.py`
+- `tests/test_kdb_metric_runner.py`
+- `pyproject.toml`
+- `README.md`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Updated metric-runner tests so reusable utility definitions are validated in the q library bootstrap instead of repeated rendered metric queries.
+- Updated deterministic mock kdb client to accept the q library bootstrap without requiring a date-scoped metric query.
+
+### Validation
+
+- `python -m compileall -q mmsr tests` passed.
+- `python -m pytest -q -ra --tb=short --color=no` passed, with one expected live-kdb schema skip.
+- Formatter checks remain unavailable in this runtime unless Black/Ruff are installed.
+
+### Current milestone
+
+- Phase 10 / first live-kdb market-report readiness.
+
+### Estimated milestone completion
+
+- 99.99%
+
+### Remaining work before milestone completion
+
+- Live production validation against real kdb source functions and schemas.
+- Confirm whether metric-specific calculation functions should also be fully static q-library functions with config dictionaries rather than rendered metric wrappers.
+
+### Open Questions
+
+- Should all metric calculation functions be converted to static q-library functions that accept q config dictionaries, leaving only a tiny source-function wrapper template?
+
+### Next deterministic step
+
+- Run a one-day, two-symbol live kdb render and verify the q library is installed once before the day/chunk calculation query.
+
+---
+
+## 2026-05-28 — Quote schema simplification and integer auction codes
+
+### Implemented
+
+- Removed `session` from quote input schema contracts because quote-backed templates bucket by raw `time` through `timeBucketContinuous` and do not use quote session state.
+- Kept `session` on trade input schemas because auction bucket labels still need the AM/PM session context.
+- Changed kdb auction-state handling from symbolic/null values to integer codes:
+  - `1` = opening auction
+  - `2` = closing auction
+  - `0` = continuous session
+- Updated the toxicity/reversion auction exclusion filter to select `auction = 0`.
+- Updated q bootstrap and unit tests to assert integer auction codes.
+
+### Files changed
+
+- `mmsr/kdb/schema_contracts.py`
+- `mmsr/kdb/q_lib/mmsr_calculations.q.j2`
+- `mmsr/kdb/query_plan.py`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_kdb_schema_contracts.py`
+- `tests/test_kdb_metric_runner.py`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Updated schema-contract tests so liquidity, tick-normalized liquidity, realized-volatility, effective-spread, and price-impact quote contracts no longer require `session`.
+- Updated query-planner tests to check quote contracts require neither `session` nor `auction`.
+- Updated kdb bootstrap tests to assert integer auction-code bucket amendments.
+
+### Validation
+
+- Ran `PYTHONPATH=. pytest -q tests/test_kdb_schema_contracts.py tests/test_kdb_query_plan.py tests/test_kdb_metric_runner.py` successfully.
+- Ran `PYTHONPATH=. pytest -q` successfully.
+- Ran a repository grep confirming no remaining q references to `` `open``, `` `close``, or `null auction`.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening.
+
+### Estimated milestone completion
+
+- 93%
+
+### Remaining work before milestone completion
+
+- Confirm production raw-data functions emit integer `auction` codes on trade rows.
+- Add a short production-schema note or sample fixture documenting `auction` code semantics at the kdb source boundary.
+- Continue hardening live query smoke tests around production source-function contracts.
+
+### Best next deterministic step
+
+- Add a production-schema example documenting the canonical trade and quote source columns, including integer `auction` semantics and quote rows without `session`.
+
+### Open questions
+
+- Should MMSR tolerate legacy symbolic auction values during a transition period, or should production source functions convert them to integer codes before returning rows?

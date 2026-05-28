@@ -1,0 +1,31 @@
+/ Activity metrics template.
+/ Expected params:
+/   `trades_table`: raw-data function expression/table returning canonical trades
+/   `ref_table`: expression/table returning day reference data
+/   `calculation_namespace`: namespace where MMSR installs calculation functions
+/   `date_filter`
+/   `ref_filter`
+/   `symbol_filter`
+/   `bucket_expr`
+/   `group_by`
+/
+/ Execution contract:
+/   1. Build the filtered reference universe.
+/   2. Call the user raw-data function with date and that universe.
+/   3. Pass raw tables into the MMSR calc function.
+/   4. Return the final select result to PyKX. No kdb table is persisted.
+
+{{ calculation_namespace }}.calcActivity:{[rawTrades;refs]
+    trades: rawTrades lj refs;
+    result: select
+        turnover: {{ calculation_namespace }}.sumNotional[tradePrice; tradeSize],
+        volume: {{ calculation_namespace }}.sumSize[tradeSize],
+        trade_count: {{ calculation_namespace }}.rowCount[i]
+    by date, time_bucket: {{ bucket_expr }}{{ group_by }}
+    from trades
+    where {{ date_filter }}{{ symbol_filter }},
+          tradePrice > 0,
+          tradeSize > 0;
+    result
+    };
+

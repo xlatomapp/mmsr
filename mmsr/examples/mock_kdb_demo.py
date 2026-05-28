@@ -153,6 +153,8 @@ class DeterministicMockKdbClient:
         if args:
             raise ValueError("the deterministic mock kdb client does not accept args")
         self.queries.append(query)
+        if "MMSR reusable q utility library" in query:
+            return []
         return _mock_rows_for_query(query)
 
 

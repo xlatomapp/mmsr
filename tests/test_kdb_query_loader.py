@@ -83,7 +83,7 @@ def test_packaged_activity_template_parameters_ignore_documentation_comments() -
     template = load_q_template("activity.q")
 
     assert template_parameters(template) == frozenset(
-        {"trades_table", "ref_table", "ref_filter", "calculation_namespace", "date_filter", "bucket_expr", "group_by", "symbol_filter"}
+        {"calculation_namespace", "date_filter", "bucket_expr", "group_by", "symbol_filter"}
     )
 
 
@@ -100,7 +100,7 @@ def test_packaged_liquidity_template_parameters_include_bucket_expr() -> None:
     template = load_q_template("liquidity.q")
 
     assert template_parameters(template) == frozenset(
-        {"quotes_table", "ref_table", "ref_filter", "calculation_namespace", "date_filter", "bucket_expr", "group_by", "symbol_filter"}
+        {"calculation_namespace", "date_filter", "bucket_expr", "group_by", "symbol_filter"}
     )
 
 
@@ -109,11 +109,6 @@ def test_packaged_toxicity_reversion_template_parameters_are_strict() -> None:
 
     assert template_parameters(template) == frozenset(
         {
-            "pts_trades_table",
-            "pts_quotes_table",
-            "primary_quotes_table",
-            "ref_table",
-            "ref_filter",
             "calculation_namespace",
             "date_filter",
             "bucket_expr",

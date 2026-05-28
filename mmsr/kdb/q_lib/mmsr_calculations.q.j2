@@ -1,0 +1,70 @@
+/ MMSR reusable q utility library.
+/ Render and install this once into the configured calculation namespace before
+/ running metric calculations. Metric query templates intentionally do not
+/ redefine these helpers, so first-time readers see one canonical utility surface.
+
+{{ calculation_namespace }}.sumNotional:{[price;size] sum price * size};
+{{ calculation_namespace }}.sumSize:{[size] sum size};
+{{ calculation_namespace }}.rowCount:{[rows] count rows};
+{{ calculation_namespace }}.medianQuotedSpreadBps:{[bid;ask] med 10000 * (ask - bid) % ((ask + bid) % 2)};
+{{ calculation_namespace }}.medianTopOfBookDepth:{[bidSize;askSize] med bidSize + askSize};
+{{ calculation_namespace }}.weightedAverage:{[weights;values] wavg[weights; values]};
+{{ calculation_namespace }}.positiveRatio:{[values] avg values > 0};
+{{ calculation_namespace }}.inferAggressorSide:{[tradePrice;mid] ?[tradePrice>mid;1;?[tradePrice<mid;-1;0]]};
+
+{{ calculation_namespace }}.timeBucket:{[t;session;auction;bucket]
+    / Trade rows may include integer auction flags. Start from the continuous
+    / time bucket labels, then amend only rows explicitly marked as auction
+    / prints. Auction code 1=open, 2=close, 0=continuous.
+    labels:`$string bucket xbar t;
+    labels:@[labels;where (auction = 1) & (session = `am);:;`AMO];
+    labels:@[labels;where (auction = 2) & (session = `am);:;`AMC];
+    labels:@[labels;where (auction = 1) & (session = `pm);:;`PMO];
+    labels:@[labels;where (auction = 2) & (session = `pm);:;`PMC];
+    labels
+    };
+
+{{ calculation_namespace }}.timeBucketContinuous:{[t;bucket]
+    / Quote rows are continuous-session rows. They do not carry auction state.
+    `$string bucket xbar t
+    };
+
+{{ calculation_namespace }}.appendScope:{[t;level;groupType;groupValue]
+    update aggregationLevel:level, groupType:groupType, groupValue:groupValue from t
+    };
+
+{{ calculation_namespace }}.rollupMetricResult:{[facts;metricName;aggregationLevels]
+    / Chunk outputs are razed in kdb before this function is called. This
+    / function emits standardized report-scope metadata for the configured
+    / aggregation levels while preserving metric-family result columns.
+    if[0=count facts; :facts];
+    cols: cols facts;
+    hasBucket:`time_bucket in cols;
+    hasSym:`sym in cols;
+    hasCap:`topixCapGrp in cols;
+    market: $[`market in aggregationLevels;
+        update aggregationLevel:`market, groupType:`market, groupValue:`TSE from facts;
+        0#facts
+        ];
+    marketBucket: $[`market_bucket in aggregationLevels & hasBucket;
+        update aggregationLevel:`market_bucket, groupType:`market, groupValue:`TSE from facts;
+        0#facts
+        ];
+    cap: $[`topix_cap_group in aggregationLevels & hasCap;
+        update aggregationLevel:`topix_cap_group, groupType:`topixCapGrp, groupValue:topixCapGrp from facts;
+        0#facts
+        ];
+    capBucket: $[`topix_cap_group_bucket in aggregationLevels & hasCap & hasBucket;
+        update aggregationLevel:`topix_cap_group_bucket, groupType:`topixCapGrp, groupValue:topixCapGrp from facts;
+        0#facts
+        ];
+    sym: $[`symbol in aggregationLevels & hasSym;
+        update aggregationLevel:`symbol, groupType:`sym, groupValue:sym from facts;
+        0#facts
+        ];
+    symBucket: $[`symbol_bucket in aggregationLevels & hasSym & hasBucket;
+        update aggregationLevel:`symbol_bucket, groupType:`sym, groupValue:sym from facts;
+        0#facts
+        ];
+    raze (market;marketBucket;cap;capBucket;sym;symBucket)
+    };

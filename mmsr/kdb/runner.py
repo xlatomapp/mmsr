@@ -13,6 +13,8 @@ from mmsr.kdb.query_plan import (
     KdbMetricQueryPlanError,
     KdbMetricQueryPlanner,
     MetricRunRequest,
+    RenderedMetricBatchQuery,
+    RenderedMetricDayQuery,
     RenderedMetricQuery,
     group_by_for_metric_result,
     template_for_metric,
@@ -36,6 +38,7 @@ class KdbMetricRunner:
         self.query_planner = (
             KdbMetricQueryPlanner() if query_planner is None else query_planner
         )
+        self._installed_calculation_namespaces: set[str] = set()
 
     def install_calculation_functions(
         self,
@@ -48,14 +51,42 @@ class KdbMetricRunner:
         aggregation helpers that metric templates use inside kdb+.
         """
 
-        self.client.execute(
-            render_calculation_function_bootstrap(calculation_namespace)
-        )
+        self.client.execute(render_calculation_function_bootstrap(calculation_namespace))
+        self._installed_calculation_namespaces.add(calculation_namespace)
+
+
+
+    def ensure_calculation_functions(
+        self,
+        calculation_namespace: str = ".mmsr",
+    ) -> None:
+        """Install MMSR q helpers once per calculation namespace."""
+
+        if not isinstance(self.client, KdbClient):
+            return
+        if calculation_namespace not in self._installed_calculation_namespaces:
+            self.install_calculation_functions(calculation_namespace)
 
     def plan_query(self, request: MetricRunRequest) -> RenderedMetricQuery:
         """Render q and expose required/optional kdb table schema without IO."""
 
         return self.query_planner.render(request)
+
+    def plan_batch(
+        self,
+        requests: Sequence[MetricRunRequest],
+    ) -> RenderedMetricBatchQuery:
+        """Render one day/chunk q query for multiple metric requests."""
+
+        return self.query_planner.render_batch(requests)
+
+    def plan_day(
+        self,
+        requests: Sequence[MetricRunRequest],
+    ) -> RenderedMetricDayQuery:
+        """Render one q query that loops chunks and rolls up one full day."""
+
+        return self.query_planner.render_day(requests)
 
     def render_query(self, request: MetricRunRequest) -> tuple[str, str]:
         """Render the q query for ``request`` and return ``(query, template_name)``.
@@ -67,6 +98,95 @@ class KdbMetricRunner:
         plan = self.plan_query(request)
         return plan.query, plan.template_name
 
+    def run_day(
+        self,
+        requests: Sequence[MetricRunRequest],
+    ) -> tuple[MetricTimeSeries, ...]:
+        """Run one full trading-day query with q-side chunking and rollups."""
+
+        plan = self.plan_day(requests)
+        self.ensure_calculation_functions(plan.metric_queries[0].calculation_namespace)
+        raw_result = self.client.execute(plan.query)
+        result_by_metric = _coerce_batch_result(
+            raw_result,
+            fallback_metric_name=plan.metric_names[0] if len(plan.metric_names) == 1 else None,
+        )
+        series_by_metric: list[MetricTimeSeries] = []
+        for metric_query in plan.metric_queries:
+            if metric_query.metric_name not in result_by_metric:
+                available = ", ".join(sorted(result_by_metric)) or "none"
+                raise KdbMetricRunnerError(
+                    f"day result is missing metric {metric_query.metric_name!r}; "
+                    f"available metrics: {available}"
+                )
+            metric_result = result_by_metric[metric_query.metric_name]
+            metric_query.validate_result_schema(metric_result)
+            series_by_metric.append(
+                normalize_metric_result(
+                    metric_name=metric_query.metric_name,
+                    result=metric_result,
+                    group_by=metric_query.result_group_by,
+                    metadata={
+                        "template": metric_query.template_name,
+                        "query": plan.query,
+                        "requested_group_by": metric_query.requested_group_by,
+                        "group_by": metric_query.result_group_by,
+                        "required_output_columns": metric_query.required_output_columns,
+                        "optional_output_columns": metric_query.optional_output_columns,
+                        "source_functions": metric_query.source_functions,
+                        "calculation_namespace": metric_query.calculation_namespace,
+                        "day_metrics": plan.metric_names,
+                        "all_symbols": plan.all_symbols,
+                        "chunk_size": plan.chunk_size,
+                        "execution_shape": "day_q_chunk_rollup",
+                    },
+                )
+            )
+        return tuple(series_by_metric)
+
+    def run_batch(
+        self,
+        requests: Sequence[MetricRunRequest],
+    ) -> tuple[MetricTimeSeries, ...]:
+        """Run one day/chunk batch query and normalize each returned metric table."""
+
+        plan = self.plan_batch(requests)
+        self.ensure_calculation_functions(plan.metric_queries[0].calculation_namespace)
+        raw_result = self.client.execute(plan.query)
+        result_by_metric = _coerce_batch_result(
+            raw_result,
+            fallback_metric_name=plan.metric_names[0] if len(plan.metric_names) == 1 else None,
+        )
+        series_by_metric: list[MetricTimeSeries] = []
+        for metric_query in plan.metric_queries:
+            if metric_query.metric_name not in result_by_metric:
+                available = ", ".join(sorted(result_by_metric)) or "none"
+                raise KdbMetricRunnerError(
+                    f"batch result is missing metric {metric_query.metric_name!r}; "
+                    f"available metrics: {available}"
+                )
+            metric_result = result_by_metric[metric_query.metric_name]
+            metric_query.validate_result_schema(metric_result)
+            series_by_metric.append(
+                normalize_metric_result(
+                    metric_name=metric_query.metric_name,
+                    result=metric_result,
+                    group_by=metric_query.result_group_by,
+                    metadata={
+                        "template": metric_query.template_name,
+                        "query": plan.query,
+                        "requested_group_by": metric_query.requested_group_by,
+                        "group_by": metric_query.result_group_by,
+                        "required_output_columns": metric_query.required_output_columns,
+                        "optional_output_columns": metric_query.optional_output_columns,
+                        "source_functions": metric_query.source_functions,
+                        "calculation_namespace": metric_query.calculation_namespace,
+                        "batch_metrics": plan.metric_names,
+                    },
+                )
+            )
+        return tuple(series_by_metric)
+
     def run(self, request: MetricRunRequest) -> MetricTimeSeries:
         """Run a supported metric request and return normalized observations.
 
@@ -76,6 +196,7 @@ class KdbMetricRunner:
         """
 
         plan = self.plan_query(request)
+        self.ensure_calculation_functions(plan.calculation_namespace)
         raw_result = self.client.execute(plan.query)
         plan.validate_result_schema(raw_result)
         return normalize_metric_result(
@@ -93,6 +214,32 @@ class KdbMetricRunner:
                 "calculation_namespace": plan.calculation_namespace,
             },
         )
+
+
+def _coerce_batch_result(
+    result: Any,
+    *,
+    fallback_metric_name: str | None = None,
+) -> dict[str, Any]:
+    """Coerce a q dictionary/Python mapping of metric name to result table."""
+
+    converted = _maybe_to_python(result)
+    if not isinstance(converted, Mapping):
+        if fallback_metric_name is not None:
+            return {fallback_metric_name: converted}
+        raise KdbMetricRunnerError("batch metric result must be a mapping")
+    out: dict[str, Any] = {}
+    for raw_key, value in converted.items():
+        key = _coerce_batch_metric_key(raw_key)
+        out[key] = value
+    return out
+
+
+def _coerce_batch_metric_key(value: Any) -> str:
+    if isinstance(value, bytes):
+        return value.decode()
+    key = str(value)
+    return key[1:] if key.startswith("`") else key
 
 
 def normalize_metric_result(

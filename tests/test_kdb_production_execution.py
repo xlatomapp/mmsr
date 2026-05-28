@@ -131,7 +131,8 @@ def test_production_query_requests_are_daily_and_use_date_syms_source_args() -> 
     assert ".desk.mmsrCalc.calcActivity:{" in query_plan.query
     assert "rawRefs: select from (.sb.mmsr.getRef[2026.05.01]);" in query_plan.query
     assert 'refs: `sym xkey select from rawRefs where sym in ($"7203";$"6758");' in query_plan.query
-    assert "trades: (.sb.mmsr.getTrade[2026.05.01;0!refs]) lj refs" in query_plan.query
+    assert "rawTrades: (.sb.mmsr.getTrade[2026.05.01;0!refs]);" in query_plan.query
+    assert "calcActivity[rawTrades;refs]" in query_plan.query
 
 def test_production_planner_rejects_calendar_dates_outside_period() -> None:
     config = ReportConfig(title="Daily Monitor", metrics=["turnover"])
@@ -342,6 +343,7 @@ class FakeRunner:
     def __init__(self) -> None:
         self.requests = []
         self.planned_requests = []
+        self.batch_requests = []
 
     def plan_query(self, request):  # type: ignore[no-untyped-def]
         self.planned_requests.append(request)
@@ -349,6 +351,14 @@ class FakeRunner:
 
     def run(self, request):  # type: ignore[no-untyped-def]
         self.requests.append(request)
+        return self._series_for_request(request)
+
+    def run_batch(self, requests):  # type: ignore[no-untyped-def]
+        self.batch_requests.append(tuple(requests))
+        self.requests.extend(requests)
+        return tuple(self._series_for_request(request) for request in requests)
+
+    def _series_for_request(self, request):  # type: ignore[no-untyped-def]
         day = request.period.start_date
         return MetricTimeSeries.from_observations(
             [
@@ -424,6 +434,36 @@ def test_production_executor_uses_calendar_and_combines_metric_series() -> None:
         date(2026, 5, 1),
         date(2026, 5, 4),
     )
+
+def test_production_executor_batches_metrics_by_day_and_symbol_chunk() -> None:
+    config = ReportConfig(
+        title="Daily Monitor",
+        metrics=["turnover", "quoted_spread_bps"],
+        group_by=["sym"],
+        kdb=KdbExecutionConfig(symbol_chunk_size=1),
+    )
+    runner = FakeRunner()
+    executor = KdbProductionExecutor(
+        runner=runner,  # type: ignore[arg-type]
+        calendar_source=FakeCalendar(),
+    )
+
+    series = executor.run(
+        config=config,
+        period=_period(),
+        symbols=["7203", "6758"],
+    )
+
+    assert [item.metric_name for item in series] == ["turnover", "quoted_spread_bps"]
+    assert len(runner.batch_requests) == 4  # 2 days * 2 chunks
+    assert all(len(batch) == 2 for batch in runner.batch_requests)
+    assert len(runner.requests) == 8  # 2 days * 2 chunks * 2 metrics
+    assert all(
+        step["batch_metric_count"] == 2
+        for metric_series in series
+        for step in metric_series.metadata["steps"]
+    )
+
 
 def test_production_executor_run_reference_marks_reference_metadata() -> None:
     config = ReportConfig(

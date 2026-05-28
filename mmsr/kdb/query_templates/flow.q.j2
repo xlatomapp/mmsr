@@ -1,11 +1,11 @@
 / Signed flow compatibility template.
 / Flow still requires an aggressorSide column on the enriched trade source.
+/ The final expression returns the aggregated table to PyKX; MMSR does not
+/ persist an intermediate or result table in kdb.
 
-{{ calculation_namespace }}.calcFlow:{
-    rawRefs: select from {{ ref_table }};
-    refs: `sym xkey select from rawRefs where {{ ref_filter }};
-    trades: {{ trades_table }} lj refs;
-    select
+{{ calculation_namespace }}.calcFlow:{[rawTrades;refs]
+    trades: rawTrades lj refs;
+    result: select
         signed_turnover: sum aggressorSide * tradePrice * tradeSize,
         trade_imbalance: (sum aggressorSide * tradeSize) % sum tradeSize,
         signed_volume: sum aggressorSide * tradeSize,
@@ -16,7 +16,7 @@
     where {{ date_filter }}{{ symbol_filter }},
           tradePrice > 0,
           tradeSize > 0,
-          aggressorSide in (1 -1)
+          aggressorSide in (1 -1);
+    result
     };
 
-{{ calculation_namespace }}.calcFlow[]

@@ -21,27 +21,13 @@
 /
 / Reversion convention: inferred aggressorSide * (future TSE/primary mid - primary mid at trade) / future TSE/primary mid * 10000.
 / Aggressor side is inferred from each trade's own PTS venue/symbol prevailing quote.
+/ The final expression returns the aggregated table to PyKX; no result table is
+/ persisted in kdb.
 
-{{ calculation_namespace }}.weightedAverage:{[weights;values] wavg[weights; values]};
-{{ calculation_namespace }}.positiveRatio:{[values] avg values > 0};
-{{ calculation_namespace }}.sumNotional:{[price;size] sum price * size};
-{{ calculation_namespace }}.rowCount:{[rows] count rows};
-{{ calculation_namespace }}.inferAggressorSide:{[tradePrice;mid] ?[tradePrice>mid;1;?[tradePrice<mid;-1;0]]};
-{{ calculation_namespace }}.timeBucket:{[t;session;auction;bucket]
-    labels:`$string bucket xbar t;
-    labels[where (auction = `open) & session = `am]:`AMO;
-    labels[where (auction = `close) & session = `am]:`AMC;
-    labels[where (auction = `open) & session = `pm]:`PMO;
-    labels[where (auction = `close) & session = `pm]:`PMC;
-    labels
-    };
-
-{{ calculation_namespace }}.calcToxicityReversion:{
-    rawRefs: select from {{ ref_table }};
-    refs: `sym xkey select from rawRefs where {{ ref_filter }};
-    rawPtsTrades: {{ pts_trades_table }} lj refs;
-    rawPtsQuotes: {{ pts_quotes_table }} lj refs;
-    rawPrimaryQuotes: {{ primary_quotes_table }} lj refs;
+{{ calculation_namespace }}.calcToxicityReversion:{[rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs]
+    rawPtsTrades: rawPtsTradeRows lj refs;
+    rawPtsQuotes: rawPtsQuoteRows lj refs;
+    rawPrimaryQuotes: rawPrimaryQuoteRows lj refs;
 
     ptsTrades:
         select
@@ -134,7 +120,7 @@
             valid_pts_quote: ptsQuoteAge <= {{ max_pts_quote_age }}
         from tradeWithPostMid;
 
-    select
+    result: select
         {{ value_column }}: {{ calculation_namespace }}.weightedAverage[notional; reversion_bps],
         horizon_sort_order: first horizon_sort_order,
         positive_reversion_ratio: {{ calculation_namespace }}.positiveRatio[reversion_bps],
@@ -149,7 +135,7 @@
           not null ptsMid,
           not null primaryMid,
           not null postMid,
-          postMid > 0
+          postMid > 0;
+    result
     };
 
-{{ calculation_namespace }}.calcToxicityReversion[]

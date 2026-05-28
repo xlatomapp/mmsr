@@ -61,6 +61,21 @@ MMSR installs reusable q aggregation helpers such as `.desk.mmsr.sumNotional`,
 `session` and `auction` columns returned by your source functions, so production
 configs should not hard-code static session start/end times.
 
+The live data path is intentionally streaming-by-result rather than persisted in
+kdb. Production execution is batched by one trading day and one symbol chunk.
+For each day/chunk batch, the rendered q query builds `refs` from the raw
+reference universe, calls each configured raw source function at most once for
+the source roles required by the configured metrics, and then passes the loaded
+raw tables into MMSR calculation functions such as
+`.desk.mmsr.calcFlow[rawTrades;refs]`. The top-level q expression returns a
+dictionary keyed by metric name, where each value is the aggregated result table
+for that metric. PyKX returns that dictionary to Python through
+`KdbClient.execute`; `KdbMetricRunner` validates each metric output schema and
+normalizes each table into `MetricTimeSeries` for report rendering and reference
+comparison. MMSR does not persist result tables in kdb unless a future
+operator-owned sink is explicitly added.
+
+
 `config/report.production_minimal.yaml` is the recommended first live-kdb
 configuration in the repo. The same example is packaged in
 `mmsr/examples/config/live_kdb_report.yaml` for installed wheels/sdists. It is
@@ -295,6 +310,11 @@ The required user q function signatures are positional and intentionally small:
 .sb.mmsr.getPtsTrade[date;ref]
 .sb.mmsr.getPtsQuote[date;ref]
 ```
+
+Trade rows may include `auction` so MMSR can label `AMO`/`AMC`/`PMO`/`PMC`
+buckets. Quote rows are continuous-session rows only; `getQuote` and
+`getPtsQuote` are not expected to return an `auction` column, and quote metrics
+use `timeBucketContinuous[time;bucket]`.
 
 `getRef[date]` controls the active universe for the date and returns one row per
 analysis symbol with at least `date`, `sym`, `ric`, `topixCapGrp`, and `lotSize`.
@@ -539,3 +559,62 @@ target/current series, the default report includes a `Reference and Target Daily
 Trends` page. This plots the reference trading days followed by the target period
 on a daily x-axis so reviewers can see the time series that produced the
 comparison summary.
+
+
+## Production q-side execution shape
+
+Production kdb runs now execute one trading day at a time. Python obtains the
+day's reference universe, passes an explicit `allSyms` vector and `chunkSize`
+into the rendered q wrapper, and q cuts the symbols into chunks internally. For
+each chunk, q loads the required raw sources once, passes the loaded trade/quote
+tables into MMSR calc functions, razes the chunk outputs inside kdb, and returns
+final metric result tables to Python via PyKX.
+
+The default rollup levels are configured under `data.kdb.aggregation_levels`:
+
+- `market`
+- `market_bucket`
+- `topix_cap_group`
+- `topix_cap_group_bucket`
+- `symbol`
+- `symbol_bucket`
+
+Quote source contracts no longer require an `auction` column. Quotes are treated
+as continuous-session rows and use continuous intraday buckets; trade-side
+calculations still use auction labels where trade rows expose `session` and
+`auction`.
+
+Rendered q templates are stored as `mmsr/kdb/query_templates/*.q.j2` to avoid
+confusing them with directly loadable q libraries. The loader still accepts
+legacy `.q` template names from Python APIs and maps them to `.q.j2` resources.
+
+
+### kdb calculation library loading
+
+MMSR keeps reusable q utilities in one package-owned library:
+
+```text
+mmsr/kdb/q_lib/mmsr_calculations.q.j2
+```
+
+`KdbMetricRunner` renders this library into the configured `calculation_namespace`
+and installs it into a real PyKX-backed kdb process before metric execution. The
+per-metric files under `mmsr/kdb/query_templates/*.q.j2` are rendered wrappers
+for configured source functions and metric-specific expressions; they no longer
+repeat shared utility definitions such as `timeBucket`, `timeBucketContinuous`,
+`sumNotional`, or `rollupMetricResult`.
+
+This keeps the runtime shape clear:
+
+```text
+install MMSR q library once per namespace
+for each trading day:
+  q cuts symbols into chunks
+  q loads trade/quote/PTS sources once per chunk
+  q calculates chunk facts/results
+  q razes and rollups requested aggregation levels
+  PyKX returns the final result tables to Python
+```
+
+Quote source functions are continuous-session quote sources and do not need an
+`auction` column. Auction-aware bucketing remains trade-only.

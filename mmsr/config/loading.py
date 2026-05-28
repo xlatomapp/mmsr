@@ -243,6 +243,20 @@ def _kdb_config(
             section.get("symbol_chunk_group_by", ["sym"]),
             "data.kdb.symbol_chunk_group_by",
         ),
+        aggregation_levels=_string_sequence(
+            section.get(
+                "aggregation_levels",
+                [
+                    "market",
+                    "market_bucket",
+                    "topix_cap_group",
+                    "topix_cap_group_bucket",
+                    "symbol",
+                    "symbol_bucket",
+                ],
+            ),
+            "data.kdb.aggregation_levels",
+        ),
     )
 
 

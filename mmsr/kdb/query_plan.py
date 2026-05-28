@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import date, time
 from typing import Any
 
-from mmsr.kdb.query_loader import load_q_template, render_template
+from mmsr.kdb.query_loader import load_q_template, render_template, template_parameters
 from mmsr.kdb.schema_contracts import (
     QTemplateInputTableSchemaContract,
     QTemplateOutputSchemaContract,
@@ -163,6 +163,49 @@ class RenderedMetricQuery:
         self.output_contract.validate_result(result)
 
 
+
+@dataclass(frozen=True)
+class RenderedMetricBatchQuery:
+    """Rendered q query that loads one day/chunk once and returns metric tables.
+
+    The q expression returns a dictionary keyed by metric name. Each dictionary
+    value is the aggregated result table for that metric, which Python validates
+    and normalizes using the same per-metric output contracts as single-metric
+    execution.
+    """
+
+    query: str
+    metric_queries: tuple[RenderedMetricQuery, ...]
+
+    @property
+    def metric_names(self) -> tuple[str, ...]:
+        """Metric names returned by the batch query in dictionary order."""
+
+        return tuple(metric_query.metric_name for metric_query in self.metric_queries)
+
+
+@dataclass(frozen=True)
+class RenderedMetricDayQuery:
+    """Rendered q query that runs all symbol chunks for one trading day.
+
+    The expression receives explicit ``allSyms`` and ``chunkSize`` values, cuts
+    the universe inside q, loads raw sources once per chunk, razes chunk outputs
+    inside q, applies q-side rollups, and returns a dictionary keyed by metric
+    name for PyKX normalization.
+    """
+
+    query: str
+    metric_queries: tuple[RenderedMetricQuery, ...]
+    all_symbols: tuple[str, ...]
+    chunk_size: int
+
+    @property
+    def metric_names(self) -> tuple[str, ...]:
+        """Metric names returned by the day query in dictionary order."""
+
+        return tuple(metric_query.metric_name for metric_query in self.metric_queries)
+
+
 class KdbMetricQueryPlanner:
     """Render metric q and expose source/output schema contracts without IO."""
 
@@ -181,40 +224,13 @@ class KdbMetricQueryPlanner:
             request.calculation_namespace,
             "calculation_namespace",
         )
-        params = {
-            **_source_parameters(
-                template_name=template_name,
-                table_names=request.table_names,
-                source_functions=request.source_functions,
-                request=request,
-            ),
-            "date_filter": _date_filter(
-                request.period.start_date,
-                request.period.end_date,
-            ),
-            "bucket_expr": _bucket_expr(request.period.bucket, calculation_namespace),
-            "group_by": _group_by_suffix(query_group_by),
-            "calculation_namespace": calculation_namespace,
-            "ref_filter": _ref_symbol_filter(request.parameters),
-        }
-        if template_name in {
-            "activity.q",
-            "liquidity.q",
-            "liquidity_ticks.q",
-            "realized_volatility.q",
-            "flow.q",
-            "effective_spread.q",
-            "price_impact.q",
-        }:
-            params["symbol_filter"] = _optional_symbol_filter(request.parameters)
-        if template_name == "effective_spread.q":
-            params.update(_effective_spread_template_parameters(request))
-        if template_name == "price_impact.q":
-            params.update(_price_impact_template_parameters(request))
-        if template_name == _REVERSION_TEMPLATE:
-            params.update(_reversion_template_parameters(request))
+        params = _template_parameters_for_request(request)
 
-        query = render_template(template, params)
+        rendered_template = _render_template_with_used_params(template, params)
+        query = rendered_template + "\n" + _single_metric_execution_block(
+            template_name=template_name,
+            params=params,
+        )
         return RenderedMetricQuery(
             metric_name=request.metric.name,
             template_name=template_name,
@@ -241,6 +257,182 @@ class KdbMetricQueryPlanner:
                 metric_name=request.metric.name,
                 group_by=result_group_by,
             ),
+        )
+
+    def render_day(
+        self,
+        requests: Sequence[MetricRunRequest],
+    ) -> RenderedMetricDayQuery:
+        """Render one q query for all chunks and metrics for one trading day.
+
+        This is the production-oriented path: Python passes an explicit symbol
+        universe and chunk size, while q performs the chunk loop, source loading,
+        ``raze``/``uj`` style concatenation, and final report rollups.
+        """
+
+        clean_requests = tuple(requests)
+        if not clean_requests:
+            raise KdbMetricQueryPlanError("day query requires at least one request")
+
+        _validate_day_request_compatibility(clean_requests)
+
+        representative_requests = _representative_metric_requests(clean_requests)
+        metric_queries = tuple(self.render(request) for request in representative_requests)
+        batch_params = _day_source_parameters(
+            _batch_source_parameters(representative_requests),
+            clean_requests[0].period.start_date,
+        )
+        source_roles = _batch_source_roles(representative_requests)
+        calculation_namespace = _q_namespace(
+            clean_requests[0].calculation_namespace,
+            "calculation_namespace",
+        )
+        all_symbols = _day_symbol_values(clean_requests)
+        chunk_size = _day_chunk_size(clean_requests, all_symbols)
+        aggregation_levels = _aggregation_level_values(clean_requests[0].parameters)
+
+        template_blocks: list[str] = []
+        seen_templates: set[str] = set()
+        for metric_query, request in zip(metric_queries, representative_requests, strict=True):
+            if metric_query.template_name in seen_templates:
+                continue
+            seen_templates.add(metric_query.template_name)
+            template_blocks.append(
+                _render_template_with_used_params(
+                    load_q_template(metric_query.template_name),
+                    _template_parameters_for_request(request),
+                )
+            )
+
+        chunk_metric_lines: list[str] = []
+        chunk_result_symbols: list[str] = []
+        chunk_result_variables: list[str] = []
+        for index, request in enumerate(representative_requests, start=1):
+            template_name = template_for_metric(request.metric.name)
+            variable = f"chunkMetricResult{index}"
+            chunk_metric_lines.append(
+                f"            {variable}: {_metric_call_expression(template_name, calculation_namespace)};"
+            )
+            chunk_result_symbols.append(_q_symbol_from_string(request.metric.name))
+            chunk_result_variables.append(variable)
+
+        day_metric_lines: list[str] = []
+        result_symbols: list[str] = []
+        result_variables: list[str] = []
+        for index, metric_query in enumerate(metric_queries, start=1):
+            variable = f"metricResult{index}"
+            metric_symbol = _q_symbol_from_string(metric_query.metric_name)
+            result_symbols.append(metric_symbol)
+            result_variables.append(variable)
+            day_metric_lines.append(
+                "    "
+                + f"{variable}: {calculation_namespace}.rollupMetricResult["
+                + f"raze {{x[{metric_symbol}]}} each chunkResults;"
+                + f"{metric_symbol};"
+                + "requestedAggregationLevels];"
+            )
+
+        body_lines = [
+            "{[runDate;allSyms;chunkSize;requestedAggregationLevels]",
+            "    chunks: $[0=count allSyms; enlist 0#`; chunkSize cut allSyms];",
+            "    chunkResults: { [chunkSyms]",
+            f"            rawRefs: select from {batch_params['ref_table']};",
+            "            refs: `sym xkey select from rawRefs where sym in chunkSyms;",
+        ]
+        body_lines.extend("        " + line.strip() for line in _batch_source_load_lines(source_roles, batch_params))
+        body_lines.extend(chunk_metric_lines)
+        body_lines.append(
+            "            "
+            + _q_symbol_list(chunk_result_symbols)
+            + "!("
+            + ";".join(chunk_result_variables)
+            + ")"
+        )
+        body_lines.append("        } each chunks;")
+        body_lines.extend(day_metric_lines)
+        body_lines.append(
+            "    "
+            + _q_symbol_list(result_symbols)
+            + "!("
+            + ";".join(result_variables)
+            + ")"
+        )
+        body_lines.append(
+            f"    }}[{_q_date(clean_requests[0].period.start_date)};"
+            f"{_q_symbol_vector_from_strings(all_symbols)};"
+            f"{chunk_size};"
+            f"{_q_symbol_vector(aggregation_levels, 'aggregation_levels')}]"
+        )
+
+        return RenderedMetricDayQuery(
+            query="\n".join((*template_blocks, *body_lines)),
+            metric_queries=metric_queries,
+            all_symbols=all_symbols,
+            chunk_size=chunk_size,
+        )
+
+
+    def render_batch(
+        self,
+        requests: Sequence[MetricRunRequest],
+    ) -> RenderedMetricBatchQuery:
+        """Render one q query for one day/chunk and multiple metrics.
+
+        The batch query sources reference/trade/quote tables once, passes those
+        raw tables into each MMSR calculation function, and returns a q
+        dictionary of aggregated result tables keyed by metric name.
+        """
+
+        clean_requests = tuple(requests)
+        if not clean_requests:
+            raise KdbMetricQueryPlanError("batch query requires at least one request")
+
+        metric_queries = tuple(self.render(request) for request in clean_requests)
+        _validate_batch_request_compatibility(clean_requests)
+
+        batch_params = _batch_source_parameters(clean_requests)
+        source_roles = _batch_source_roles(clean_requests)
+        body_lines = [
+            "{[]",
+            f"    rawRefs: select from {batch_params['ref_table']};",
+            f"    refs: `sym xkey select from rawRefs where {batch_params['ref_filter']};",
+            "    chunkSyms: exec sym from 0!refs;",
+        ]
+        body_lines.extend(_batch_source_load_lines(source_roles, batch_params))
+        result_symbols: list[str] = []
+        result_variables: list[str] = []
+        for index, (request, metric_query) in enumerate(
+            zip(clean_requests, metric_queries, strict=True),
+            start=1,
+        ):
+            params = _template_parameters_for_request(request)
+            rendered_template = _render_template_with_used_params(
+                load_q_template(metric_query.template_name),
+                params,
+            )
+            result_variable = f"metricResult{index}"
+            body_lines.append("")
+            body_lines.extend(
+                "    " + line if line else ""
+                for line in rendered_template.splitlines()
+            )
+            body_lines.append(
+                f"    {result_variable}: {_metric_call_expression(metric_query.template_name, metric_query.calculation_namespace)};"
+            )
+            result_symbols.append(_q_symbol_from_string(metric_query.metric_name))
+            result_variables.append(result_variable)
+
+        body_lines.append(
+            "    "
+            + _q_symbol_list(result_symbols)
+            + "!("
+            + ";".join(result_variables)
+            + ")"
+        )
+        body_lines.append("    }[]")
+        return RenderedMetricBatchQuery(
+            query="\n".join(body_lines),
+            metric_queries=metric_queries,
         )
 
 
@@ -437,6 +629,345 @@ def _reference_extra_columns(query_group_by: Sequence[str]) -> tuple[str, ...]:
     return tuple(_dedupe(list(query_group_by)))
 
 
+
+def _render_template_with_used_params(
+    template: str,
+    params: Mapping[str, str],
+) -> str:
+    """Render q template using only placeholders that the template defines."""
+
+    required = template_parameters(template)
+    return render_template(
+        template,
+        {name: params[name] for name in required},
+    )
+
+
+def _template_parameters_for_request(request: MetricRunRequest) -> dict[str, str]:
+    """Return all render parameters for a single metric request."""
+
+    template_name = template_for_metric(request.metric.name)
+    query_group_by = _query_group_by_for_template(template_name, request.group_by)
+    calculation_namespace = _q_namespace(
+        request.calculation_namespace,
+        "calculation_namespace",
+    )
+    params = {
+        **_source_parameters(
+            template_name=template_name,
+            table_names=request.table_names,
+            source_functions=request.source_functions,
+            request=request,
+        ),
+        "date_filter": _date_filter(
+            request.period.start_date,
+            request.period.end_date,
+        ),
+        "bucket_expr": _bucket_expr_for_template(
+            template_name,
+            request.period.bucket,
+            calculation_namespace,
+        ),
+        "group_by": _group_by_suffix(query_group_by),
+        "calculation_namespace": calculation_namespace,
+        "ref_filter": _ref_symbol_filter(request.parameters),
+    }
+    if template_name in {
+        "activity.q",
+        "liquidity.q",
+        "liquidity_ticks.q",
+        "realized_volatility.q",
+        "flow.q",
+        "effective_spread.q",
+        "price_impact.q",
+    }:
+        params["symbol_filter"] = _optional_symbol_filter(request.parameters)
+    if template_name == "effective_spread.q":
+        params.update(_effective_spread_template_parameters(request))
+    if template_name == "price_impact.q":
+        params.update(_price_impact_template_parameters(request))
+    if template_name == _REVERSION_TEMPLATE:
+        params.update(_reversion_template_parameters(request))
+    return params
+
+
+def _single_metric_execution_block(
+    *,
+    template_name: str,
+    params: Mapping[str, str],
+) -> str:
+    """Return the top-level q expression for a single metric query."""
+
+    source_roles = _source_roles_for_template(template_name)
+    lines = [
+        "{[]",
+        f"    rawRefs: select from {params['ref_table']};",
+        f"    refs: `sym xkey select from rawRefs where {params['ref_filter']};",
+        "    chunkSyms: exec sym from 0!refs;",
+    ]
+    lines.extend(_batch_source_load_lines(source_roles, params))
+    lines.append(
+        f"    result: {_metric_call_expression(template_name, params['calculation_namespace'])};"
+    )
+    lines.append("    result")
+    lines.append("    }[]")
+    return "\n".join(lines)
+
+
+def _metric_call_expression(template_name: str, calculation_namespace: str) -> str:
+    """Return the q call that passes already-loaded raw rows into calc function."""
+
+    calls = {
+        "activity.q": f"{calculation_namespace}.calcActivity[rawTrades;refs]",
+        "liquidity.q": f"{calculation_namespace}.calcLiquidity[rawQuotes;refs]",
+        "liquidity_ticks.q": (
+            f"{calculation_namespace}.calcLiquidityTicks[rawQuotes;refs]"
+        ),
+        "realized_volatility.q": (
+            f"{calculation_namespace}.calcRealizedVolatility[rawQuoteRows;refs]"
+        ),
+        "flow.q": f"{calculation_namespace}.calcFlow[rawTrades;refs]",
+        "effective_spread.q": (
+            f"{calculation_namespace}.calcEffectiveSpread["
+            "rawTradeRows;rawQuoteRows;refs]"
+        ),
+        "price_impact.q": (
+            f"{calculation_namespace}.calcPriceImpact["
+            "rawTradeRows;rawQuoteRows;refs]"
+        ),
+        _REVERSION_TEMPLATE: (
+            f"{calculation_namespace}.calcToxicityReversion["
+            "rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs]"
+        ),
+    }
+    try:
+        return calls[template_name]
+    except KeyError as exc:
+        raise KdbMetricQueryPlanError(
+            f"unsupported q template for metric call: {template_name!r}"
+        ) from exc
+
+
+def _source_roles_for_template(template_name: str) -> tuple[str, ...]:
+    """Return source roles required by one template, excluding reference_data."""
+
+    return tuple(
+        source_key
+        for source_key, _template_parameter in _METRIC_TABLE_PARAMETER_MAP[template_name]
+        if source_key != "reference_data"
+    )
+
+
+def _batch_source_roles(requests: Sequence[MetricRunRequest]) -> tuple[str, ...]:
+    roles: list[str] = []
+    for request in requests:
+        roles.extend(_source_roles_for_template(template_for_metric(request.metric.name)))
+    return tuple(_dedupe(roles))
+
+
+def _batch_source_parameters(requests: Sequence[MetricRunRequest]) -> dict[str, str]:
+    """Return source parameters shared by a compatible day/chunk batch."""
+
+    merged: dict[str, str] = {}
+    for request in requests:
+        params = _template_parameters_for_request(request)
+        for key, value in params.items():
+            if key.endswith("_table") or key == "ref_filter":
+                existing = merged.get(key)
+                if existing is not None and existing != value:
+                    raise KdbMetricQueryPlanError(
+                        f"batch request has conflicting q source parameter {key!r}"
+                    )
+                merged[key] = value
+    if "ref_table" not in merged:
+        raise KdbMetricQueryPlanError("batch query requires reference-data source")
+    merged.setdefault("ref_filter", "1b")
+    return merged
+
+
+def _batch_source_load_lines(
+    source_roles: Sequence[str],
+    params: Mapping[str, str],
+) -> list[str]:
+    """Return q assignments that load each raw source table once."""
+
+    lines: list[str] = []
+    for role in source_roles:
+        local_name = _source_local_name(role)
+        param_name = _source_param_name(role)
+        if param_name not in params:
+            raise KdbMetricQueryPlanError(
+                f"batch query missing source parameter {param_name!r}"
+            )
+        source_expr = params[param_name]
+        lines.append(f"    {local_name}: {source_expr};")
+        if role == "trades":
+            lines.append(f"    rawTradeRows: rawTrades; / rawTradeRows: {source_expr};")
+        elif role == "quotes":
+            lines.append(f"    rawQuoteRows: rawQuotes; / rawQuoteRows: {source_expr};")
+    return lines
+
+
+def _source_param_name(role: str) -> str:
+    mapping = {
+        "trades": "trades_table",
+        "quotes": "quotes_table",
+        "pts_trades": "pts_trades_table",
+        "pts_quotes": "pts_quotes_table",
+        "primary_quotes": "primary_quotes_table",
+    }
+    try:
+        return mapping[role]
+    except KeyError as exc:
+        raise KdbMetricQueryPlanError(f"unsupported source role {role!r}") from exc
+
+
+def _source_local_name(role: str) -> str:
+    mapping = {
+        "trades": "rawTrades",
+        "quotes": "rawQuotes",
+        "pts_trades": "rawPtsTradeRows",
+        "pts_quotes": "rawPtsQuoteRows",
+        "primary_quotes": "rawPrimaryQuoteRows",
+    }
+    try:
+        return mapping[role]
+    except KeyError as exc:
+        raise KdbMetricQueryPlanError(f"unsupported source role {role!r}") from exc
+
+
+def _day_source_parameters(
+    params: Mapping[str, str],
+    trading_day: date,
+) -> dict[str, str]:
+    """Replace the rendered day literal in source calls with the runDate arg."""
+
+    day_literal = _q_date(trading_day)
+    return {
+        key: value.replace(day_literal, "runDate")
+        for key, value in params.items()
+    }
+
+
+def _representative_metric_requests(
+    requests: Sequence[MetricRunRequest],
+) -> tuple[MetricRunRequest, ...]:
+    """Return one request per metric name in the first-seen production order."""
+
+    seen: set[str] = set()
+    out: list[MetricRunRequest] = []
+    for request in requests:
+        if request.metric.name in seen:
+            continue
+        seen.add(request.metric.name)
+        out.append(request)
+    return tuple(out)
+
+
+def _day_symbol_values(requests: Sequence[MetricRunRequest]) -> tuple[str, ...]:
+    """Return explicit day symbols from chunked request parameters."""
+
+    symbols: list[str] = []
+    for request in requests:
+        symbols.extend(_symbol_filter_values(request.parameters))
+    return tuple(_dedupe(symbols))
+
+
+def _day_chunk_size(
+    requests: Sequence[MetricRunRequest],
+    all_symbols: Sequence[str],
+) -> int:
+    """Infer the configured chunk size from production chunk requests."""
+
+    chunk_lengths = [
+        len(_symbol_filter_values(request.parameters))
+        for request in requests
+        if _symbol_filter_values(request.parameters)
+    ]
+    if chunk_lengths:
+        return max(chunk_lengths)
+    return max(1, len(all_symbols))
+
+
+def _aggregation_level_values(parameters: Mapping[str, Any]) -> tuple[str, ...]:
+    """Return requested q-side rollup levels for production day execution."""
+
+    raw = parameters.get(
+        "aggregation_levels",
+        (
+            "market",
+            "market_bucket",
+            "topix_cap_group",
+            "topix_cap_group_bucket",
+            "symbol",
+            "symbol_bucket",
+        ),
+    )
+    if isinstance(raw, str) or not isinstance(raw, Sequence):
+        raise KdbMetricQueryPlanError(
+            "parameter 'aggregation_levels' must be a sequence of strings"
+        )
+    levels = tuple(value for value in raw if isinstance(value, str) and value)
+    if len(levels) != len(raw) or not levels:
+        raise KdbMetricQueryPlanError(
+            "parameter 'aggregation_levels' must contain only non-empty strings"
+        )
+    return levels
+
+
+def _validate_day_request_compatibility(
+    requests: Sequence[MetricRunRequest],
+) -> None:
+    """Validate requests can be run by one q-side day/chunk/rollup call."""
+
+    first = requests[0]
+    first_day = first.period.start_date
+    first_source_functions = dict(first.source_functions)
+    first_table_names = dict(first.table_names)
+    first_namespace = first.calculation_namespace
+    for request in requests:
+        if request.period.start_date != first_day or request.period.end_date != first_day:
+            raise KdbMetricQueryPlanError("day query requests must be single-day")
+        if dict(request.source_functions) != first_source_functions:
+            raise KdbMetricQueryPlanError(
+                "day query requests must share source_functions"
+            )
+        if dict(request.table_names) != first_table_names:
+            raise KdbMetricQueryPlanError("day query requests must share table_names")
+        if request.calculation_namespace != first_namespace:
+            raise KdbMetricQueryPlanError(
+                "day query requests must share calculation_namespace"
+            )
+
+
+def _validate_batch_request_compatibility(
+    requests: Sequence[MetricRunRequest],
+) -> None:
+    first = requests[0]
+    first_symbols = _symbol_filter_values(first.parameters)
+    first_period = first.period
+    first_source_functions = dict(first.source_functions)
+    first_table_names = dict(first.table_names)
+    first_namespace = first.calculation_namespace
+    for request in requests[1:]:
+        if request.period != first_period:
+            raise KdbMetricQueryPlanError(
+                "batch requests must share one trading-day period"
+            )
+        if _symbol_filter_values(request.parameters) != first_symbols:
+            raise KdbMetricQueryPlanError("batch requests must share one symbol chunk")
+        if dict(request.source_functions) != first_source_functions:
+            raise KdbMetricQueryPlanError(
+                "batch requests must share source_functions"
+            )
+        if dict(request.table_names) != first_table_names:
+            raise KdbMetricQueryPlanError("batch requests must share table_names")
+        if request.calculation_namespace != first_namespace:
+            raise KdbMetricQueryPlanError(
+                "batch requests must share calculation_namespace"
+            )
+
+
 def _source_parameters(
     *,
     template_name: str,
@@ -597,7 +1128,7 @@ def _reversion_template_parameters(request: MetricRunRequest) -> dict[str, str]:
             if venues
             else f"(not null venue) & venue <> {primary_venue_symbol}"
         ),
-        "auction_filter": "null auction" if exclude_auction else "1b",
+        "auction_filter": "auction = 0" if exclude_auction else "1b",
         "horizon": _q_duration(horizon, "horizon"),
         "horizon_label": _q_symbol_from_string(horizon),
         "horizon_sort_order": str(_reversion_horizon_sort_order(horizon)),
@@ -745,6 +1276,16 @@ def _symbol_filter_values(parameters: Mapping[str, Any]) -> tuple[str, ...]:
     return (symbol_value,)
 
 
+def _q_symbol_list(rendered_symbols: Sequence[str]) -> str:
+    """Return a q symbol list from already-rendered q symbol expressions."""
+
+    if not rendered_symbols:
+        return "0#`"
+    if len(rendered_symbols) == 1:
+        return f"enlist {rendered_symbols[0]}"
+    return "(" + ";".join(rendered_symbols) + ")"
+
+
 def _q_symbol_vector_from_strings(values: Sequence[str]) -> str:
     if not values:
         return "0#`"
@@ -785,16 +1326,36 @@ def _date_filter(start: date, end: date) -> str:
     return f"date within ({_q_date(start)};{_q_date(end)})"
 
 
+def _bucket_expr_for_template(
+    template_name: str,
+    bucket: IntradayBucketSpec,
+    calculation_namespace: str,
+) -> str:
+    """Return the bucket expression appropriate for trade or quote rows."""
+
+    if template_name in {
+        "liquidity.q",
+        "liquidity_ticks.q",
+        "realized_volatility.q",
+    }:
+        duration = _bucket_duration(bucket)
+        return f"{calculation_namespace}.timeBucketContinuous[time; {duration}]"
+    return _bucket_expr(bucket, calculation_namespace)
+
+
 def _bucket_expr(bucket: IntradayBucketSpec, calculation_namespace: str) -> str:
-    if bucket.unit == "m":
-        duration = f"0D00:{bucket.size:02d}:00.000"
-    elif bucket.unit == "h":
-        duration = f"0D{bucket.size:02d}:00:00.000"
-    elif bucket.unit == "d":
-        duration = "1D00:00:00.000"
-    else:
-        raise KdbMetricQueryPlanError(f"unsupported bucket unit: {bucket.unit}")
+    duration = _bucket_duration(bucket)
     return f"{calculation_namespace}.timeBucket[time; session; auction; {duration}]"
+
+
+def _bucket_duration(bucket: IntradayBucketSpec) -> str:
+    if bucket.unit == "m":
+        return f"0D00:{bucket.size:02d}:00.000"
+    if bucket.unit == "h":
+        return f"0D{bucket.size:02d}:00:00.000"
+    if bucket.unit == "d":
+        return "1D00:00:00.000"
+    raise KdbMetricQueryPlanError(f"unsupported bucket unit: {bucket.unit}")
 
 
 def _group_by_suffix(group_by: Sequence[str]) -> str:

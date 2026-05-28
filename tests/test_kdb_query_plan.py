@@ -86,7 +86,8 @@ def test_query_planner_exposes_activity_input_and_output_contracts() -> None:
     )
     assert ".mmsr.sumNotional[tradePrice; tradeSize]" in plan.query
     assert ".mmsr.sumSize[tradeSize]" in plan.query
-    assert "trades: trade_l1 lj refs" in plan.query
+    assert "rawTrades: trade_l1;" in plan.query
+    assert ".mmsr.calcActivity[rawTrades;refs]" in plan.query
     assert 'sym = $"7203"' in plan.query
 
 
@@ -115,8 +116,6 @@ def test_query_planner_exposes_liquidity_quote_contracts() -> None:
         "date",
         "time",
         "sym",
-        "session",
-        "auction",
         "bidPrice",
         "askPrice",
         "bidSize",
@@ -163,8 +162,6 @@ def test_query_planner_exposes_tick_spread_quote_contracts() -> None:
         "date",
         "time",
         "sym",
-        "session",
-        "auction",
         "bidPrice",
         "askPrice",
         "bidSize",
@@ -207,8 +204,6 @@ def test_query_planner_exposes_realized_volatility_quote_contracts() -> None:
         "date",
         "time",
         "sym",
-        "session",
-        "auction",
         "bidPrice",
         "askPrice",
     )
@@ -304,8 +299,6 @@ def test_query_planner_exposes_effective_spread_trade_quote_contracts() -> None:
         "date",
         "time",
         "sym",
-        "session",
-        "auction",
         "bidPrice",
         "askPrice",
     )
@@ -357,8 +350,6 @@ def test_query_planner_exposes_price_impact_trade_quote_contracts() -> None:
         "date",
         "time",
         "sym",
-        "session",
-        "auction",
         "bidPrice",
         "askPrice",
     )
@@ -536,7 +527,8 @@ def test_query_planner_can_call_user_defined_trade_source_function() -> None:
     assert ".sb.mmsrCalc.calcActivity:{" in plan.query
     assert "rawRefs: select from (.sb.mmsr.getRef[2026.05.01]);" in plan.query
     assert 'refs: `sym xkey select from rawRefs where sym = $"7203";' in plan.query
-    assert "trades: (.sb.mmsr.getTrade[2026.05.01;0!refs]) lj refs" in plan.query
+    assert "rawTrades: (.sb.mmsr.getTrade[2026.05.01;0!refs]);" in plan.query
+    assert "calcActivity[rawTrades;refs]" in plan.query
     assert "`startDate`endDate`startTimes`endTimes`bucket`syms`venues" not in plan.query
     assert "`date`symbolChunkId`symbolChunkCount" not in plan.query
     assert ";2026.05.02;" not in plan.query
@@ -569,7 +561,7 @@ def test_query_planner_can_call_user_defined_quote_source_function() -> None:
     assert ".desk.mmsr.calcLiquidity:{" in plan.query
     assert "rawRefs: select from (.sb.mmsr.getRef[2026.05.01]);" in plan.query
     assert "refs: `sym xkey select from rawRefs where 1b;" in plan.query
-    assert "quotes: (.sb.mmsr.getQuote[2026.05.01;0!refs]) lj refs" in plan.query
+    assert "rawQuotes: (.sb.mmsr.getQuote[2026.05.01;0!refs]);" in plan.query
 
 
 
@@ -593,7 +585,7 @@ def test_query_planner_can_call_user_defined_quote_source_function_for_ticks() -
     assert "tick_size" in plan.input_contracts[0].required_columns
     assert ".desk.mmsr.calcLiquidityTicks:{" in plan.query
     assert "from quotes" in plan.query
-    assert "quotes: (.sb.mmsr.getQuote[2026.05.01;0!refs]) lj refs" in plan.query
+    assert "rawQuotes: (.sb.mmsr.getQuote[2026.05.01;0!refs]);" in plan.query
 
 
 def test_query_planner_can_call_user_defined_trade_source_function_for_flow() -> None:
@@ -615,7 +607,8 @@ def test_query_planner_can_call_user_defined_trade_source_function_for_flow() ->
     assert "aggressorSide" in plan.input_contracts[0].required_columns
     assert ".desk.mmsr.calcFlow:{" in plan.query
     assert "from trades" in plan.query
-    assert "trades: (.sb.mmsr.getTrade[2026.05.01;0!refs]) lj refs" in plan.query
+    assert "rawTrades: (.sb.mmsr.getTrade[2026.05.01;0!refs]);" in plan.query
+    assert "calcFlow[rawTrades;refs]" in plan.query
 
 
 
@@ -644,8 +637,8 @@ def test_query_planner_can_call_user_defined_trade_and_quote_functions_for_effec
     assert plan.input_contracts[0].table_name == ".sb.mmsr.getTrade"
     assert plan.input_contracts[1].table_name == ".sb.mmsr.getQuote"
     assert ".desk.mmsr.calcEffectiveSpread:{" in plan.query
-    assert "rawTrades: (.sb.mmsr.getTrade[2026.05.01;0!refs]) lj refs" in plan.query
-    assert "rawQuotes: (.sb.mmsr.getQuote[2026.05.01;0!refs]) lj refs" in plan.query
+    assert "rawTradeRows: (.sb.mmsr.getTrade[2026.05.01;0!refs]);" in plan.query
+    assert "rawQuoteRows: (.sb.mmsr.getQuote[2026.05.01;0!refs]);" in plan.query
 
 def test_reversion_planner_uses_user_defined_trade_and_quote_source_functions() -> None:
     registry = build_default_registry()
@@ -679,9 +672,9 @@ def test_reversion_planner_uses_user_defined_trade_and_quote_source_functions() 
     assert ".sb.mmsrCalc.calcToxicityReversion:{" in plan.query
     assert "ptsTrades:" in plan.query
     assert "rawRefs: select from (.sb.mmsr.getRef[2026.05.01]);" in plan.query
-    assert "rawPtsTrades: (.sb.mmsr.getPtsTrade[2026.05.01;0!refs]) lj refs" in plan.query
-    assert "rawPtsQuotes: (.sb.mmsr.getPtsQuote[2026.05.01;0!refs]) lj refs" in plan.query
-    assert "rawPrimaryQuotes: (.sb.mmsr.getQuote[2026.05.01;0!refs]) lj refs" in plan.query
+    assert "rawPtsTradeRows: (.sb.mmsr.getPtsTrade[2026.05.01;0!refs]);" in plan.query
+    assert "rawPtsQuoteRows: (.sb.mmsr.getPtsQuote[2026.05.01;0!refs]);" in plan.query
+    assert "rawPrimaryQuoteRows: (.sb.mmsr.getQuote[2026.05.01;0!refs]);" in plan.query
     assert "refs: `sym xkey select from rawRefs where 1b;" in plan.query
     assert "`TSE`SBIJ" in plan.query
 
@@ -724,3 +717,87 @@ def test_query_planner_rejects_invalid_group_identifier_before_execution() -> No
                 table_names={"trades": "trade_l1"},
             )
         )
+
+
+def test_query_planner_renders_day_query_with_explicit_syms_and_q_rollup() -> None:
+    registry = build_default_registry()
+    period = ReportPeriod(
+        start_date=date(2026, 5, 1),
+        end_date=date(2026, 5, 1),
+        bucket=IntradayBucketSpec("5m"),
+    )
+    planner = KdbMetricQueryPlanner()
+    requests = [
+        MetricRunRequest(
+            metric=registry.get("turnover"),
+            period=period,
+            group_by=["topixCapGrp", "sym"],
+            parameters={
+                "symbols": ("7203", "6758"),
+                "aggregation_levels": ("market", "market_bucket", "symbol"),
+            },
+            source_functions={
+                "trades": ".sb.mmsr.getTrade",
+                "quotes": ".sb.mmsr.getQuote",
+                "reference_data": ".sb.mmsr.getRef",
+                "pts_trades": ".sb.mmsr.getPtsTrade",
+                "pts_quotes": ".sb.mmsr.getPtsQuote",
+                "primary_quotes": ".sb.mmsr.getQuote",
+            },
+            calculation_namespace=".desk.mmsr",
+        ),
+        MetricRunRequest(
+            metric=registry.get("quoted_spread_bps"),
+            period=period,
+            group_by=["topixCapGrp", "sym"],
+            parameters={
+                "symbols": ("7203", "6758"),
+                "aggregation_levels": ("market", "market_bucket", "symbol"),
+            },
+            source_functions={
+                "trades": ".sb.mmsr.getTrade",
+                "quotes": ".sb.mmsr.getQuote",
+                "reference_data": ".sb.mmsr.getRef",
+                "pts_trades": ".sb.mmsr.getPtsTrade",
+                "pts_quotes": ".sb.mmsr.getPtsQuote",
+                "primary_quotes": ".sb.mmsr.getQuote",
+            },
+            calculation_namespace=".desk.mmsr",
+        ),
+    ]
+
+    plan = planner.render_day(requests)
+
+    assert plan.metric_names == ("turnover", "quoted_spread_bps")
+    assert plan.all_symbols == ("7203", "6758")
+    assert plan.chunk_size == 2
+    assert "currentSymbolChunk" not in plan.query
+    assert "{[runDate;allSyms;chunkSize;requestedAggregationLevels]" in plan.query
+    assert '($\"7203\";$\"6758\")' in plan.query
+    assert "chunks: $[0=count allSyms; enlist 0#`; chunkSize cut allSyms];" in plan.query
+    assert ".sb.mmsr.getTrade[runDate;0!refs]" in plan.query
+    assert ".sb.mmsr.getQuote[runDate;0!refs]" in plan.query
+    assert "rollupMetricResult[raze" in plan.query
+    assert "`market`market_bucket`symbol" in plan.query
+
+
+def test_query_planner_quote_contracts_do_not_require_tick_state() -> None:
+    contract = KdbMetricQueryPlanner().render(
+        MetricRunRequest(
+            metric=build_default_registry().get("quoted_spread_bps"),
+            period=ReportPeriod(
+                start_date=date(2026, 5, 1),
+                end_date=date(2026, 5, 1),
+                bucket=IntradayBucketSpec("5m"),
+            ),
+            group_by=["topixCapGrp"],
+            source_functions={
+                "quotes": ".sb.mmsr.getQuote",
+                "reference_data": ".sb.mmsr.getRef",
+            },
+        )
+    ).input_contracts[0]
+
+    assert "session" not in contract.required_columns
+    assert "auction" not in contract.required_columns
+    assert "continuous-session" in " ".join(contract.assumptions)

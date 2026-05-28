@@ -1,4 +1,4 @@
-"""Load and render q query templates from package resources."""
+"""Load and render q/Jinja-style query templates from package resources."""
 
 from __future__ import annotations
 
@@ -16,24 +16,44 @@ class QueryTemplateError(ValueError):
 
 
 def load_q_template(name: str) -> str:
-    """Load a q template by filename from the q_templates package directory.
+    """Load a q template by filename from the query_templates package directory.
 
-    Template names must be simple ``.q`` filenames. Path traversal and nested
-    resource paths are rejected so callers cannot load arbitrary files.
+    Template names must be simple ``.q.j2`` filenames. A legacy ``.q`` name is
+    accepted and mapped to ``.q.j2`` so older callers fail less abruptly, but the
+    repository stores rendered templates with the explicit template suffix.
     """
     if not name:
         raise ValueError("q template name must be non-empty")
     if PurePath(name).name != name:
         raise ValueError("q template name must be a filename, not a path")
-    if not name.endswith(".q"):
-        raise ValueError("q template name must end with .q")
+    if name.endswith(".q"):
+        name = name + ".j2"
+    if not name.endswith(".q.j2"):
+        raise ValueError("q template name must end with .q.j2")
 
-    package = "mmsr.kdb.q_templates"
+    package = "mmsr.kdb.query_templates"
     template_path = resources.files(package).joinpath(name)
     if not template_path.is_file():
         raise FileNotFoundError(f"q template not found: {name}")
     return template_path.read_text(encoding="utf-8")
 
+
+
+def load_q_library_template(name: str) -> str:
+    """Load a reusable q library template by filename from the q_lib package."""
+
+    if not name:
+        raise ValueError("q library template name must be non-empty")
+    if PurePath(name).name != name:
+        raise ValueError("q library template name must be a filename, not a path")
+    if not name.endswith(".q.j2"):
+        raise ValueError("q library template name must end with .q.j2")
+
+    package = "mmsr.kdb.q_lib"
+    template_path = resources.files(package).joinpath(name)
+    if not template_path.is_file():
+        raise FileNotFoundError(f"q library template not found: {name}")
+    return template_path.read_text(encoding="utf-8")
 
 def template_parameters(template: str) -> frozenset[str]:
     """Return the unique named placeholders required by ``template``.
@@ -122,6 +142,6 @@ def render_calculation_function_bootstrap(calculation_namespace: str) -> str:
     ):
         raise ValueError(f"invalid calculation_namespace: {calculation_namespace!r}")
     return render_template(
-        load_q_template("calculation_functions.q"),
+        load_q_library_template("mmsr_calculations.q.j2"),
         {"calculation_namespace": calculation_namespace},
     )

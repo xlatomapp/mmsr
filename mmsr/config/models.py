@@ -311,6 +311,14 @@ class KdbExecutionConfig:
     enforce_daily_raw_scope: bool = True
     symbol_chunk_size: int | None = None
     symbol_chunk_group_by: tuple[str, ...] | list[str] = ("sym",)
+    aggregation_levels: tuple[str, ...] | list[str] = (
+        "market",
+        "market_bucket",
+        "topix_cap_group",
+        "topix_cap_group_bucket",
+        "symbol",
+        "symbol_bucket",
+    )
 
     def __post_init__(self) -> None:
         _validate_q_namespace(
@@ -324,6 +332,11 @@ class KdbExecutionConfig:
             "kdb.symbol_chunk_group_by",
         )
         object.__setattr__(self, "symbol_chunk_group_by", chunk_group_by)
+        aggregation_levels = _as_non_empty_tuple(
+            self.aggregation_levels,
+            "kdb.aggregation_levels",
+        )
+        object.__setattr__(self, "aggregation_levels", aggregation_levels)
 
     def source_functions(self) -> dict[str, str]:
         """Return the configured raw data source-function mapping."""
