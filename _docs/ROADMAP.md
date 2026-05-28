@@ -214,6 +214,29 @@ product scope explicitly changes.
 - Tests verify metric registration and basic visual rendering.
 - Terminology uses `reversion` consistently in user-facing docs, metric labels, and report output.
 
+
+
+### Milestone 5 architecture correction — kdb-owned report-day execution
+
+Production kdb execution must use one installed q entry point per trading day.
+Python must not fetch, enumerate, or chunk the production symbol universe. Python
+may pass explicit user-requested universe filters, metric names, metric
+parameters, aggregation levels, source function handles, and chunk size. The
+installed q library must own reference-data loading, universe filtering, symbol
+discovery, symbol chunking, raw source loading, metric dispatch, and rollup.
+
+Exit criteria for this correction:
+
+- Runtime report rendering calls `runReportDay[runDate; reportConfig]`.
+- Rendered production q does not contain Python-built chunk loops or metric
+  lambdas such as `{[rawSources] ...}`.
+- Rendered production q does not log or expose old q template filenames as the
+  runtime execution concept; operator logs use metric family names instead.
+- Full production symbol lists are never fetched from kdb into Python for
+  planning or chunking.
+- Tests cover q-owned symbol discovery/chunking and installed metric dispatch.
+
+
 ## Milestone 6: Reference comparison engine
 
 **Goal:** Compare current metric time series against comparable reference windows without overstating statistical confidence.

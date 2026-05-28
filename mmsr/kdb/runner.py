@@ -19,6 +19,7 @@ from mmsr.kdb.query_plan import (
     RenderedMetricQuery,
     group_by_for_metric_result,
     template_for_metric,
+    metric_family_for_metric,
 )
 from mmsr.metrics.results import MetricObservation, MetricTimeSeries
 
@@ -111,9 +112,8 @@ class KdbMetricRunner:
 
         plan = self.plan_day(requests)
         LOGGER.info(
-            "Running kdb day query: metrics=%s symbols=%s chunk_size=%s",
+            "Running kdb day query: metrics=%s chunk_size=%s universe=kdb-owned",
             ", ".join(plan.metric_names),
-            len(plan.all_symbols),
             plan.chunk_size,
         )
         self.ensure_calculation_functions(plan.metric_queries[0].calculation_namespace)
@@ -140,7 +140,7 @@ class KdbMetricRunner:
                     result=metric_result,
                     group_by=metric_query.result_group_by,
                     metadata={
-                        "template": metric_query.template_name,
+                        "metric_family": metric_family_for_metric(metric_query.metric_name),
                         "query": plan.query,
                         "requested_group_by": metric_query.requested_group_by,
                         "group_by": metric_query.result_group_by,
@@ -149,7 +149,6 @@ class KdbMetricRunner:
                         "source_functions": metric_query.source_functions,
                         "calculation_namespace": metric_query.calculation_namespace,
                         "day_metrics": plan.metric_names,
-                        "all_symbols": plan.all_symbols,
                         "chunk_size": plan.chunk_size,
                         "execution_shape": "day_q_chunk_rollup",
                     },
@@ -189,7 +188,7 @@ class KdbMetricRunner:
                     result=metric_result,
                     group_by=metric_query.result_group_by,
                     metadata={
-                        "template": metric_query.template_name,
+                        "metric_family": metric_family_for_metric(metric_query.metric_name),
                         "query": plan.query,
                         "requested_group_by": metric_query.requested_group_by,
                         "group_by": metric_query.result_group_by,
@@ -213,9 +212,9 @@ class KdbMetricRunner:
 
         plan = self.plan_query(request)
         LOGGER.info(
-            "Running kdb metric query: metric=%s template=%s",
+            "Running kdb metric query: metric=%s family=%s",
             request.metric.name,
-            plan.template_name,
+            metric_family_for_metric(request.metric.name),
         )
         self.ensure_calculation_functions(plan.calculation_namespace)
         raw_result = self.client.execute(plan.query)

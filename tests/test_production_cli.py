@@ -96,7 +96,7 @@ class FakeProductionKdbClient:
             row_date = date(2026, 4, 30)
             volume = 11000
 
-        if "calcLiquidity" in query:
+        if "quoted_spread_bps" in query:
             return [
                 {
                     "date": row_date,
@@ -152,12 +152,11 @@ def test_render_production_report_file_uses_live_execution_path(
     metric_queries = [
         query
         for query in FakeProductionKdbClient.queries
-        if query.strip().startswith(".desk.mmsr.runMetricDay")
+        if query.strip().startswith(".desk.mmsr.runReportDay")
     ]
     assert len(metric_queries) == 3  # one q-side day/chunk/rollup call for target and each reference day
     assert ".sb.mmsr.getTrade" in "\n".join(FakeProductionKdbClient.queries)
-    assert "{[runDate;refs] .sb.mmsr.getTrade[runDate;refs]}" in "\n".join(metric_queries)
-    assert ".desk.mmsr.runMetricDay[" in "\n".join(metric_queries)
+    assert ".desk.mmsr.runReportDay[" in "\n".join(metric_queries)
     assert "2026.04.29" in "\n".join(metric_queries)
     assert "2026.04.30" in "\n".join(metric_queries)
 
@@ -185,9 +184,9 @@ def test_summarize_production_report_plan_queries_calendar_not_metrics(
         date(2026, 4, 30),
     )
     assert summary.metric_names == ("volume",)
-    assert summary.symbol_chunk_count == 2
-    assert summary.target_step_count == 2
-    assert summary.reference_step_count == 4
+    assert summary.symbol_chunk_count == 1
+    assert summary.target_step_count == 1
+    assert summary.reference_step_count == 2
     assert summary.metric_contracts[0].template_name == "activity.q"
     assert len(FakeProductionKdbClient.queries) == 3
     assert "callTradingCalendar" in FakeProductionKdbClient.queries[0]
@@ -211,10 +210,10 @@ def test_summarize_production_report_plan_uses_symbol_function_without_cli_symbo
         kdb_port=5001,
     )
 
-    assert summary.symbol_chunk_count == 2
-    assert summary.target_step_count == 2
-    assert summary.reference_step_count == 4
-    assert any("getRef" in query for query in FakeProductionKdbClient.queries)
+    assert summary.symbol_chunk_count == 1
+    assert summary.target_step_count == 1
+    assert summary.reference_step_count == 2
+    assert not any("getRef" in query for query in FakeProductionKdbClient.queries)
 
 
 def test_preflight_production_report_executes_one_bounded_metric_step(
@@ -238,7 +237,7 @@ def test_preflight_production_report_executes_one_bounded_metric_step(
     assert result.config_title == "Production Preflight Report"
     assert result.trading_days == (date(2026, 5, 1),)
     assert result.preflight_step.metric_name == "volume"
-    assert result.preflight_step.symbols == ("7203", "6758")
+    assert result.preflight_step.symbols == ("7203", "6758", "9984")
     assert result.rendered_query.template_name == "activity.q"
     assert "topixCapGrp" in result.rendered_query.required_output_columns
     assert result.result_row_count == 1
@@ -270,7 +269,7 @@ def test_preflight_production_report_can_select_metric(
     assert result.rendered_query.template_name == "liquidity.q"
     assert "quoted_spread_bps" in result.rendered_query.required_output_columns
     assert ".sb.mmsr.getQuote" in FakeProductionKdbClient.queries[2]
-    assert "calcLiquidity" in FakeProductionKdbClient.queries[2]
+    assert "quoted_spread_bps" in FakeProductionKdbClient.queries[2]
 
 def test_main_render_command_writes_report(tmp_path, monkeypatch, capsys) -> None:
     config_path = tmp_path / "report.yaml"
@@ -359,8 +358,8 @@ def test_main_preflight_command_accepts_metric_selection(
     assert exit_code == 0
     output = capsys.readouterr().out
     assert "Sample metric: quoted_spread_bps" in output
-    assert "Sample template: liquidity.q" in output
-    assert "calcLiquidity" in FakeProductionKdbClient.queries[2]
+    assert "Sample metric family: liquidity" in output
+    assert "quoted_spread_bps" in FakeProductionKdbClient.queries[2]
 
 def test_main_plan_command_prints_summary_without_metric_execution(
     tmp_path,
@@ -396,8 +395,8 @@ def test_main_plan_command_prints_summary_without_metric_execution(
     assert "Production plan summary:" in output
     assert "Target trading days: 1 (2026-05-01)" in output
     assert "Reference trading days: 2 (2026-04-29, 2026-04-30)" in output
-    assert "Symbol chunks per trading day: 2" in output
-    assert "Total metric steps: 6" in output
+    assert "Symbol chunks per trading day: 1" in output
+    assert "Total metric steps: 3" in output
     assert ".sb.mmsr.getTrade" in output
     assert "callTradingCalendar" in FakeProductionKdbClient.queries[0]
     assert all("getTradingCalendar" in query for query in FakeProductionKdbClient.queries[1:])

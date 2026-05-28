@@ -769,16 +769,17 @@ def test_query_planner_renders_day_query_with_explicit_syms_and_q_rollup() -> No
     plan = planner.render_day(requests)
 
     assert plan.metric_names == ("turnover", "quoted_spread_bps")
-    assert plan.all_symbols == ("7203", "6758")
-    assert plan.chunk_size == 2
+    assert plan.chunk_size == 500
     assert "currentSymbolChunk" not in plan.query
-    assert ".desk.mmsr.runMetricDay[" in plan.query
-    assert '($\"7203\";$\"6758\")' in plan.query
-    assert "{[runDate;refs] .sb.mmsr.getTrade[runDate;refs]}" in plan.query
-    assert "{[runDate;refs] .sb.mmsr.getQuote[runDate;refs]}" in plan.query
-    assert "{[runDate;refs] .sb.mmsr.getRef[runDate]}" in plan.query
-    assert "{[rawSources] .desk.mmsr.calcActivity[rawSources`trades;rawSources`refs;`bucket`start_date`end_date!(0D00:05:00.000;2026.05.01;2026.05.01)]}" in plan.query
-    assert "{[rawSources] .desk.mmsr.calcLiquidity[rawSources`quotes;rawSources`refs;`bucket`start_date`end_date!(0D00:05:00.000;2026.05.01;2026.05.01)]}" in plan.query
+    assert ".desk.mmsr.runReportDay[" in plan.query
+    assert ".desk.mmsr.runMetricDay[" not in plan.query
+    assert "chunkMetricResult" not in plan.query
+    assert "{[rawSources]" not in plan.query
+    assert "sourceFunctions" in plan.query
+    assert ".sb.mmsr.getTrade" in plan.query
+    assert ".sb.mmsr.getQuote" in plan.query
+    assert ".sb.mmsr.getRef" in plan.query
+    assert "enlist `symbols!" in plan.query
     assert 'rollupMetricResult[raze {x[$"quoted_spread_bps"]} each chunkResults;requestedAggregationLevels]' not in plan.query
     assert 'rollupMetricResult[raze {x[$"quoted_spread_bps"]} each chunkResults;$"quoted_spread_bps";' not in plan.query
     assert "`market`market_bucket`symbol" in plan.query
@@ -834,7 +835,9 @@ def test_render_day_uses_canonical_q_library_blocks_not_removed_template_files()
         ]
     )
 
-    assert ".calcLiquidity" in plan.query
-    assert ".runMetricDay[" in plan.query
+    assert ".runReportDay[" in plan.query
+    assert ".runMetricDay[" not in plan.query
+    assert ".calcLiquidity" not in plan.query
+    assert "{[rawSources]" not in plan.query
     assert "query_templates" not in plan.query
     assert "liquidity.q.j2" not in plan.query

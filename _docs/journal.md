@@ -8303,3 +8303,67 @@ Removed files:
 ### Open questions
 
 - Does the live kdb `$` error persist after report rendering stops loading metric templates entirely and uses installed parameterized q functions?
+
+
+---
+
+## 2026-05-28 — Move production report-day orchestration into q
+
+### Implemented
+
+- Updated `_docs/ROADMAP.md` with the Milestone 5 architecture correction: production report-day execution must be kdb-owned.
+- Replaced Python-built production day chunk loops and metric lambdas with a single installed q entry point: `runReportDay[runDate; reportConfig]`.
+- Added q-side helpers in `mmsr/kdb/q_lib/mmsr_calculations.q.j2`:
+  - `applyUniverseFilters`
+  - `loadReportSources`
+  - `runMetric`
+  - `runReportDay`
+- Changed `KdbMetricQueryPlanner.render_day()` so Python renders only date, source function handles, metric names, metric parameter dictionaries, universe filters, aggregation levels, and chunk size.
+- Stopped Python production planning from fetching symbol universes or splitting symbol chunks. Optional CLI symbols are passed only as q-side universe filters.
+- Changed production preflight to use the day runner path.
+- Removed `template=` wording from day/single runner logs and day-result metadata in favor of metric family terminology.
+- Updated tests for q-owned symbol discovery, q-owned chunking, and the `runReportDay` execution shape.
+
+### Files changed
+
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `mmsr/kdb/q_lib/mmsr_calculations.q.j2`
+- `mmsr/kdb/query_plan.py`
+- `mmsr/kdb/production.py`
+- `mmsr/kdb/runner.py`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_kdb_production_execution.py`
+- `tests/test_production_cli.py`
+
+### Tests added or updated
+
+- Updated production execution tests to assert one Python request per day/metric with q-owned symbol chunking.
+- Updated query-plan tests to assert production day q uses `runReportDay`, does not contain generated metric lambdas, and does not reference removed template files.
+- Updated production CLI tests to assert `runReportDay` is the production execution entry point.
+
+### Validation
+
+- `PYTHONPATH=. pytest -q` passed.
+- The environment still printed the unrelated spreadsheet runtime warmup warning during Python startup, but it did not prevent tests from passing.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening.
+
+### Estimated milestone completion
+
+- 98%
+
+### Remaining work before milestone completion
+
+- Run `mmsr preflight --verbose` against live kdb to validate `runReportDay` q syntax and source-function invocation with real PyKX.
+- If live q exposes syntax/runtime issues, fix only the q-side top-level runner or source dispatch path.
+
+### Best next deterministic step
+
+- Execute `quoted_spread_bps` preflight with `--verbose` against live kdb and use the logged `runReportDay` query/backtrace to harden q runtime behavior.
+
+### Open questions
+
+- Should explicit CLI `--symbol` filters be passed as PyKX query arguments instead of rendered q literals in a later hardening step?

@@ -31,7 +31,7 @@ def _period() -> ReportPeriod:
         bucket=IntradayBucketSpec("5m"),
     )
 
-def test_production_execution_planner_splits_into_daily_symbol_chunked_requests() -> None:
+def test_production_execution_planner_builds_daily_kdb_owned_requests() -> None:
     config = ReportConfig(
         title="Daily Monitor",
         metrics=["turnover", "quoted_spread_bps"],
@@ -50,15 +50,15 @@ def test_production_execution_planner_splits_into_daily_symbol_chunked_requests(
         symbols=["7203", "6758", "9984"],
     )
 
-    assert len(plan.steps) == 8  # 2 days * 2 symbol chunks * 2 metrics
+    assert len(plan.steps) == 4  # 2 days * 2 metrics; q owns symbol chunking
     assert plan.trading_days == (date(2026, 5, 1), date(2026, 5, 4))
     assert plan.metric_names == ("turnover", "quoted_spread_bps")
 
     first = plan.steps[0]
     assert first.trading_day == date(2026, 5, 1)
     assert first.symbol_chunk_id == 1
-    assert first.symbol_chunk_count == 2
-    assert first.symbols == ("7203", "6758")
+    assert first.symbol_chunk_count == 1
+    assert first.symbols == ("7203", "6758", "9984")
     assert first.request.period.start_date == first.request.period.end_date
     assert first.request.period.start_date == date(2026, 5, 1)
     assert first.request.source_functions == {
@@ -70,13 +70,10 @@ def test_production_execution_planner_splits_into_daily_symbol_chunked_requests(
         "primary_quotes": ".sb.mmsr.getQuote",
     }
     assert first.request.calculation_namespace == ".desk.mmsrCalc"
-    assert first.request.parameters["symbols"] == ("7203", "6758")
+    assert first.request.parameters["symbols"] == ("7203", "6758", "9984")
     assert "symbol_chunk_id" not in first.request.parameters
     assert "symbol_chunk_count" not in first.request.parameters
 
-    third = plan.steps[2]
-    assert third.symbol_chunk_id == 2
-    assert third.symbols == ("9984",)
 
 
 def test_symbol_chunked_market_groups_add_per_symbol_aggregation_key() -> None:
@@ -95,7 +92,7 @@ def test_symbol_chunked_market_groups_add_per_symbol_aggregation_key() -> None:
     )
 
     request = plan.steps[0].request
-    assert request.group_by == ["topixCapGrp", "sym"]
+    assert request.group_by == ["topixCapGrp"]
 
     query_plan = KdbMetricQueryPlanner().render(request)
     assert "calcActivity[rawTrades;refs;" in query_plan.query
@@ -191,9 +188,9 @@ def test_production_reference_plan_uses_previous_trading_days_and_chunks() -> No
     )
     assert window.period.start_date == date(2026, 4, 27)
     assert window.period.end_date == date(2026, 4, 30)
-    assert len(plan.steps) == 6  # 3 reference days * 2 symbol chunks * 1 metric
+    assert len(plan.steps) == 3  # 3 reference days * 1 metric; q owns symbol chunking
     assert plan.steps[0].request.period.start_date == date(2026, 4, 27)
-    assert plan.steps[-1].symbols == ("9984",)
+    assert plan.steps[-1].symbols == ("7203", "6758", "9984")
 
 def test_production_plan_summary_reports_scope_and_contracts() -> None:
     config = ReportConfig(
@@ -224,11 +221,11 @@ def test_production_plan_summary_reports_scope_and_contracts() -> None:
     assert summary.reference_trading_days == (date(2026, 4, 28), date(2026, 4, 30))
     assert summary.metric_names == ("volume", "quoted_spread_bps")
     assert summary.metric_count == 2
-    assert summary.symbol_chunk_count == 2
+    assert summary.symbol_chunk_count == 1
     assert summary.symbol_chunk_group_by == ("sym",)
-    assert summary.target_step_count == 8
-    assert summary.reference_step_count == 8
-    assert summary.total_step_count == 16
+    assert summary.target_step_count == 4
+    assert summary.reference_step_count == 4
+    assert summary.total_step_count == 8
     assert summary.calculation_namespace == ".desk.mmsrCalc"
     assert ("trades", ".sb.mmsr.getTrade") in summary.source_functions
     assert [contract.metric_name for contract in summary.metric_contracts] == [
@@ -242,7 +239,7 @@ def test_production_plan_summary_reports_scope_and_contracts() -> None:
     assert "Production plan summary:" in lines
     assert "Target trading days: 2 (2026-05-01, 2026-05-04)" in lines
     assert "Reference trading days: 2 (2026-04-28, 2026-04-30)" in lines
-    assert "Symbol chunks per trading day: 2" in lines
+    assert "Symbol chunks per trading day: 1" in lines
     assert "Chunk aggregation groups: sym" in lines
     assert "Reference-data universe function: none" in lines
     assert ".sb.mmsr.getTrade" in lines
@@ -297,7 +294,7 @@ def test_production_preflight_can_select_configured_metric(
     assert result.preflight_step.metric_name == metric_name
     assert result.rendered_query.template_name == template_name
     assert metric_name in result.rendered_query.required_output_columns
-    assert source_role in dict(result.rendered_query.source_functions)
+    assert source_role in dict(result.rendered_query.metric_queries[0].source_functions)
     assert len(runner.planned_requests) == 1
     assert len(runner.requests) == 1
     assert runner.requests[0].metric.name == metric_name
@@ -358,6 +355,15 @@ class FakeRunner:
         self.requests.extend(requests)
         return tuple(self._series_for_request(request) for request in requests)
 
+    def plan_day(self, requests):  # type: ignore[no-untyped-def]
+        self.planned_requests.extend(requests)
+        return KdbMetricQueryPlanner().render_day(requests)
+
+    def run_day(self, requests):  # type: ignore[no-untyped-def]
+        self.batch_requests.append(tuple(requests))
+        self.requests.extend(requests)
+        return tuple(self._series_for_request(request) for request in requests)
+
     def _series_for_request(self, request):  # type: ignore[no-untyped-def]
         day = request.period.start_date
         return MetricTimeSeries.from_observations(
@@ -394,14 +400,10 @@ def test_production_executor_uses_symbol_universe_when_symbols_not_explicit() ->
         period=_period(),
     )
 
-    assert symbol_source.requests == [date(2026, 5, 1), date(2026, 5, 4)]
-    assert len(runner.requests) == 3  # 2 symbols on first day, 1 on second day
-    assert [request.parameters["symbols"] for request in runner.requests] == [
-        ("7203",),
-        ("6758",),
-        ("9984",),
-    ]
-    assert len(series[0].observations) == 3
+    assert symbol_source.requests == []
+    assert len(runner.requests) == 2  # 2 days; q owns symbol universe
+    assert all("symbols" not in request.parameters for request in runner.requests)
+    assert len(series[0].observations) == 2
 
 
 def test_production_executor_uses_calendar_and_combines_metric_series() -> None:
@@ -423,11 +425,11 @@ def test_production_executor_uses_calendar_and_combines_metric_series() -> None:
         symbols=["7203", "6758"],
     )
 
-    assert len(runner.requests) == 4  # 2 days * 2 chunks * 1 metric
+    assert len(runner.requests) == 2  # 2 days * 1 metric; q owns chunking
     assert all(req.period.start_date == req.period.end_date for req in runner.requests)
     assert len(series) == 1
     assert series[0].metric_name == "turnover"
-    assert len(series[0].observations) == 4
+    assert len(series[0].observations) == 2
     assert series[0].metadata["execution"] == "production_kdb"
     assert series[0].metadata["raw_scope"] == "trading_day"
     assert series[0].metadata["trading_days"] == (
@@ -455,9 +457,9 @@ def test_production_executor_batches_metrics_by_day_and_symbol_chunk() -> None:
     )
 
     assert [item.metric_name for item in series] == ["turnover", "quoted_spread_bps"]
-    assert len(runner.batch_requests) == 4  # 2 days * 2 chunks
+    assert len(runner.batch_requests) == 2  # 2 days; q owns chunking
     assert all(len(batch) == 2 for batch in runner.batch_requests)
-    assert len(runner.requests) == 8  # 2 days * 2 chunks * 2 metrics
+    assert len(runner.requests) == 4  # 2 days * 2 metrics
     assert all(
         step["batch_metric_count"] == 2
         for metric_series in series

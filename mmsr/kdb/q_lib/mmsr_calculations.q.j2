@@ -402,32 +402,92 @@
     result
     };
 
-{{ calculation_namespace }}.runMetricDay:{[runDate;allSyms;chunkSize;requestedAggregationLevels;sourceLoaders;metricFunctions]
+{{ calculation_namespace }}.applyUniverseFilters:{[refs;universeFilters]
+    filteredRefs: refs;
+    if[`symbols in key universeFilters;
+        if[0<count universeFilters`symbols;
+            filteredRefs: select from filteredRefs where sym in universeFilters`symbols
+            ]
+        ];
+    filteredRefs
+    };
+
+{{ calculation_namespace }}.loadReportSources:{[runDate;refs;sourceFunctions]
+    rawSources: `refs!(enlist refs);
+    if[`trades in key sourceFunctions;
+        rawSources[`trades]: sourceFunctions[`trades][runDate;0!refs]
+        ];
+    if[`quotes in key sourceFunctions;
+        rawSources[`quotes]: sourceFunctions[`quotes][runDate;0!refs]
+        ];
+    if[`pts_trades in key sourceFunctions;
+        rawSources[`pts_trades]: sourceFunctions[`pts_trades][runDate;0!refs]
+        ];
+    if[`pts_quotes in key sourceFunctions;
+        rawSources[`pts_quotes]: sourceFunctions[`pts_quotes][runDate;0!refs]
+        ];
+    if[`primary_quotes in key sourceFunctions;
+        rawSources[`primary_quotes]: sourceFunctions[`primary_quotes][runDate;0!refs]
+        ];
+    rawSources
+    };
+
+{{ calculation_namespace }}.runMetric:{[metricName;rawSources;metricParams]
+    if[metricName in `turnover`volume`trade_count;
+        :{{ calculation_namespace }}.calcActivity[rawSources`trades;rawSources`refs;metricParams]
+        ];
+    if[metricName in `quoted_spread_bps`top_of_book_depth;
+        :{{ calculation_namespace }}.calcLiquidity[rawSources`quotes;rawSources`refs;metricParams]
+        ];
+    if[metricName in enlist `quoted_spread_ticks;
+        :{{ calculation_namespace }}.calcLiquidityTicks[rawSources`quotes;rawSources`refs;metricParams]
+        ];
+    if[metricName in enlist `realized_volatility;
+        :{{ calculation_namespace }}.calcRealizedVolatility[rawSources`quotes;rawSources`refs;metricParams]
+        ];
+    if[metricName in `signed_turnover`trade_imbalance;
+        :{{ calculation_namespace }}.calcFlow[rawSources`trades;rawSources`refs;metricParams]
+        ];
+    if[metricName in enlist `effective_spread_bps;
+        :{{ calculation_namespace }}.calcEffectiveSpread[rawSources`trades;rawSources`quotes;rawSources`refs;metricParams]
+        ];
+    if[metricName in enlist `price_impact_30s_bps;
+        :{{ calculation_namespace }}.calcPriceImpact[rawSources`trades;rawSources`quotes;rawSources`refs;metricParams]
+        ];
+    if[string[metricName] like "primary_quote_reversion_*_bps";
+        :{{ calculation_namespace }}.calcToxicityReversion[
+            rawSources`pts_trades;
+            rawSources`pts_quotes;
+            rawSources`primary_quotes;
+            rawSources`refs;
+            metricParams]
+        ];
+    '(`unsupportedMetric;metricName)
+    };
+
+{{ calculation_namespace }}.runReportDay:{[runDate;reportConfig]
+    sourceFunctions: reportConfig`sourceFunctions;
+    metricNames: reportConfig`metricNames;
+    metricParams: reportConfig`metricParams;
+    universeFilters: reportConfig`universeFilters;
+    requestedAggregationLevels: reportConfig`aggregationLevels;
+    chunkSize: reportConfig`chunkSize;
+
+    rawRefs: sourceFunctions[`reference_data][runDate];
+    refs: `sym xkey {{ calculation_namespace }}.applyUniverseFilters[rawRefs;universeFilters];
+    allSyms: exec sym from 0!refs;
+
     chunks: enlist 0#`;
     if[0<count allSyms; chunks: chunkSize cut allSyms];
-    metricNames: key metricFunctions;
-    chunkResults: { [runDate;sourceLoaders;metricFunctions;chunkSyms]
-            rawRefs: sourceLoaders[`reference_data][runDate;()];
-            refs: `sym xkey select from rawRefs where sym in chunkSyms;
-            rawSources: `rawRefs`refs!(rawRefs;refs);
-            if[`trades in key sourceLoaders;
-                rawSources[`trades]: sourceLoaders[`trades][runDate;0!refs]
-                ];
-            if[`quotes in key sourceLoaders;
-                rawSources[`quotes]: sourceLoaders[`quotes][runDate;0!refs]
-                ];
-            if[`pts_trades in key sourceLoaders;
-                rawSources[`pts_trades]: sourceLoaders[`pts_trades][runDate;0!refs]
-                ];
-            if[`pts_quotes in key sourceLoaders;
-                rawSources[`pts_quotes]: sourceLoaders[`pts_quotes][runDate;0!refs]
-                ];
-            if[`primary_quotes in key sourceLoaders;
-                rawSources[`primary_quotes]: sourceLoaders[`primary_quotes][runDate;0!refs]
-                ];
-            metricNames: key metricFunctions;
-            metricNames!({[rawSources;metricFunction] metricFunction[rawSources]}[rawSources] each value metricFunctions)
-        }[runDate;sourceLoaders;metricFunctions] each chunks;
+
+    chunkResults: { [runDate;refs;sourceFunctions;metricNames;metricParams;chunkSyms]
+            chunkRefs: `sym xkey select from 0!refs where sym in chunkSyms;
+            rawSources: {{ calculation_namespace }}.loadReportSources[runDate;chunkRefs;sourceFunctions];
+            metricNames!({[rawSources;metricParams;metricName]
+                {{ calculation_namespace }}.runMetric[metricName;rawSources;metricParams[metricName]]
+                }[rawSources;metricParams] each metricNames)
+        }[runDate;refs;sourceFunctions;metricNames;metricParams] each chunks;
+
     metricNames!({[chunkResults;requestedAggregationLevels;metricName]
         {{ calculation_namespace }}.rollupMetricResult[
             raze {[metricName;chunkResult] chunkResult[metricName]}[metricName] each chunkResults;

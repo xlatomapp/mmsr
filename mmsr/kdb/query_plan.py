@@ -185,17 +185,15 @@ class RenderedMetricBatchQuery:
 
 @dataclass(frozen=True)
 class RenderedMetricDayQuery:
-    """Rendered q query that runs all symbol chunks for one trading day.
+    """Rendered q query that calls the installed top-level MMSR day runner.
 
-    The expression receives explicit ``allSyms`` and ``chunkSize`` values, cuts
-    the universe inside q, loads raw sources once per chunk, razes chunk outputs
-    inside q, applies q-side rollups, and returns a dictionary keyed by metric
-    name for PyKX normalization.
+    Python renders only validated scalar/report configuration literals. kdb owns
+    reference loading, universe filtering, symbol discovery, chunking, raw source
+    loading, metric dispatch, and rollup.
     """
 
     query: str
     metric_queries: tuple[RenderedMetricQuery, ...]
-    all_symbols: tuple[str, ...]
     chunk_size: int
 
     @property
@@ -203,6 +201,26 @@ class RenderedMetricDayQuery:
         """Metric names returned by the day query in dictionary order."""
 
         return tuple(metric_query.metric_name for metric_query in self.metric_queries)
+
+    @property
+    def required_output_columns(self) -> tuple[str, ...]:
+        """Required columns for a single-metric day query."""
+
+        if len(self.metric_queries) != 1:
+            raise KdbMetricQueryPlanError(
+                "required_output_columns is only defined for single-metric day queries"
+            )
+        return self.metric_queries[0].required_output_columns
+
+    @property
+    def template_name(self) -> str:
+        """Legacy single-metric family identifier for older callers."""
+
+        if len(self.metric_queries) != 1:
+            raise KdbMetricQueryPlanError(
+                "template_name is only defined for single-metric day queries"
+            )
+        return self.metric_queries[0].template_name
 
 
 class KdbMetricQueryPlanner:
@@ -262,7 +280,7 @@ class KdbMetricQueryPlanner:
         self,
         requests: Sequence[MetricRunRequest],
     ) -> RenderedMetricDayQuery:
-        """Render one q call that delegates day execution to the MMSR q library."""
+        """Render one q call to the installed top-level MMSR report-day runner."""
 
         clean_requests = tuple(requests)
         if not clean_requests:
@@ -272,54 +290,50 @@ class KdbMetricQueryPlanner:
 
         representative_requests = _representative_metric_requests(clean_requests)
         metric_queries = tuple(self.render(request) for request in representative_requests)
-        source_roles = _batch_source_roles(representative_requests)
         calculation_namespace = _q_namespace(
             clean_requests[0].calculation_namespace,
             "calculation_namespace",
         )
-        all_symbols = _day_symbol_values(clean_requests)
-        chunk_size = _day_chunk_size(clean_requests, all_symbols)
         aggregation_levels = _aggregation_level_values(clean_requests[0].parameters)
-
-        loader_roles = ("reference_data", *source_roles)
-        source_loaders = _q_function_dictionary(
-            loader_roles,
-            [
-                _q_source_loader_expression(
-                    source_key=role,
-                    table_names=clean_requests[0].table_names,
-                    source_functions=clean_requests[0].source_functions,
-                )
-                for role in loader_roles
-            ],
-            label="source_loaders",
+        chunk_size = _configured_chunk_size(clean_requests[0].parameters)
+        source_roles = _batch_source_roles(representative_requests)
+        source_functions = _source_function_dictionary(
+            ("reference_data", *source_roles),
+            clean_requests[0].table_names,
+            clean_requests[0].source_functions,
         )
-        metric_functions = _q_function_dictionary(
-            [metric_query.metric_name for metric_query in metric_queries],
+        metric_params = _metric_parameter_dictionary(representative_requests)
+        universe_filters = _universe_filter_dictionary(clean_requests[0].parameters)
+
+        report_config = _q_dictionary_expression(
             [
-                _metric_function_expression(
-                    request.metric.name,
-                    metric_query.template_name,
-                    metric_query.calculation_namespace,
-                    request,
-                )
-                for metric_query, request in zip(metric_queries, representative_requests, strict=True)
+                "sourceFunctions",
+                "metricNames",
+                "metricParams",
+                "universeFilters",
+                "aggregationLevels",
+                "chunkSize",
             ],
-            label="metric_functions",
+            [
+                source_functions,
+                _q_symbol_vector_from_strings(
+                    [metric_query.metric_name for metric_query in metric_queries]
+                ),
+                metric_params,
+                universe_filters,
+                _q_symbol_vector(aggregation_levels, "aggregation_levels"),
+                str(chunk_size),
+            ],
+            "report_config",
         )
 
-        query = f"""{calculation_namespace}.runMetricDay[
+        query = f"""{calculation_namespace}.runReportDay[
     {_q_date(clean_requests[0].period.start_date)};
-    {_q_symbol_vector_from_strings(all_symbols)};
-    {chunk_size};
-    {_q_symbol_vector(aggregation_levels, 'aggregation_levels')};
-    {source_loaders};
-    {metric_functions}]"""
+    {report_config}]"""
 
         return RenderedMetricDayQuery(
             query=query,
             metric_queries=metric_queries,
-            all_symbols=all_symbols,
             chunk_size=chunk_size,
         )
 
@@ -391,6 +405,15 @@ def template_for_metric(metric_name: str) -> str:
             f"metric {metric_name!r} is not yet supported by KdbMetricRunner; "
             f"supported metrics: {supported}"
         ) from exc
+
+
+
+
+def metric_family_for_metric(metric_name: str) -> str:
+    """Return the q metric family for logs and diagnostics."""
+
+    template_name = template_for_metric(metric_name)
+    return template_name.removesuffix(".q")
 
 
 def group_by_for_metric_result(metric_name: str, group_by: Sequence[str]) -> list[str]:
@@ -865,6 +888,73 @@ def _q_function_dictionary(
         return f"{rendered_keys}!enlist {values[0]}"
     return f"{rendered_keys}!({';'.join(values)})"
 
+
+
+
+
+def _source_function_dictionary(
+    roles: Sequence[str],
+    table_names: Mapping[str, str],
+    source_functions: Mapping[str, str],
+) -> str:
+    """Return q dictionary of configured source function handles.
+
+    Production report-day execution is kdb-owned; Python only passes handles for
+    user-owned source functions. Direct table-name fallbacks remain for older
+    single/batch callers and are not supported by the report-day runner.
+    """
+
+    keys: list[str] = []
+    values: list[str] = []
+    for role in roles:
+        resolved_role = _resolve_source_key(role, table_names, source_functions)
+        if resolved_role not in source_functions:
+            raise KdbMetricQueryPlanError(
+                "day query requires source_functions for role "
+                f"{role!r}; table-name execution is only supported by legacy "
+                "single/batch query paths"
+            )
+        keys.append(role)
+        values.append(
+            _q_function_identifier(
+                source_functions[resolved_role],
+                f"source_functions[{resolved_role!r}]",
+            )
+        )
+    return _q_function_dictionary(keys, values, label="source_functions")
+
+
+def _metric_parameter_dictionary(requests: Sequence[MetricRunRequest]) -> str:
+    """Return q dictionary keyed by metric name with each metric parameter dict."""
+
+    keys = [request.metric.name for request in requests]
+    values = [_metric_params_expression(request) for request in requests]
+    return _q_dictionary_expression(keys, values, "metric parameter dictionary")
+
+
+def _universe_filter_dictionary(parameters: Mapping[str, Any]) -> str:
+    """Return q dictionary of high-level universe filters.
+
+    Python may pass user-requested CLI/config filters, but it must not discover
+    or render the full production symbol universe. The installed q runner loads
+    refs and derives/chunks the universe in kdb.
+    """
+
+    symbols = _symbol_filter_values(parameters)
+    return _q_dictionary_expression(
+        ["symbols"],
+        [_q_symbol_vector_from_strings(symbols)],
+        "universe filter dictionary",
+    )
+
+
+def _configured_chunk_size(parameters: Mapping[str, Any]) -> int:
+    """Return configured q-side symbol chunk size."""
+
+    value = parameters.get("chunk_size", parameters.get("symbol_chunk_size", 500))
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise KdbMetricQueryPlanError("parameter 'chunk_size' must be a positive integer")
+    return value
 
 
 def _source_roles_for_template(template_name: str) -> tuple[str, ...]:

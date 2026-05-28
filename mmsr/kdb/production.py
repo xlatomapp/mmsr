@@ -18,7 +18,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from mmsr.config.models import ReportConfig
-from mmsr.kdb.query_plan import MetricRunRequest, RenderedMetricQuery
+from mmsr.kdb.query_plan import MetricRunRequest, RenderedMetricQuery, metric_family_for_metric
 from mmsr.kdb.runner import KdbMetricRunner
 from mmsr.kdb.schema_contracts import QTemplateInputTableSchemaContract
 from mmsr.metrics.registry import MetricRegistry, build_default_registry
@@ -136,7 +136,7 @@ class KdbProductionPreflightResult:
     config_title: str
     trading_days: tuple[date, ...]
     preflight_step: ProductionMetricRunStep
-    rendered_query: RenderedMetricQuery
+    rendered_query: object
     result_row_count: int
     checks: tuple[KdbProductionPreflightCheck, ...]
 
@@ -156,8 +156,9 @@ class KdbProductionPreflightResult:
             f"Calendar trading days: {len(self.trading_days)}",
             f"Sample metric: {step.metric_name}",
             f"Sample trading day: {step.trading_day.isoformat()}",
-            f"Sample symbol chunk: {step.symbol_chunk_id}/{step.symbol_chunk_count}",
-            f"Sample template: {self.rendered_query.template_name}",
+            "Sample symbol chunk: kdb-owned",
+            "Sample metric family: "
+            + _metric_family_for_step(step),
             "Required output columns: "
             + ", ".join(self.rendered_query.required_output_columns),
             f"Validated sample rows: {self.result_row_count}",
@@ -232,50 +233,42 @@ class KdbProductionExecutionPlanner:
         symbols: Sequence[str] | None = None,
         symbols_by_day: Mapping[date, Sequence[str]] | None = None,
     ) -> KdbProductionRunPlan:
-        """Return an ordered date/chunk/metric execution plan."""
+        """Return one kdb-owned execution step per trading day and metric.
+
+        Python does not fetch, enumerate, or chunk the full symbol universe.
+        Optional CLI symbols are passed only as a high-level q-side universe
+        filter; the installed q runner loads reference data and creates chunks.
+        """
 
         bounded_days = _validate_trading_days(period, trading_days)
-        day_symbols = _symbols_by_trading_day(
-            trading_days=bounded_days,
-            symbols=symbols,
-            symbols_by_day=symbols_by_day,
-        )
+        explicit_symbols = _clean_string_tuple(symbols or (), "symbols")
         steps: list[ProductionMetricRunStep] = []
         for trading_day in bounded_days:
             daily_period = _daily_period(period, trading_day)
-            symbol_chunks = _symbol_chunks(
-                day_symbols[trading_day],
-                config.kdb.symbol_chunk_size,
-            )
-            for chunk_index, chunk_symbols in enumerate(symbol_chunks, start=1):
-                for metric_name in config.metrics:
-                    metric = self.registry.get(metric_name)
-                    parameters = dict(config.metric_parameters_for(metric_name))
-                    parameters["aggregation_levels"] = tuple(config.kdb.aggregation_levels)
-                    request_group_by = _chunk_safe_group_by(
-                        config.group_by,
-                        chunk_size=config.kdb.symbol_chunk_size,
-                        chunk_group_by=config.kdb.symbol_chunk_group_by,
+            for metric_name in config.metrics:
+                metric = self.registry.get(metric_name)
+                parameters = dict(config.metric_parameters_for(metric_name))
+                parameters["aggregation_levels"] = tuple(config.kdb.aggregation_levels)
+                parameters["chunk_size"] = config.kdb.symbol_chunk_size or 500
+                if explicit_symbols:
+                    parameters["symbols"] = explicit_symbols
+                steps.append(
+                    ProductionMetricRunStep(
+                        trading_day=trading_day,
+                        metric_name=metric_name,
+                        symbol_chunk_id=1,
+                        symbol_chunk_count=1,
+                        symbols=explicit_symbols,
+                        request=MetricRunRequest(
+                            metric=metric,
+                            period=daily_period,
+                            group_by=list(config.group_by),
+                            parameters=parameters,
+                            source_functions=config.kdb.source_functions(),
+                            calculation_namespace=config.kdb.calculation_namespace,
+                        ),
                     )
-                    if chunk_symbols:
-                        parameters["symbols"] = chunk_symbols
-                    steps.append(
-                        ProductionMetricRunStep(
-                            trading_day=trading_day,
-                            metric_name=metric_name,
-                            symbol_chunk_id=chunk_index,
-                            symbol_chunk_count=len(symbol_chunks),
-                            symbols=chunk_symbols,
-                            request=MetricRunRequest(
-                                metric=metric,
-                                period=daily_period,
-                                group_by=list(request_group_by),
-                                parameters=parameters,
-                                source_functions=config.kdb.source_functions(),
-                                calculation_namespace=config.kdb.calculation_namespace,
-                            ),
-                        )
-                    )
+                )
 
         return KdbProductionRunPlan(steps=tuple(steps))
 
@@ -329,10 +322,6 @@ class KdbProductionExecutor:
             period=period,
             trading_days=trading_days,
             symbols=symbols,
-            symbols_by_day=self._symbols_by_day(
-                trading_days,
-                explicit_symbols=symbols,
-            ),
         )
 
     def build_reference_window(
@@ -364,10 +353,6 @@ class KdbProductionExecutor:
             period=window.period,
             trading_days=window.trading_days,
             symbols=symbols,
-            symbols_by_day=self._symbols_by_day(
-                window.trading_days,
-                explicit_symbols=symbols,
-            ),
         )
 
     def build_plan_summary(
@@ -391,10 +376,6 @@ class KdbProductionExecutor:
             period=reference_window.period,
             trading_days=reference_window.trading_days,
             symbols=symbols,
-            symbols_by_day=self._symbols_by_day(
-                reference_window.trading_days,
-                explicit_symbols=symbols,
-            ),
         )
         return KdbProductionPlanSummary(
             config_title=config.title,
@@ -460,10 +441,6 @@ class KdbProductionExecutor:
             period=window.period,
             trading_days=window.trading_days,
             symbols=symbols,
-            symbols_by_day=self._symbols_by_day(
-                window.trading_days,
-                explicit_symbols=symbols,
-            ),
         )
         return self._run_plan(
             config=config,
@@ -762,28 +739,11 @@ class KdbProductionPreflight:
             )
         )
 
-        symbols_by_day = self._symbols_by_day(
-            trading_days,
-            explicit_symbols=symbols,
-        )
-        if symbols_by_day is not None:
-            checks.append(
-                KdbProductionPreflightCheck(
-                    name="symbol_universe_access",
-                    status="passed",
-                    detail=(
-                        f"{sum(len(day_symbols) for day_symbols in symbols_by_day.values())} "
-                        f"symbol assignment(s) across {len(symbols_by_day)} trading day(s)"
-                    ),
-                )
-            )
-
         plan = self.planner.build_plan(
             config=config,
             period=period,
             trading_days=trading_days,
             symbols=symbols,
-            symbols_by_day=symbols_by_day,
         )
         LOGGER.info(
             "Preflight plan built: days=%s metrics=%s steps=%s",
@@ -808,22 +768,23 @@ class KdbProductionPreflight:
             step.symbol_chunk_count,
             len(step.symbols),
         )
-        rendered_query = self.runner.plan_query(step.request)
+        rendered_query = self.runner.plan_day((step.request,))
+        metric_query = rendered_query.metric_queries[0]
         checks.append(
             KdbProductionPreflightCheck(
                 name="query_plan",
                 status="passed",
                 detail=(
-                    f"{rendered_query.template_name} requires "
-                    + ", ".join(rendered_query.required_output_columns)
+                    f"{_metric_family_for_step(step)} family requires "
+                    + ", ".join(metric_query.required_output_columns)
                 ),
             )
         )
 
-        LOGGER.info("Executing preflight sample metric query")
-        series = self.runner.run(step.request)
+        LOGGER.info("Executing preflight sample day query")
+        series = self.runner.run_day((step.request,))[0]
         LOGGER.info(
-            "Preflight sample query returned %s observation(s)",
+            "Preflight sample day query returned %s observation(s)",
             len(series.observations),
         )
         checks.append(
@@ -870,6 +831,10 @@ class KdbProductionPreflight:
             )
             symbols_by_day[trading_day] = day_symbols
         return symbols_by_day
+
+
+def _metric_family_for_step(step: ProductionMetricRunStep) -> str:
+    return metric_family_for_metric(step.metric_name)
 
 
 def _preflight_metric_selection(
