@@ -1639,8 +1639,16 @@ def _q_symbol_vector(values: Sequence[str], label: str) -> str:
 
 
 def _q_symbol_from_string(value: str) -> str:
+    """Return a q symbol cast for any string value.
+
+    Numeric Japanese security codes and configuration keys that contain
+    underscores must be rendered with the leading backtick, for example
+    `` `$"7203"`` or `` `$"reference_data"``. Rendering only ``$"..."`` sends an
+    invalid expression to q instead of a symbol.
+    """
+
     escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-    return f'$"{escaped}"'
+    return f'`$"{escaped}"'
 
 
 _DURATION_RE = re.compile(r"^(?P<size>[1-9][0-9]*)(?P<unit>ms|s|m|h)$")

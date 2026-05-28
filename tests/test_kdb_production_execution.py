@@ -123,11 +123,11 @@ def test_production_query_requests_are_daily_and_use_date_syms_source_args() -> 
     ).KdbMetricQueryPlanner().render(rendered)
 
     assert "`date`symbolChunkId`symbolChunkCount" not in query_plan.query
-    assert '($"7203";$"6758")' in query_plan.query
+    assert '(`$"7203";`$"6758")' in query_plan.query
     assert "2026.05.01;1;1]" not in query_plan.query
     assert ".desk.mmsrCalc.calcActivity[rawTrades;refs;" in query_plan.query
     assert "rawRefs: select from (.sb.mmsr.getRef[2026.05.01]);" in query_plan.query
-    assert 'refs: `sym xkey select from rawRefs where sym in ($"7203";$"6758");' in query_plan.query
+    assert 'refs: `sym xkey select from rawRefs where sym in (`$"7203";`$"6758");' in query_plan.query
     assert "rawTrades: (.sb.mmsr.getTrade[2026.05.01;0!refs]);" in query_plan.query
     assert "calcActivity[rawTrades;refs;" in query_plan.query
 

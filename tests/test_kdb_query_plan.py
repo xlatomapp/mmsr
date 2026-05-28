@@ -1,4 +1,5 @@
 from datetime import date, time
+import re
 
 import pytest
 
@@ -88,7 +89,7 @@ def test_query_planner_exposes_activity_input_and_output_contracts() -> None:
     assert "calcActivity[rawTrades;refs;" in plan.query
     assert "rawTrades: trade_l1;" in plan.query
     assert ".mmsr.calcActivity[rawTrades;refs;" in plan.query
-    assert 'sym = $"7203"' in plan.query
+    assert 'sym = `$"7203"' in plan.query
 
 
 def test_query_planner_exposes_liquidity_quote_contracts() -> None:
@@ -172,7 +173,7 @@ def test_query_planner_exposes_tick_spread_quote_contracts() -> None:
     assert "sector" in plan.input_contracts[1].required_columns
     assert "calcLiquidityTicks" in plan.query
     assert ".mmsr.calcLiquidityTicks[rawQuotes;refs;" in plan.query
-    assert 'sym = $"7203"' in plan.query
+    assert 'sym = `$"7203"' in plan.query
 
 
 def test_query_planner_exposes_realized_volatility_quote_contracts() -> None:
@@ -211,7 +212,7 @@ def test_query_planner_exposes_realized_volatility_quote_contracts() -> None:
     assert "sector" in plan.input_contracts[1].required_columns
     assert "calcRealizedVolatility" in plan.query
     assert ".mmsr.calcRealizedVolatility[rawQuoteRows;refs;" in plan.query
-    assert 'sym = $"7203"' in plan.query
+    assert 'sym = `$"7203"' in plan.query
 
 
 def test_query_planner_exposes_flow_trade_contracts() -> None:
@@ -254,7 +255,7 @@ def test_query_planner_exposes_flow_trade_contracts() -> None:
     assert "sector" in plan.input_contracts[1].required_columns
     assert "calcFlow" in plan.query
     assert "calcFlow[rawTrades;refs;" in plan.query
-    assert 'sym = $"7203"' in plan.query
+    assert 'sym = `$"7203"' in plan.query
 
 
 
@@ -305,7 +306,7 @@ def test_query_planner_exposes_effective_spread_trade_quote_contracts() -> None:
     assert "calcEffectiveSpread" in plan.query
     assert "calcEffectiveSpread[rawTradeRows;rawQuoteRows;refs;" in plan.query
     assert "0D00:00:00.500" in plan.query
-    assert 'sym = $"7203"' in plan.query
+    assert 'sym = `$"7203"' in plan.query
 
 
 def test_query_planner_exposes_price_impact_trade_quote_contracts() -> None:
@@ -359,7 +360,7 @@ def test_query_planner_exposes_price_impact_trade_quote_contracts() -> None:
     assert "0D00:00:30.000" in plan.query
     assert "0D00:00:00.500" in plan.query
     assert "0D00:00:02.000" in plan.query
-    assert 'sym = $"7203"' in plan.query
+    assert 'sym = `$"7203"' in plan.query
 
 
 def test_query_planner_exposes_reversion_optional_metadata_contract() -> None:
@@ -526,7 +527,7 @@ def test_query_planner_can_call_user_defined_trade_source_function() -> None:
     assert plan.input_contracts[1].table_name == ".sb.mmsr.getRef"
     assert ".sb.mmsrCalc.calcActivity[rawTrades;refs;" in plan.query
     assert "rawRefs: select from (.sb.mmsr.getRef[2026.05.01]);" in plan.query
-    assert 'refs: `sym xkey select from rawRefs where sym = $"7203";' in plan.query
+    assert 'refs: `sym xkey select from rawRefs where sym = `$"7203";' in plan.query
     assert "rawTrades: (.sb.mmsr.getTrade[2026.05.01;0!refs]);" in plan.query
     assert "calcActivity[rawTrades;refs;" in plan.query
     assert "`startDate`endDate`startTimes`endTimes`bucket`syms`venues" not in plan.query
@@ -783,6 +784,13 @@ def test_query_planner_renders_day_query_with_explicit_syms_and_q_rollup() -> No
     assert 'rollupMetricResult[raze {x[$"quoted_spread_bps"]} each chunkResults;requestedAggregationLevels]' not in plan.query
     assert 'rollupMetricResult[raze {x[$"quoted_spread_bps"]} each chunkResults;$"quoted_spread_bps";' not in plan.query
     assert "`market`market_bucket`symbol" in plan.query
+
+    assert '`$"reference_data"' in plan.query
+    assert '`$"quoted_spread_bps"' in plan.query
+    assert '`$"7203"' in plan.query
+    assert re.search(r'(?<!`)\\$"reference_data"', plan.query) is None
+    assert re.search(r'(?<!`)\\$"quoted_spread_bps"', plan.query) is None
+    assert re.search(r'(?<!`)\\$"7203"', plan.query) is None
 
 
 

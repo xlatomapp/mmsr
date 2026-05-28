@@ -8367,3 +8367,55 @@ Removed files:
 ### Open questions
 
 - Should explicit CLI `--symbol` filters be passed as PyKX query arguments instead of rendered q literals in a later hardening step?
+
+
+---
+
+## 2026-05-28 — Fix q symbol-cast rendering for report-day config dictionaries
+
+### Implemented
+
+- Fixed the central q string-to-symbol literal renderer so arbitrary string symbols render with the required leading backtick, for example `` `$"reference_data"``, `` `$"quoted_spread_bps"``, and `` `$"7203"``.
+- Updated report-day config rendering so dictionary keys and symbol-vector values sent to ``runReportDay`` no longer produce bare ``$"..."`` expressions.
+- Updated legacy single/batch query tests to expect the same canonical q symbol cast for numeric Japanese symbols.
+- Added regression checks that report-day rendered q does not contain bare ``$"reference_data"``, ``$"quoted_spread_bps"``, or ``$"7203"`` without a leading backtick.
+
+### Files changed
+
+- `mmsr/kdb/query_plan.py`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_kdb_metric_runner.py`
+- `tests/test_kdb_production_execution.py`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Updated q rendering expectations for numeric symbol filters and metric-result dictionaries.
+- Added explicit report-day query assertions for backtick-preserving symbol casts in source-function keys, metric names, and explicit symbol filters.
+
+### Validation
+
+- `PYTHONPATH=. pytest -q tests/test_kdb_query_plan.py tests/test_kdb_metric_runner.py tests/test_kdb_production_execution.py` passed.
+- `PYTHONPATH=. pytest -q` passed.
+- Python startup still printed the unrelated spreadsheet runtime warmup warning from the execution environment, but it did not fail the tests.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening.
+
+### Estimated milestone completion
+
+- 98%
+
+### Remaining work before milestone completion
+
+- Run `mmsr preflight --verbose` against live kdb to validate the corrected ``runReportDay`` config dictionary syntax end-to-end.
+- Fix any remaining live q runtime issues in the q-side top-level runner or source dispatch path.
+
+### Best next deterministic step
+
+- Execute `quoted_spread_bps` preflight with `--verbose` against live kdb and use the logged corrected ``runReportDay`` query/backtrace to harden q runtime behavior.
+
+### Open questions
+
+- Should explicit CLI `--symbol` filters be passed as PyKX query arguments instead of rendered q literals in a later hardening step?

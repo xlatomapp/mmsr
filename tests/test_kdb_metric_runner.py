@@ -1,4 +1,5 @@
 from datetime import date, time
+import re
 
 import pytest
 
@@ -141,7 +142,7 @@ def test_kdb_metric_runner_can_bound_starter_query_to_single_symbol() -> None:
     )
 
     assert series.observations[0].group == {"sym": "7203"}
-    assert 'sym = $"7203"' in client.queries[0]
+    assert 'sym = `$"7203"' in client.queries[0]
 
 
 def test_kdb_metric_runner_renders_liquidity_query_without_group_columns() -> None:
@@ -220,9 +221,9 @@ def test_kdb_metric_runner_batch_loads_sources_once_and_returns_metric_tables() 
     query = client.queries[0]
     assert query.count("rawTrades: trade;") == 1
     assert query.count("rawQuotes: quote;") == 1
-    assert "refs: `sym xkey select from rawRefs where sym = $\"7203\";" in query
-    assert "(`$" not in query
-    assert '($"turnover";$"quoted_spread_bps")!(metricResult1;metricResult2)' in query
+    assert "refs: `sym xkey select from rawRefs where sym = `$\"7203\";" in query
+    assert re.search(r'(?<!`)\\$"turnover"', query) is None
+    assert '(`$"turnover";`$"quoted_spread_bps")!(metricResult1;metricResult2)' in query
 
 
 def test_kdb_metric_runner_renders_effective_spread_query_and_preserves_metadata() -> None:
