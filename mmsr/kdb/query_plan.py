@@ -30,7 +30,7 @@ from mmsr.kdb.schema_contracts import (
     toxicity_reversion_input_schema_contracts,
 )
 from mmsr.metrics.base import MetricDefinition
-from mmsr.periods.models import IntradayBucketSpec, ReportPeriod, TradingSession
+from mmsr.periods.models import IntradayBucketSpec, ReportPeriod
 
 
 _ACTIVITY_METRICS = frozenset({"turnover", "volume", "trade_count"})
@@ -74,11 +74,19 @@ _METRIC_TEMPLATE_MAP = {
 _METRIC_TABLE_PARAMETER_MAP = {
     "activity.q": (("trades", "trades_table"), ("reference_data", "ref_table")),
     "liquidity.q": (("quotes", "quotes_table"), ("reference_data", "ref_table")),
-    "liquidity_ticks.q": (("quotes", "quotes_table"),),
-    "realized_volatility.q": (("quotes", "quotes_table"),),
-    "flow.q": (("trades", "trades_table"),),
-    "effective_spread.q": (("trades", "trades_table"), ("quotes", "quotes_table")),
-    "price_impact.q": (("trades", "trades_table"), ("quotes", "quotes_table")),
+    "liquidity_ticks.q": (("quotes", "quotes_table"), ("reference_data", "ref_table")),
+    "realized_volatility.q": (("quotes", "quotes_table"), ("reference_data", "ref_table")),
+    "flow.q": (("trades", "trades_table"), ("reference_data", "ref_table")),
+    "effective_spread.q": (
+        ("trades", "trades_table"),
+        ("quotes", "quotes_table"),
+        ("reference_data", "ref_table"),
+    ),
+    "price_impact.q": (
+        ("trades", "trades_table"),
+        ("quotes", "quotes_table"),
+        ("reference_data", "ref_table"),
+    ),
     _REVERSION_TEMPLATE: (
         ("venue_trades", "venue_trades_table"),
         ("primary_quotes", "primary_quotes_table"),
@@ -96,14 +104,14 @@ class MetricRunRequest:
     """Request to run one metric over a period and grouping.
 
     Production requests should prefer ``source_functions`` over direct
-    ``table_names``. The raw data functions are user-defined q functions that
-    accept ``date`` and ``syms`` positional arguments and return canonical
-    trade/quote rows; MMSR-owned q then performs the metric aggregation inside
-    ``calculation_namespace``.
+    ``table_names``. The reference-data function is a user-defined q function that
+    accepts ``date`` and returns the active universe/reference table. Raw trade
+    and quote functions accept ``date`` plus that filtered reference table; MMSR-
+    owned q then performs the metric aggregation inside ``calculation_namespace``.
 
     ``parameters`` carries metric-family-specific scalar settings that are not
     source names. The first user is the cross-venue reversion family, which needs
-    ``primary_venue``, ``venues``, and optionally ``max_primary_quote_age``.
+    ``primary_venue`` and optionally ``venues``/quote-age settings.
     """
 
     metric: MetricDefinition
@@ -186,9 +194,8 @@ class KdbMetricQueryPlanner:
             "bucket_expr": _bucket_expr(request.period.bucket, calculation_namespace),
             "group_by": _group_by_suffix(query_group_by),
             "calculation_namespace": calculation_namespace,
+            "ref_filter": _ref_symbol_filter(request.parameters),
         }
-        if "{{ time_filter }}" in template:
-            params["time_filter"] = _time_filter(request.period.sessions)
         if template_name in {
             "activity.q",
             "liquidity.q",
@@ -307,42 +314,76 @@ def _input_contracts_for_template(
             ),
         )
     if template_name == "liquidity_ticks.q":
-        extra = _source_extra_columns(query_group_by, parameters)
+        raw_extra = _raw_source_extra_columns(parameters)
+        ref_extra = _reference_extra_columns(query_group_by)
         return (
             liquidity_ticks_input_schema_contract(
                 quotes_table=_source_label("quotes", table_names, source_functions),
-                extra_required_columns=extra,
+                extra_required_columns=raw_extra,
+            ),
+            reference_data_input_schema_contract(
+                reference_table=_source_label("reference_data", table_names, source_functions),
+                extra_required_columns=ref_extra,
+                template_name=template_name,
             ),
         )
     if template_name == "realized_volatility.q":
-        extra = _source_extra_columns(query_group_by, parameters)
+        raw_extra = _raw_source_extra_columns(parameters)
+        ref_extra = _reference_extra_columns(query_group_by)
         return (
             realized_volatility_input_schema_contract(
                 quotes_table=_source_label("quotes", table_names, source_functions),
-                extra_required_columns=extra,
+                extra_required_columns=raw_extra,
+            ),
+            reference_data_input_schema_contract(
+                reference_table=_source_label("reference_data", table_names, source_functions),
+                extra_required_columns=ref_extra,
+                template_name=template_name,
             ),
         )
     if template_name == "flow.q":
-        extra = _source_extra_columns(query_group_by, parameters)
+        raw_extra = _raw_source_extra_columns(parameters)
+        ref_extra = _reference_extra_columns(query_group_by)
         return (
             flow_input_schema_contract(
                 trades_table=_source_label("trades", table_names, source_functions),
-                extra_required_columns=extra,
+                extra_required_columns=raw_extra,
+            ),
+            reference_data_input_schema_contract(
+                reference_table=_source_label("reference_data", table_names, source_functions),
+                extra_required_columns=ref_extra,
+                template_name=template_name,
             ),
         )
     if template_name == "effective_spread.q":
-        trade_extra = _source_extra_columns(query_group_by, parameters)
-        return effective_spread_input_schema_contracts(
-            trades_table=_source_label("trades", table_names, source_functions),
-            quotes_table=_source_label("quotes", table_names, source_functions),
-            extra_trade_required_columns=trade_extra,
+        raw_extra = _raw_source_extra_columns(parameters)
+        ref_extra = _reference_extra_columns(query_group_by)
+        return (
+            *effective_spread_input_schema_contracts(
+                trades_table=_source_label("trades", table_names, source_functions),
+                quotes_table=_source_label("quotes", table_names, source_functions),
+                extra_trade_required_columns=raw_extra,
+            ),
+            reference_data_input_schema_contract(
+                reference_table=_source_label("reference_data", table_names, source_functions),
+                extra_required_columns=ref_extra,
+                template_name=template_name,
+            ),
         )
     if template_name == "price_impact.q":
-        trade_extra = _source_extra_columns(query_group_by, parameters)
-        return price_impact_input_schema_contracts(
-            trades_table=_source_label("trades", table_names, source_functions),
-            quotes_table=_source_label("quotes", table_names, source_functions),
-            extra_trade_required_columns=trade_extra,
+        raw_extra = _raw_source_extra_columns(parameters)
+        ref_extra = _reference_extra_columns(query_group_by)
+        return (
+            *price_impact_input_schema_contracts(
+                trades_table=_source_label("trades", table_names, source_functions),
+                quotes_table=_source_label("quotes", table_names, source_functions),
+                extra_trade_required_columns=raw_extra,
+            ),
+            reference_data_input_schema_contract(
+                reference_table=_source_label("reference_data", table_names, source_functions),
+                extra_required_columns=ref_extra,
+                template_name=template_name,
+            ),
         )
     if template_name == _REVERSION_TEMPLATE:
         return toxicity_reversion_input_schema_contracts(
@@ -422,7 +463,9 @@ def _q_source_expression(
             source_functions[source_key],
             f"source_functions[{source_key!r}]",
         )
-        return f"({function_name}[{_q_raw_data_function_arguments(request)}])"
+        if source_key == "reference_data":
+            return f"({function_name}[{_q_date(request.period.start_date)}])"
+        return f"({function_name}[{_q_date(request.period.start_date)};0!refs])"
 
     if source_key in table_names:
         return _q_identifier(table_names[source_key], "table name")
@@ -431,9 +474,9 @@ def _q_source_expression(
         return (
             "([]date:0#0Nd;"
             "sym:`symbol$();"
-            "topix_bucket:`symbol$();"
-            "market_cap_bucket:`symbol$();"
-            "lot_size:0#0N)"
+            "ric:`symbol$();"
+            "topixCapGrp:`symbol$();"
+            "lotSize:0#0N)"
         )
 
     raise KdbMetricQueryPlanError(
@@ -505,11 +548,19 @@ def _price_impact_template_parameters(request: MetricRunRequest) -> dict[str, st
 def _reversion_template_parameters(request: MetricRunRequest) -> dict[str, str]:
     horizon = _reversion_horizon_from_metric(request.metric.name)
     primary_venue = _required_string_parameter(request, "primary_venue")
-    venues = _required_string_sequence_parameter(request, "venues")
+    venues = _optional_string_sequence_parameter(request, "venues")
     max_primary_quote_age = request.parameters.get("max_primary_quote_age", "1s")
+    max_venue_quote_age = request.parameters.get(
+        "max_venue_quote_age",
+        max_primary_quote_age,
+    )
     if not isinstance(max_primary_quote_age, str):
         raise KdbMetricQueryPlanError(
             "parameter 'max_primary_quote_age' must be a string"
+        )
+    if not isinstance(max_venue_quote_age, str):
+        raise KdbMetricQueryPlanError(
+            "parameter 'max_venue_quote_age' must be a string"
         )
 
     exclude_auction = bool(request.parameters.get("exclude_auction", False))
@@ -517,7 +568,11 @@ def _reversion_template_parameters(request: MetricRunRequest) -> dict[str, str]:
     return {
         "value_column": _q_identifier(request.metric.name, "metric value column"),
         "primary_venue": _q_symbol(primary_venue, "primary_venue"),
-        "venue_filter": f"venue in {_q_symbol_vector(venues, 'venues')}",
+        "venue_filter": (
+            f"venue in {_q_symbol_vector(venues, 'venues')}"
+            if venues
+            else "not null venue"
+        ),
         "auction_filter": "null auction" if exclude_auction else "1b",
         "horizon": _q_duration(horizon, "horizon"),
         "horizon_label": _q_symbol_from_string(horizon),
@@ -525,6 +580,10 @@ def _reversion_template_parameters(request: MetricRunRequest) -> dict[str, str]:
         "max_primary_quote_age": _q_duration(
             max_primary_quote_age,
             "max_primary_quote_age",
+        ),
+        "max_venue_quote_age": _q_duration(
+            max_venue_quote_age,
+            "max_venue_quote_age",
         ),
     }
 
@@ -582,6 +641,20 @@ def _required_string_sequence_parameter(
         )
 
     value = request.parameters[name]
+    return _string_sequence_parameter(value, name)
+
+
+def _optional_string_sequence_parameter(
+    request: MetricRunRequest,
+    name: str,
+) -> tuple[str, ...] | None:
+    value = request.parameters.get(name)
+    if value in (None, ""):
+        return None
+    return _string_sequence_parameter(value, name)
+
+
+def _string_sequence_parameter(value: Any, name: str) -> tuple[str, ...]:
     if isinstance(value, (str, bytes, bytearray)) or not isinstance(value, Sequence):
         raise KdbMetricQueryPlanError(
             f"parameter {name!r} must be a sequence of strings"
@@ -595,25 +668,15 @@ def _required_string_sequence_parameter(
     return strings
 
 
-def _q_raw_data_function_arguments(request: MetricRunRequest) -> str:
-    """Render the canonical positional raw-source function arguments.
+def _ref_symbol_filter(parameters: Mapping[str, Any]) -> str:
+    """Return a q where predicate for filtering the reference universe."""
 
-    User source functions must match this fixed argument order:
-
-    ``date; syms``.
-
-    The arguments intentionally scope raw data access to one requested trading
-    day and one symbol slice before MMSR-owned q performs calculation.
-    Production callers should pass a one-trading-day ``ReportPeriod`` when
-    running full-market reports.
-    """
-
-    return ";".join(
-        (
-            _q_date(request.period.start_date),
-            _q_symbol_filter_vector(request.parameters),
-        )
-    )
+    symbols = _symbol_filter_values(parameters)
+    if not symbols:
+        return "1b"
+    if len(symbols) == 1:
+        return f"sym = {_q_symbol_from_string(symbols[0])}"
+    return f"sym in {_q_symbol_vector_from_strings(symbols)}"
 
 
 def _q_symbol_filter_vector(parameters: Mapping[str, Any]) -> str:
@@ -696,19 +759,6 @@ def _q_time_vector(values: Sequence[time]) -> str:
 
 def _date_filter(start: date, end: date) -> str:
     return f"date within ({_q_date(start)};{_q_date(end)})"
-
-
-def _time_filter(sessions: Sequence[TradingSession]) -> str:
-    if not sessions:
-        return "1b"
-
-    clauses = [
-        f"time within ({_q_time(session.start)};{_q_time(session.end)})"
-        for session in sessions
-    ]
-    if len(clauses) == 1:
-        return clauses[0]
-    return "(" + " | ".join(f"({clause})" for clause in clauses) + ")"
 
 
 def _bucket_expr(bucket: IntradayBucketSpec, calculation_namespace: str) -> str:

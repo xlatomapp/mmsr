@@ -50,7 +50,7 @@ source functions, calculation namespace, and metric parameters. Treat the plan
 as the source of truth for the Python-facing kdb boundary. Production plans
 should call user-owned functions with MMSR's fixed positional arguments, such as
 `.sb.mmsr.getTrade[date;syms]`, `.sb.mmsr.getQuote[date;syms]`,
-`.sb.mmsr.getRef[date;syms]`, `.sb.mmsr.getSymbols[date]`, and
+`.sb.mmsr.getRef[date;syms]`, `.sb.mmsr.getRef[date]`, and
 `.sb.mmsr.getTradingCalendar[start;end]`; those functions may internally query
 physical tables, cleanse rows, route between HDB/RDB, or map client taxonomy.
 Production configs should not hard-code static session times. Trade and quote
@@ -59,33 +59,32 @@ continuous intraday buckets and auction buckets inside kdb.
 
 | Requirement | Why it matters | Minimum evidence |
 | --- | --- | --- |
-| Raw source-function contract reviewed | User-owned source functions can use client-specific table names internally, but required canonical columns must still be returned before MMSR filtering, joining, or grouping. The default report requires activity, displayed-liquidity, and primary-quote reversion fields. Trade and quote rows must include `session` and `auction`; reversion trades require `aggressor_side` with buy=1 and sell=-1. | `RenderedMetricQuery.input_contracts` reviewed against `meta .sb.mmsr.getTrade[date;syms]`, `meta .sb.mmsr.getQuote[date;syms]`, or equivalent schema evidence. |
-| Symbol-universe function confirmed | Operators should control the report universe without editing MMSR code or raw source functions. | Configured `.sb.mmsr.getSymbols[date]` returns the intended liquid/security universe for each target and reference trading day. | 
-| Reference-data function confirmed | TOPIX bucket, market-cap group, lot size, and any configured grouping taxonomy should come from a user-owned source of truth. | Configured `.sb.mmsr.getRef[date;syms]` returns `date`, `sym`, `topix_bucket`, `market_cap_bucket`, `lot_size`, and any additional configured grouping columns. |
+| Raw source-function contract reviewed | User-owned source functions can use client-specific table names internally, but required canonical columns must still be returned before MMSR filtering, joining, or grouping. The default report requires activity, displayed-liquidity, and primary-quote reversion fields. Trade and quote rows must include `session`, `auction`, and `venue`; reversion side is inferred by matching each trade to the prevailing same-venue/same-symbol quote. | `RenderedMetricQuery.input_contracts` reviewed against `meta .sb.mmsr.getTrade[date;syms]`, `meta .sb.mmsr.getQuote[date;syms]`, or equivalent schema evidence. |
+| Reference-data universe function confirmed | Operators should control the report universe without editing MMSR code or raw source functions. | Configured `.sb.mmsr.getRef[date]` returns the intended liquid/security universe for each target and reference trading day. | 
+| Reference-data function confirmed | TOPIX capitalization group, lot size, and any configured grouping taxonomy should come from a user-owned source of truth. | Configured `.sb.mmsr.getRef[date;syms]` returns `date`, `sym`, `topixCapGrp`, `lotSize`, and any additional configured grouping columns. |
 | Daily execution scope confirmed | Full-market target and reference periods must not request multi-day raw trade/quote windows. | `KdbProductionExecutor` or `KdbProductionExecutionPlanner` shows one `MetricRunRequest` per trading day for both `run()` and `run_reference()`; each raw request is scoped to one `date` and one `syms` vector. |
-| Plan summary reviewed | Operators should know live run scope before metric q calls are made. | `mmsr plan` or `KdbProductionExecutor.build_plan_summary()` reports target/reference trading days, metric count, symbol chunk count, total metric steps, calculation namespace, symbol-universe function, source functions, and schema contracts. |
+| Plan summary reviewed | Operators should know live run scope before metric q calls are made. | `mmsr plan` or `KdbProductionExecutor.build_plan_summary()` reports target/reference trading days, metric count, symbol chunk count, total metric steps, calculation namespace, reference-data universe function, source functions, and schema contracts. |
 | Reference lookback confirmed | Reference comparisons need a calendar-derived trading-day window, not a weekday or raw calendar-day approximation. | `KdbProductionReferenceWindow.trading_days` contains the previous `reference.lookback_days` available trading days and `MetricComparison.reference_sample_size` reflects daily reference observation units. |
-| Symbol chunking policy confirmed | Some one-day full-market slices may still be too large without client-side or server-side partitioning. | Configured `kdb.symbol_chunk_size` splits the `syms` vector returned by the symbol-universe function before raw source calls. |
+| Symbol chunking policy confirmed | Some one-day full-market slices may still be too large without client-side or server-side partitioning. | Configured `kdb.symbol_chunk_size` splits the `syms` vector returned by the reference-data universe function before raw source calls. |
 | Output schema preserved | The report path normalizes only after required output columns are present. | `RenderedMetricQuery.required_output_columns` match the columns returned by the final q select. |
 | Optional diagnostics documented | Optional columns can improve report ranking/auditability but must not become hidden requirements. | `RenderedMetricQuery.optional_output_columns` reviewed; for reversion this currently includes `context_sort_order`. |
 | Result validation run before report rendering | Schema mismatches should fail at the kdb boundary, not inside report components. | `RenderedMetricQuery.validate_result_schema(result)` or `KdbMetricRunner.run()` succeeds on a bounded slice. |
 | Grouping semantics confirmed | Requested `group_by` columns become raw source-function result requirements for starter activity/liquidity queries and output requirements for all templates. | One bounded validation slice for every production grouping used by the report. |
 
-## Sector, segment, and market-cap taxonomy
+## Sector, segment, and optional market-cap taxonomy
 
 Confirm the client taxonomy before encoding richer drilldown fixtures or
-production-specific defaults. The market-cap bucket rule must be explicit and
+production-specific defaults. Any future market-cap bucket rule must be explicit and
 versioned.
 
 | Requirement | Why it matters | Minimum evidence |
 | --- | --- | --- |
 | Canonical sector taxonomy name and version | Sector labels can differ across TOPIX, exchange, broker, and client-specific classifications. | Taxonomy owner, version/date, and allowed sector labels. |
 | Segment field and allowed values | `market_segment` and `segment` are both supported normalized group keys, but production must choose the source mapping. | Confirmed field name and allowed values such as Prime, Standard, Growth, ETF, REIT, or client-specific alternatives. |
-| Market-cap bucket definition | Large/mid/small labels are not meaningful without thresholds and effective dates. | Thresholds, currency, calculation date, rebalance cadence, and null/unknown handling. |
 | Symbol identifier convention | Drilldowns must not collide with symbol anomaly pages or client-specific identifiers. | Confirmed primary identifier such as `sym`, `symbol`, `ticker`, `security_code`, `issue_code`, or `local_code`. |
-| Effective-dated mapping behavior | Sector and market-cap mappings can change through reclassification, IPOs, delistings, and corporate actions. | Mapping table with valid-from/valid-to fields or an equivalent as-of-date rule. |
+| Effective-dated mapping behavior | Sector, segment, and other taxonomy mappings can change through reclassification, IPOs, delistings, and corporate actions. | Mapping table with valid-from/valid-to fields or an equivalent as-of-date rule. |
 | Unknown and suspended instruments | Production reports need deterministic labels instead of dropping rows silently. | Rules for unknown sector, unknown segment, halted/suspended issues, ETFs, REITs, and preferred shares. |
-| Group-key normalization | Report options are configurable, but normalized comparison facts need stable group keys. | Mapping from production field names into normalized keys such as `sector`, `segment`, and `market_cap_bucket`. |
+| Group-key normalization | Report options are configurable, but normalized comparison facts need stable group keys. | Mapping from production field names into normalized keys such as `sector`, `segment`, and `topixCapGrp`. |
 
 ## Required kdb+ source fields
 
@@ -109,9 +108,9 @@ calendar assumptions are not production ready.
 | `date` | Report-period filtering and reference comparison grouping. |
 | `time` | Intraday bucket assignment. |
 | `sym` | Symbol-level and metadata joins. |
-| `trade_price` | Turnover and optional signed-turnover calculations. |
-| `trade_size` | Volume, turnover, and optional imbalance calculations. |
-| `aggressor_side` | Required only for `signed_turnover` and `trade_imbalance` / `flow.q`; convention must be `buy=1`, `sell=-1`. |
+| `tradePrice` | Turnover and optional signed-turnover calculations. |
+| `tradeSize` | Volume, turnover, and optional imbalance calculations. |
+| `aggressorSide` | Required only for `signed_turnover` and `trade_imbalance` / `flow.q`; convention must be `buy=1`, `sell=-1`. |
 
 ### Quote raw-data function for `liquidity.q` and optional liquidity/volatility add-ons
 
@@ -120,10 +119,10 @@ calendar assumptions are not production ready.
 | `date` | Report-period filtering and reference comparison grouping. |
 | `time` | Intraday bucket assignment and quote-return ordering. |
 | `sym` | Symbol-level and metadata joins; required for optional `realized_volatility.q` so adjacent mid-price returns are calculated within each symbol. |
-| `bid_price` | Quoted spread, top-of-book, primary-mid reversion, and optional quote-mid realized-volatility metrics. |
-| `ask_price` | Quoted spread, top-of-book, primary-mid reversion, and optional quote-mid realized-volatility metrics. |
-| `bid_size` | Top-of-book depth metrics. |
-| `ask_size` | Top-of-book depth metrics. |
+| `bidPrice` | Quoted spread, top-of-book, primary-mid reversion, and optional quote-mid realized-volatility metrics. |
+| `askPrice` | Quoted spread, top-of-book, primary-mid reversion, and optional quote-mid realized-volatility metrics. |
+| `bidSize` | Top-of-book depth metrics. |
+| `askSize` | Top-of-book depth metrics. |
 | `tick_size` | Required only for `quoted_spread_ticks` / `liquidity_ticks.q`; may be supplied by a symbol-metadata or tick-ladder join inside the user quote function. |
 
 ### Venue trade raw-data function for `toxicity_reversion.q`
@@ -134,9 +133,9 @@ calendar assumptions are not production ready.
 | `time` | Trade timestamp and horizon join anchor. |
 | `sym` | Symbol-level and metadata joins. |
 | `venue` | Cross-venue series grouping. |
-| `trade_price` | Reversion denominator and execution anchor. |
-| `trade_size` | Sample-size and notional diagnostics. |
-| `aggressor_side` | Signed reversion direction; convention must be `buy=1`, `sell=-1`; reversion uses `aggressor_side * (future_mid - mid_at_trade) / future_mid * 10000`. |
+| `tradePrice` | Reversion denominator and execution anchor. |
+| `tradeSize` | Sample-size and notional diagnostics. |
+| `aggressorSide` | Not required from the raw source for reversion; MMSR calculates it from the matched same-venue/same-symbol prevailing quote with inferred buy=1 and sell=-1. Reversion then uses that side against the TSE/primary mid path. |
 
 ### Primary quote raw-data function for `toxicity_reversion.q`
 
@@ -146,8 +145,8 @@ calendar assumptions are not production ready.
 | `time` | Quote timestamp used before and after the trade horizon. |
 | `sym` | Symbol-level and metadata joins. |
 | `venue` | Primary-quote venue confirmation, normally TSE unless configured otherwise. |
-| `bid_price` | Primary mid-price calculation. |
-| `ask_price` | Primary mid-price calculation; rows should satisfy `ask_price > bid_price`. |
+| `bidPrice` | Primary mid-price calculation. |
+| `askPrice` | Primary mid-price calculation; rows should satisfy `askPrice > bidPrice`. |
 
 ### Symbol metadata / taxonomy table
 
@@ -160,7 +159,6 @@ be joined to normalized metric rows before comparison facts are built.
 | Effective date or validity range | Supports as-of joins for historical comparisons. |
 | Sector | Populates normalized `sector` group keys. |
 | Segment | Populates normalized `segment` or `market_segment` group keys. |
-| Market-cap bucket or source market cap | Populates `market_cap_bucket` after the agreed threshold rule. |
 | Optional display name | Improves human-readable report labels without changing metric keys. |
 
 ## Validation sequence

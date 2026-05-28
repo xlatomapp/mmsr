@@ -72,20 +72,20 @@ def test_query_planner_exposes_activity_input_and_output_contracts() -> None:
         "sym",
         "session",
         "auction",
-        "trade_price",
-        "trade_size",
+        "tradePrice",
+        "tradeSize",
     )
     assert plan.input_contracts[1].table_role == "reference_data"
     assert plan.input_contracts[1].required_columns == (
         "date",
         "sym",
-        "topix_bucket",
-        "market_cap_bucket",
-        "lot_size",
+        "ric",
+        "topixCapGrp",
+        "lotSize",
         "market_segment",
     )
-    assert ".mmsr.sumNotional[trade_price; trade_size]" in plan.query
-    assert ".mmsr.sumSize[trade_size]" in plan.query
+    assert ".mmsr.sumNotional[tradePrice; tradeSize]" in plan.query
+    assert ".mmsr.sumSize[tradeSize]" in plan.query
     assert "trades: trade_l1 lj refs" in plan.query
     assert 'sym = $"7203"' in plan.query
 
@@ -117,22 +117,22 @@ def test_query_planner_exposes_liquidity_quote_contracts() -> None:
         "sym",
         "session",
         "auction",
-        "bid_price",
-        "ask_price",
-        "bid_size",
-        "ask_size",
+        "bidPrice",
+        "askPrice",
+        "bidSize",
+        "askSize",
     )
     assert plan.input_contracts[1].table_role == "reference_data"
     assert plan.input_contracts[1].required_columns == (
         "date",
         "sym",
-        "topix_bucket",
-        "market_cap_bucket",
-        "lot_size",
+        "ric",
+        "topixCapGrp",
+        "lotSize",
         "sector",
     )
-    assert ".mmsr.medianQuotedSpreadBps[bid_price; ask_price]" in plan.query
-    assert ".mmsr.medianTopOfBookDepth[bid_size; ask_size]" in plan.query
+    assert ".mmsr.medianQuotedSpreadBps[bidPrice; askPrice]" in plan.query
+    assert ".mmsr.medianTopOfBookDepth[bidSize; askSize]" in plan.query
 
 
 
@@ -165,13 +165,14 @@ def test_query_planner_exposes_tick_spread_quote_contracts() -> None:
         "sym",
         "session",
         "auction",
-        "bid_price",
-        "ask_price",
-        "bid_size",
-        "ask_size",
+        "bidPrice",
+        "askPrice",
+        "bidSize",
+        "askSize",
         "tick_size",
-        "sector",
     )
+    assert plan.input_contracts[1].table_role == "reference_data"
+    assert "sector" in plan.input_contracts[1].required_columns
     assert "calcLiquidityTicks" in plan.query
     assert "tick_size > 0" in plan.query
     assert 'sym = $"7203"' in plan.query
@@ -208,10 +209,11 @@ def test_query_planner_exposes_realized_volatility_quote_contracts() -> None:
         "sym",
         "session",
         "auction",
-        "bid_price",
-        "ask_price",
-        "sector",
+        "bidPrice",
+        "askPrice",
     )
+    assert plan.input_contracts[1].table_role == "reference_data"
+    assert "sector" in plan.input_contracts[1].required_columns
     assert "calcRealizedVolatility" in plan.query
     assert "log_return" in plan.query
     assert 'sym = $"7203"' in plan.query
@@ -249,13 +251,14 @@ def test_query_planner_exposes_flow_trade_contracts() -> None:
         "sym",
         "session",
         "auction",
-        "trade_price",
-        "trade_size",
-        "aggressor_side",
-        "sector",
+        "tradePrice",
+        "tradeSize",
+        "aggressorSide",
     )
+    assert plan.input_contracts[1].table_role == "reference_data"
+    assert "sector" in plan.input_contracts[1].required_columns
     assert "calcFlow" in plan.query
-    assert "aggressor_side in (1 -1)" in plan.query
+    assert "aggressorSide in (1 -1)" in plan.query
     assert 'sym = $"7203"' in plan.query
 
 
@@ -291,10 +294,11 @@ def test_query_planner_exposes_effective_spread_trade_quote_contracts() -> None:
         "sym",
         "session",
         "auction",
-        "trade_price",
-        "trade_size",
-        "sector",
+        "tradePrice",
+        "tradeSize",
     )
+    assert plan.input_contracts[2].table_role == "reference_data"
+    assert "sector" in plan.input_contracts[2].required_columns
     assert plan.input_contracts[1].table_role == "quotes"
     assert plan.input_contracts[1].required_columns == (
         "date",
@@ -302,12 +306,12 @@ def test_query_planner_exposes_effective_spread_trade_quote_contracts() -> None:
         "sym",
         "session",
         "auction",
-        "bid_price",
-        "ask_price",
+        "bidPrice",
+        "askPrice",
     )
     assert "calcEffectiveSpread" in plan.query
     assert "aj[`date`sym`time" in plan.query
-    assert "quote_age <= 0D00:00:00.500" in plan.query
+    assert "quoteAge <= 0D00:00:00.500" in plan.query
     assert 'sym = $"7203"' in plan.query
 
 
@@ -345,10 +349,8 @@ def test_query_planner_exposes_price_impact_trade_quote_contracts() -> None:
         "sym",
         "session",
         "auction",
-        "trade_price",
-        "trade_size",
-        "aggressor_side",
-        "sector",
+        "tradePrice",
+        "tradeSize",
     )
     assert plan.input_contracts[1].table_role == "quotes"
     assert plan.input_contracts[1].required_columns == (
@@ -357,13 +359,15 @@ def test_query_planner_exposes_price_impact_trade_quote_contracts() -> None:
         "sym",
         "session",
         "auction",
-        "bid_price",
-        "ask_price",
+        "bidPrice",
+        "askPrice",
     )
+    assert plan.input_contracts[2].table_role == "reference_data"
+    assert "sector" in plan.input_contracts[2].required_columns
     assert "calcPriceImpact" in plan.query
-    assert "horizon_time: time + 0D00:00:30.000" in plan.query
-    assert "quote_age <= 0D00:00:00.500" in plan.query
-    assert "horizon_quote_age <= 0D00:00:02.000" in plan.query
+    assert "horizonTime: time + 0D00:00:30.000" in plan.query
+    assert "quoteAge <= 0D00:00:00.500" in plan.query
+    assert "horizonQuoteAge <= 0D00:00:02.000" in plan.query
     assert 'sym = $"7203"' in plan.query
 
 
@@ -412,17 +416,16 @@ def test_query_planner_exposes_reversion_optional_metadata_contract() -> None:
         "session",
         "auction",
         "venue",
-        "trade_price",
-        "trade_size",
-        "aggressor_side",
+        "tradePrice",
+        "tradeSize",
     )
     assert plan.input_contracts[2].table_role == "reference_data"
     assert plan.input_contracts[2].required_columns == (
         "date",
         "sym",
-        "topix_bucket",
-        "market_cap_bucket",
-        "lot_size",
+        "ric",
+        "topixCapGrp",
+        "lotSize",
     )
 
 
@@ -528,11 +531,11 @@ def test_query_planner_can_call_user_defined_trade_source_function() -> None:
     assert plan.input_contracts[0].table_name == ".sb.mmsr.getTrade"
     assert plan.input_contracts[1].table_name == ".sb.mmsr.getRef"
     assert ".sb.mmsrCalc.calcActivity:{" in plan.query
-    assert 'trades: (.sb.mmsr.getTrade[2026.05.01;enlist $"7203"]) lj refs' in plan.query
-    assert 'refs: `sym xkey select from (.sb.mmsr.getRef[2026.05.01;enlist $"7203"])' in plan.query
+    assert "rawRefs: select from (.sb.mmsr.getRef[2026.05.01]);" in plan.query
+    assert 'refs: `sym xkey select from rawRefs where sym = $"7203";' in plan.query
+    assert "trades: (.sb.mmsr.getTrade[2026.05.01;0!refs]) lj refs" in plan.query
     assert "`startDate`endDate`startTimes`endTimes`bucket`syms`venues" not in plan.query
     assert "`date`symbolChunkId`symbolChunkCount" not in plan.query
-    assert 'enlist $"7203"' in plan.query
     assert ";2026.05.02;" not in plan.query
     assert ".mmsr.calcActivity" not in plan.query
 
@@ -561,8 +564,9 @@ def test_query_planner_can_call_user_defined_quote_source_function() -> None:
     assert plan.input_contracts[0].table_name == ".sb.mmsr.getQuote"
     assert plan.input_contracts[1].table_name == ".sb.mmsr.getRef"
     assert ".desk.mmsr.calcLiquidity:{" in plan.query
-    assert "quotes: (.sb.mmsr.getQuote[2026.05.01;0#`]) lj refs" in plan.query
-    assert "refs: `sym xkey select from (.sb.mmsr.getRef[2026.05.01;0#`])" in plan.query
+    assert "rawRefs: select from (.sb.mmsr.getRef[2026.05.01]);" in plan.query
+    assert "refs: `sym xkey select from rawRefs where 1b;" in plan.query
+    assert "quotes: (.sb.mmsr.getQuote[2026.05.01;0!refs]) lj refs" in plan.query
 
 
 
@@ -585,7 +589,8 @@ def test_query_planner_can_call_user_defined_quote_source_function_for_ticks() -
     assert plan.input_contracts[0].table_name == ".sb.mmsr.getQuote"
     assert "tick_size" in plan.input_contracts[0].required_columns
     assert ".desk.mmsr.calcLiquidityTicks:{" in plan.query
-    assert "from (.sb.mmsr.getQuote[2026.05.01;0#`])" in plan.query
+    assert "from quotes" in plan.query
+    assert "quotes: (.sb.mmsr.getQuote[2026.05.01;0!refs]) lj refs" in plan.query
 
 
 def test_query_planner_can_call_user_defined_trade_source_function_for_flow() -> None:
@@ -604,9 +609,10 @@ def test_query_planner_can_call_user_defined_trade_source_function_for_flow() ->
 
     assert plan.source_functions == (("trades", ".sb.mmsr.getTrade"),)
     assert plan.input_contracts[0].table_name == ".sb.mmsr.getTrade"
-    assert "aggressor_side" in plan.input_contracts[0].required_columns
+    assert "aggressorSide" in plan.input_contracts[0].required_columns
     assert ".desk.mmsr.calcFlow:{" in plan.query
-    assert "from (.sb.mmsr.getTrade[2026.05.01;0#`])" in plan.query
+    assert "from trades" in plan.query
+    assert "trades: (.sb.mmsr.getTrade[2026.05.01;0!refs]) lj refs" in plan.query
 
 
 
@@ -635,8 +641,8 @@ def test_query_planner_can_call_user_defined_trade_and_quote_functions_for_effec
     assert plan.input_contracts[0].table_name == ".sb.mmsr.getTrade"
     assert plan.input_contracts[1].table_name == ".sb.mmsr.getQuote"
     assert ".desk.mmsr.calcEffectiveSpread:{" in plan.query
-    assert "from (.sb.mmsr.getTrade[2026.05.01;0#`])" in plan.query
-    assert "from (.sb.mmsr.getQuote[2026.05.01;0#`])" in plan.query
+    assert "rawTrades: (.sb.mmsr.getTrade[2026.05.01;0!refs]) lj refs" in plan.query
+    assert "rawQuotes: (.sb.mmsr.getQuote[2026.05.01;0!refs]) lj refs" in plan.query
 
 def test_reversion_planner_uses_user_defined_trade_and_quote_source_functions() -> None:
     registry = build_default_registry()
@@ -667,9 +673,10 @@ def test_reversion_planner_uses_user_defined_trade_and_quote_source_functions() 
     assert plan.input_contracts[2].table_name == ".sb.mmsr.getRef"
     assert ".sb.mmsrCalc.calcToxicityReversion:{" in plan.query
     assert "venueTrades:" in plan.query
-    assert "rawVenueTrades: (.sb.mmsr.getTrade[2026.05.01;0#`]) lj refs" in plan.query
-    assert "rawPrimaryQuotes: (.sb.mmsr.getQuote[2026.05.01;0#`]) lj refs" in plan.query
-    assert "refs: `sym xkey select from (.sb.mmsr.getRef[2026.05.01;0#`])" in plan.query
+    assert "rawRefs: select from (.sb.mmsr.getRef[2026.05.01]);" in plan.query
+    assert "rawVenueTrades: (.sb.mmsr.getTrade[2026.05.01;0!refs]) lj refs" in plan.query
+    assert "rawQuotes: (.sb.mmsr.getQuote[2026.05.01;0!refs]) lj refs" in plan.query
+    assert "refs: `sym xkey select from rawRefs where 1b;" in plan.query
     assert "`TSE`SBIJ" in plan.query
 
 

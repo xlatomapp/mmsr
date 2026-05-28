@@ -86,16 +86,16 @@ def test_docs_document_live_kdb_integration_boundary() -> None:
         "MMSR_KDB_TRADE_FUNCTION",
         "MMSR_KDB_QUOTE_FUNCTION",
         "MMSR_KDB_CALENDAR_FUNCTION",
-        "MMSR_KDB_TEST_DATE",
         "@pytest.mark.kdb_integration",
         "skipped by default",
         "toxicity_reversion.q",
         "MetricTimeSeries",
-        "LiveKdbActivitySmokeConfig",
-        "LiveKdbLiquiditySmokeConfig",
-        "test_live_kdb_activity_smoke_validates_starter_output_schema",
-        "test_live_kdb_liquidity_smoke_validates_starter_output_schema",
-        "symbol_filter",
+        "mmsr plan",
+        "mmsr preflight",
+        "getRef[date]",
+        "getTrade[date;ref]",
+        "getQuote[date;ref]",
+        "Production preflight path",
     ]
 
     for term in required_terms:
@@ -103,7 +103,7 @@ def test_docs_document_live_kdb_integration_boundary() -> None:
 
     assert "docs/kdb_integration_testing.md" in readme
     assert "poetry run pytest -m kdb_integration" in readme
-    assert "LiveKdbActivitySmokeConfig" in readme
+    assert "mmsr preflight" in readme
     assert "mock-vs-live integration-test" in roadmap
     assert "live-kdb integration-test guidance" in status
     assert "kdb_integration_testing.md" in mkdocs

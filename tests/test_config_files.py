@@ -16,7 +16,7 @@ def test_production_minimal_config_loads_supported_kdb_metrics() -> None:
     assert period.start_date.isoformat() == "2026-05-01"
     assert config.toxicity.enabled is True
     assert config.calendar.qualified_function() == ".sb.mmsr.getTradingCalendar"
-    assert config.symbols.qualified_function() == ".sb.mmsr.getSymbols"
+    assert config.symbols.qualified_function() == ".sb.mmsr.getRef"
     assert config.metrics == [
         "turnover",
         "volume",

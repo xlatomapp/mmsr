@@ -72,7 +72,7 @@ def test_toxicity_config_defaults_match_reversion_report_contract() -> None:
     assert isinstance(config.toxicity, ToxicityConfig)
     assert config.toxicity.section_title == "Cross-Venue Toxicity"
     assert config.toxicity.primary_venue == "TSE"
-    assert config.toxicity.venues == ("TSE", "SBIJ", "ODX")
+    assert config.toxicity.venues is None
     assert config.toxicity.reversion_horizons == (
         "10ms",
         "100ms",
@@ -81,7 +81,7 @@ def test_toxicity_config_defaults_match_reversion_report_contract() -> None:
         "5s",
         "10s",
     )
-    assert config.toxicity.side_source == "feed"
+    assert config.toxicity.side_source == "inferred"
     assert config.toxicity.filters.max_primary_quote_age == "1s"
     assert config.toxicity.confidence.min_trade_count == 100
 
@@ -90,7 +90,6 @@ def test_toxicity_config_validates_duration_side_and_primary_venue() -> None:
     for kwargs, expected in [
         ({"reversion_horizons": ["100milliseconds"]}, "reversion_horizons"),
         ({"side_source": "unknown"}, "side_source"),
-        ({"primary_venue": "TSE", "venues": ["SBIJ"]}, "primary_venue"),
     ]:
         try:
             ToxicityConfig(**kwargs)
@@ -187,7 +186,7 @@ def test_kdb_config_defaults_to_namespace_scoped_raw_data_functions() -> None:
         "primary_quotes": ".mmsr.getQuote",
     }
     assert isinstance(config.symbols, SymbolUniverseConfig)
-    assert config.symbols.qualified_function() == ".mmsr.getSymbols"
+    assert config.symbols.qualified_function() == ".mmsr.getRef"
 
 
 def test_kdb_raw_data_functions_allow_user_namespace_and_role_overrides() -> None:

@@ -48,10 +48,10 @@ Branding options such as header image, footer image, logo image, and footer text
 
 The production entrypoint is `mmsr render`. It reads the YAML config, connects to
 kdb+ through the lazy PyKX-backed client, obtains target and reference trading
-days from the configured calendar function, asks the configured symbol-universe
+days from the configured calendar function, asks the configured reference-data universe
 function for each trading day, and runs the bounded production executor. Metric q
 remains MMSR-owned and namespaced. User-owned q functions are responsible only for
-calendar dates, symbol universe selection, reference data, and canonicalized
+calendar dates, reference-data universe selection, reference data, and canonicalized
 trade/quote rows.
 
 MMSR installs reusable q aggregation helpers such as `.desk.mmsr.sumNotional`,
@@ -76,8 +76,7 @@ mmsr render \
   --kdb-host localhost \
   --kdb-port 5001 \
   --symbol 7203 \
-  --symbol 6758 \
-  --venue TSE
+  --symbol 6758
 ```
 
 For full-universe reports, omit repeated `--symbol` filters and let the
@@ -100,8 +99,7 @@ mmsr plan \
   --kdb-host localhost \
   --kdb-port 5001 \
   --symbol 7203 \
-  --symbol 6758 \
-  --venue TSE
+  --symbol 6758
 ```
 
 Run `mmsr preflight` before a full production render to validate config loading,
@@ -116,7 +114,6 @@ mmsr preflight \
   --kdb-host localhost \
   --kdb-port 5001 \
   --symbol 7203 \
-  --venue TSE \
   --metric quoted_spread_bps
 ```
 
@@ -246,8 +243,9 @@ poetry run mmsr mock-kdb-demo \
 Production metric runs call user-owned q functions instead of querying physical
 tables directly. Those functions can route between HDB/RDB, cleanse data,
 normalize venue codes, enrich permissions, and map internal schemas to MMSR's
-canonical boundary. MMSR then joins reference data and runs the metric
-aggregation q inside the configured calculation namespace.
+canonical boundary. MMSR then joins reference data, infers trade side when
+needed, and runs the metric aggregation q inside the configured calculation
+namespace.
 
 Example configuration shape:
 
@@ -272,28 +270,29 @@ calendar:
   function: "getTradingCalendar"
   date_column: date
 
-symbols:
-  source: kdb
-  namespace: ".sb.mmsr"
-  function: "getSymbols"
-  symbol_column: sym
-
 reference_data:
   source: kdb
   namespace: ".sb.mmsr"
   function: "getRef"
   symbol_column: sym
+  ric_column: ric
 ```
 
 The required user q function signatures are positional and intentionally small:
 
 ```q
 .sb.mmsr.getTradingCalendar[start;end]
-.sb.mmsr.getSymbols[date]
-.sb.mmsr.getRef[date;syms]
-.sb.mmsr.getTrade[date;syms]
-.sb.mmsr.getQuote[date;syms]
+.sb.mmsr.getRef[date]
+.sb.mmsr.getTrade[date;ref]
+.sb.mmsr.getQuote[date;ref]
 ```
+
+`getRef[date]` controls the active universe for the date and returns one row per
+analysis symbol with at least `date`, `sym`, `ric`, `topixCapGrp`, and `lotSize`.
+MMSR filters that reference table for CLI `--symbol` runs or configured symbol
+chunks, then passes the filtered table into `getTrade` and `getQuote`. This lets
+source functions filter by `sym`, `ric`, or any other user-owned reference
+column without MMSR knowing the raw vendor schema.
 
 Trade and quote rows must carry per-tick market-state columns. `session` should
 identify the market session, for example `am` or `pm`. `auction` should identify
@@ -302,24 +301,24 @@ have null `auction`. MMSR uses those columns to derive continuous intraday
 buckets and explicit auction buckets such as `AMO`, `AMC`, `PMO`, and `PMC`,
 instead of relying on a static configured session-time grid.
 
-Canonical trade rows should expose `date`, `time`, `sym`, `session`, `auction`,
-`trade_price`, and `trade_size`. Reversion metrics also require `venue` and
-`aggressor_side` where `1` means buyer-initiated and `-1` means seller-initiated.
-Canonical quote rows should expose `date`, `time`, `sym`, `session`, `auction`,
-`bid_price`, `ask_price`, `bid_size`, and `ask_size`. Reversion metrics also
-require `venue` on quote rows so primary-venue quotes can be selected.
+Canonical trade rows should expose `date`, `time`, `sym`, `ric`, `session`,
+`auction`, `venue`, `tradePrice`, and `tradeSize`. Canonical quote rows should
+expose `date`, `time`, `sym`, `ric`, `session`, `auction`, `venue`, `bidPrice`,
+`askPrice`, `bidSize`, and `askSize`. MMSR derives `aggressorSide` in q for
+reversion/price-impact-style calculations by joining each trade to the prevailing
+same-venue/same-symbol quote and comparing trade price to that venue midpoint;
+source functions do not need to provide `aggressorSide` for the default live
+report.
 
-The reference-data function should return one row per requested `date`/`sym`
-with at least `date`, `sym`, `topix_bucket`, `market_cap_bucket`, and `lot_size`.
-Add any additional grouping columns, such as `sector` or `market_segment`, to
+Market-cap group is intentionally not required by the live starter boundary. Add
+any additional grouping columns, such as `sector` or `market_segment`, to
 `getRef` before including those names in the config `groups` list.
 
 The production execution path is driven by `KdbProductionExecutor`, which asks a
-trading-calendar function for dates, asks the symbol-universe function for the
-analysis symbols on each trading day, asks the reference-data function for
-symbol metadata, and builds one `MetricRunRequest` per trading day, metric, and
-optional symbol chunk. Do not request or hold a multi-day full-market raw
-trade/quote window in Python.
+trading-calendar function for dates, asks `getRef[date]` for the reference-data
+universe on each trading day, and builds one `MetricRunRequest` per trading day,
+metric, and optional symbol chunk. Do not request or hold a multi-day full-market
+raw trade/quote window in Python.
 
 ### kdb query plans and schema contracts
 
@@ -500,9 +499,9 @@ This skeleton is designed to be copied into or generated alongside a ppw project
 
 ## Cross-venue toxicity reversion
 
-The production report includes a dedicated `Cross-Venue Toxicity` page when normalized kdb-backed primary-quote reversion rows are present. It renders deterministic SVG venue reversion curves with horizon progression on the x-axis, reversion in bps on the y-axis, and one line per venue such as TSE, SBIJ, and ODX. The page consumes already-computed `MetricTimeSeries` rows and does not query kdb+, calculate raw-tick metrics, or call an LLM in the report layer.
+The production report includes a dedicated `Cross-Venue Toxicity` page when normalized kdb-backed primary-quote reversion rows are present. Production analysis targets TSE through `toxicity.primary_venue: TSE`; the reversion q then discovers the trade/quote venues present in the source rows, unless `toxicity.venues` is explicitly configured as a narrow filter. It renders deterministic SVG venue reversion curves with horizon progression on the x-axis, reversion in bps on the y-axis, and one line per venue such as TSE, SBIJ, and ODX. The page consumes already-computed `MetricTimeSeries` rows and does not query kdb+, calculate raw-tick metrics, or call an LLM in the report layer.
 
-When production output contains many date, intraday bucket, sector, segment, or symbol contexts, the toxicity page ranks contexts deterministically before applying the chart limit. The default ranking surfaces the contexts with the largest positive reversion first because positive values indicate future primary-mid movement in the aggressive-trade direction under `aggressor_side * (future_mid - mid_at_trade) / future_mid * 10000`. Production callers can set `MarketReportOptions.toxicity_reversion_context_ranking` to `max_positive_reversion`, `max_absolute_reversion`, `lowest_confidence`, `context_sort_order`, or `chronological`. When normalized kdb-backed rows include optional `context_sort_order` metadata, `context_sort_order` ranks smaller numeric values first, then falls back to adverse reversion and chronological ordering for ties or missing values.
+When production output contains many date, intraday bucket, sector, segment, or symbol contexts, the toxicity page ranks contexts deterministically before applying the chart limit. The default ranking surfaces the contexts with the largest positive reversion first because positive values indicate future TSE/primary-mid movement in the direction of the aggressor inferred from each trade's own venue quote under `aggressorSide * (future_primary_mid - primary_mid_at_trade) / future_primary_mid * 10000`. Production callers can set `MarketReportOptions.toxicity_reversion_context_ranking` to `max_positive_reversion`, `max_absolute_reversion`, `lowest_confidence`, `context_sort_order`, or `chronological`. When normalized kdb-backed rows include optional `context_sort_order` metadata, `context_sort_order` ranks smaller numeric values first, then falls back to adverse reversion and chronological ordering for ties or missing values.
 
 By default, when the dedicated `Cross-Venue Toxicity` page is present, `build_market_monitor_report()` suppresses the `primary_quote_reversion_*_bps` family from the generic `Intraday Detail` page so the same venue/horizon curves are not duplicated. Production callers that explicitly want both displays can set `MarketReportOptions.include_toxicity_reversion_metrics_in_detail_page=True`; if the dedicated toxicity page is disabled or absent, the generic detail page still renders any supplied reversion series.
 
@@ -516,7 +515,7 @@ GitHub Actions CI is configured under `.github/workflows/ci.yml` to run the test
 
 ## Reference comparison
 
-Reference comparison is built around a configured observation unit. The default is `trading_day`, so raw quote/trade data is first aggregated to one value per comparable daily observation, such as `date × time_bucket × market_cap_bucket × metric`. Current values are then compared with the historical distribution for the same comparable keys.
+Reference comparison is built around a configured observation unit. The default is `trading_day`, so raw quote/trade data is first aggregated to one value per comparable daily observation, such as `date × time_bucket × topixCapGrp × metric`. Current values are then compared with the historical distribution for the same comparable keys.
 
 Z-scores are optional anomaly diagnostics, not mandatory report fields. The default policy requires at least 30 comparable reference observations before a z-score or normal-score percentile is treated as a headline statistic. With one reference observation the report shows only current-vs-reference change; with fewer than 30 observations it prefers empirical rank, range position, and a low-confidence flag.
 

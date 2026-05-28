@@ -13,7 +13,7 @@ def test_metric_help_text_contains_formula() -> None:
     registry = build_default_registry()
     metric = registry.get("quoted_spread_bps")
     assert "Formula" in metric.help_text()
-    assert "ask_price" in metric.help_text()
+    assert "askPrice" in metric.help_text()
 
 
 def test_registry_rejects_duplicates() -> None:

@@ -23,6 +23,7 @@ def test_intraday_bucket_labels_expand_auction_codes_and_time_ranges() -> None:
 
 def test_group_labels_replace_internal_key_equals_text() -> None:
     assert format_group_key_label("market_cap_bucket") == "Market cap bucket"
+    assert format_group_key_label("topixCapGrp") == "TOPIX cap group"
     assert format_group_value_label("market_cap_bucket", "Small") == "Small cap"
     assert (
         format_group_item_label("market_cap_bucket", "Small")

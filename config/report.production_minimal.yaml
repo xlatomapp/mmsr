@@ -29,17 +29,13 @@ calendar:
   function: "getTradingCalendar"
   date_column: date
 
-symbols:
-  source: kdb
-  namespace: ".sb.mmsr"
-  function: "getSymbols"
-  symbol_column: sym
 
 reference_data:
   source: kdb
   namespace: ".sb.mmsr"
   function: "getRef"
   symbol_column: sym
+  ric_column: ric
 
 period:
   start_date: "2026-05-01"
@@ -57,8 +53,7 @@ intraday:
       afternoon_close: PMC
 
 groups:
-  - market_cap_bucket
-  - topix_bucket
+  - topixCapGrp
 
 reference:
   method: same_intraday_bucket
@@ -105,10 +100,6 @@ toxicity:
   enabled: true
   section_title: "Cross-Venue Toxicity"
   primary_venue: "TSE"
-  venues:
-    - "TSE"
-    - "SBIJ"
-    - "ODX"
   reversion_horizons:
     - "10ms"
     - "100ms"
@@ -121,7 +112,7 @@ toxicity:
     x_axis: "horizon"
     y_axis: "reversion_bps"
     series: "venue"
-  side_source: "feed"
+  side_source: "inferred"
   filters:
     exclude_auction: true
     exclude_stale_primary_quote: true

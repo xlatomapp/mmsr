@@ -1,7 +1,7 @@
 """Deterministic human-facing report display labels.
 
 The helpers in this module are intentionally small and dependency-free. They
-convert normalized report keys such as ``market_cap_bucket`` and auction bucket
+convert normalized report keys such as ``topixCapGrp`` and auction bucket
 codes such as ``AMO`` into stable display text without changing the underlying
 metric or comparison data.
 """
@@ -26,6 +26,7 @@ _GROUP_KEY_LABELS: dict[str, str] = {
     "horizon": "Horizon",
     "market": "Market",
     "market_cap_bucket": "Market cap bucket",
+    "topixCapGrp": "TOPIX cap group",
     "market_segment": "Market segment",
     "metric_name": "Metric",
     "reference_observation_aggregation": "Reference observation aggregation",

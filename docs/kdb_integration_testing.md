@@ -26,8 +26,7 @@ mmsr plan \
   --kdb-host localhost \
   --kdb-port 5001 \
   --symbol 7203 \
-  --symbol 6758 \
-  --venue TSE
+  --symbol 6758
 ```
 
 Use `mmsr preflight` before a full `mmsr render` run. The command uses the live
@@ -44,11 +43,10 @@ mmsr preflight \
   --kdb-host localhost \
   --kdb-port 5001 \
   --symbol 7203 \
-  --venue TSE \
   --metric quoted_spread_bps
 ```
 
-For full-universe production checks, omit `--symbol`; for tightly bounded smoke
+For full-universe production checks, omit `--symbol`; for tightly bounded preflight
 checks, pass one or more symbols and let `data.kdb.symbol_chunk_size` bound the
 planned or sample request. Prefer `config/report.production_minimal.yaml` for
 the first live run because it lists only the market-monitoring metrics that
@@ -88,8 +86,8 @@ environment is ready.
 The production report path should call user-defined q functions rather than
 directly querying physical trade, quote, calendar, or reference tables. Configure
 functions such as `.sb.mmsr.getTrade`, `.sb.mmsr.getQuote`, `.sb.mmsr.getRef`,
-`.sb.mmsr.getSymbols`, and `.sb.mmsr.getTradingCalendar`; those functions can
-route between HDB/RDB, cleanse rows, return client-approved symbol universes,
+`.sb.mmsr.getRef`, and `.sb.mmsr.getTradingCalendar`; those functions can
+route between HDB/RDB, cleanse rows, return client-approved reference-data universes,
 and normalize canonical columns to MMSR q.
 
 MMSR calculation templates are rendered into the configured calculation
@@ -107,7 +105,7 @@ reference calendar windows and renders schema contracts without metric IO.
 `run()` covers the target period; `run_reference()` derives the previous
 `reference.lookback_days` trading days from the same kdb calendar and uses the
 same bounded execution path. Raw source functions receive only `date` and
-`syms`; the symbol-universe function controls which symbols are analyzed for
+`syms`; the reference-data universe function controls which symbols are analyzed for
 each trading day, and the reference-data function returns TOPIX/cap/lot-size
 metadata for those symbols before MMSR q executes metric calculations.
 
@@ -126,7 +124,7 @@ They are intentionally not required by the default test suite.
 | `MMSR_KDB_QUOTE_FUNCTION` | Yes | User source function for `liquidity.q` starter metrics. |
 | `MMSR_KDB_REF_FUNCTION` | No | User reference-data function; defaults to `.sb.mmsr.getRef`. |
 | `MMSR_KDB_CALENDAR_FUNCTION` | Yes | User trading-calendar function for production date selection. |
-| `MMSR_KDB_SYMBOL_FUNCTION` | Production runs | User symbol-universe function for selecting analysis symbols by trading date. |
+| `MMSR_KDB_SYMBOL_FUNCTION` | Production runs | User reference-data universe function for selecting analysis symbols by trading date. |
 | `MMSR_KDB_VENUE_TRADE_FUNCTION` | Reversion only | Venue trade source function for `toxicity_reversion.q`. |
 | `MMSR_KDB_PRIMARY_QUOTE_FUNCTION` | Reversion only | Primary quote source function for `toxicity_reversion.q`. |
 | `MMSR_KDB_TEST_DATE` | Yes | A single known-good trading date for bounded smoke checks. |
@@ -150,8 +148,8 @@ Live tests for `activity.q` assume the configured trade function accepts
 - `sym`
 - `session`
 - `auction`
-- `trade_price`
-- `trade_size`
+- `tradePrice`
+- `tradeSize`
 
 Live tests for `liquidity.q` assume the configured quote function accepts
 `date; syms` and returns at least:
@@ -161,93 +159,83 @@ Live tests for `liquidity.q` assume the configured quote function accepts
 - `sym`
 - `session`
 - `auction`
-- `bid_price`
-- `ask_price`
-- `bid_size`
-- `ask_size`
+- `bidPrice`
+- `askPrice`
+- `bidSize`
+- `askSize`
 
 `session` should be `am` or `pm` for standard Japanese trading sessions.
 `auction` should be `open` or `close` on auction ticks and null on continuous
 ticks. MMSR uses these columns for bucket assignment instead of a static
 configured session grid.
 
-The configured reference-data function accepts `date; syms` and returns at
-least:
+The live source-function signatures are:
+
+```q
+.sb.mmsr.getTradingCalendar[start;end]
+.sb.mmsr.getRef[date]
+.sb.mmsr.getTrade[date;ref]
+.sb.mmsr.getQuote[date;ref]
+```
+
+The configured reference-data function accepts `date` and returns the active
+analysis universe plus symbol metadata for that day. It must return at least:
 
 - `date`
 - `sym`
-- `topix_bucket`
-- `market_cap_bucket`
-- `lot_size`
+- `ric`
+- `topixCapGrp`
+- `lotSize`
 
-Add `sector`, `market_segment`, or other grouping columns to the reference rows
-before adding those group names to a production report config.
+MMSR filters that reference table for CLI symbol overrides or configured symbol
+chunks, then passes the filtered table into source functions as `ref`.
 
-`quoted_spread_ticks` uses `liquidity_ticks.q` and additionally requires:
-
-- `tick_size`
-
-`realized_volatility` uses `realized_volatility.q` and requires `sym` on the
-canonical quote source so log returns are calculated by `date × sym` before
-bucket/group aggregation.
-
-Live tests for `toxicity_reversion.q` assume the configured venue-trade
-function accepts `date; syms` and returns at least:
-
-- `date`
-- `time`
-- `sym`
-- `session`
-- `auction`
-- `venue`
-- `trade_price`
-- `trade_size`
-- `aggressor_side`
-
-Live tests for `toxicity_reversion.q` assume the configured primary-quote
-function accepts `date; syms` and returns at least:
+Configured trade functions accept `date;ref` and should return at least:
 
 - `date`
 - `time`
 - `sym`
+- `ric`
 - `session`
 - `auction`
 - `venue`
-- `bid_price`
-- `ask_price`
+- `tradePrice`
+- `tradeSize`
 
-The reversion side convention is `buy=1`, `sell=-1`, with metric values
-calculated as `aggressor_side * (future_mid - mid_at_trade) / future_mid * 10000`.
-Primary quote rows should satisfy `ask_price > bid_price`. Production calendar
-data must come from `MMSR_KDB_CALENDAR_FUNCTION`; weekday-only assumptions are
-not valid for production report generation.
+Configured quote functions accept `date;ref` and should return at least:
 
+- `date`
+- `time`
+- `sym`
+- `ric`
+- `session`
+- `auction`
+- `venue`
+- `bidPrice`
+- `askPrice`
+- `bidSize`
+- `askSize`
 
-## Implemented starter live-smoke harnesses
+`quoted_spread_ticks` uses `liquidity_ticks.q` and additionally requires
+`tick_size`. `realized_volatility` uses `realized_volatility.q` and requires
+`sym` on the canonical quote source so log returns are calculated by `date ×
+sym` before bucket/group aggregation.
 
-`mmsr.kdb.live_smoke.LiveKdbActivitySmokeConfig` implements the
-environment-gated activity smoke harness. It reads the documented connection,
-calendar-function, trade-function, and bounded test-date variables, then builds
-a single `turnover` request for `activity.q`.
+For Cross-Venue Toxicity/Reversion, MMSR infers `aggressorSide` inside its
+calculation namespace by joining each trade to the prevailing same-venue,
+same-symbol quote and comparing trade price to that venue midpoint. The source
+trade function does not need to provide `aggressorSide` for the default live
+report. The reversion target remains the TSE/primary quote: future and at-trade
+primary mids are joined separately to calculate the reversion value. Quote rows
+should satisfy `askPrice > bidPrice`. Production calendar data must come from
+`getTradingCalendar[start;end]`; weekday-only assumptions are not valid for
+production report generation.
 
-`mmsr.kdb.live_smoke.LiveKdbLiquiditySmokeConfig` implements the matching
-environment-gated liquidity smoke harness. It reads the documented connection,
-calendar-function, quote-function, and bounded test-date variables, then builds
-a single `quoted_spread_bps` request for `liquidity.q`.
+## Production preflight path
 
-Both harnesses use `MMSR_KDB_TEST_DATE` as a one-day date filter. When
-`MMSR_KDB_TEST_SYMBOL` is present, the rendered starter q query adds a
-`symbol_filter` clause for `sym = $"<symbol>"` and groups by `sym`, keeping the
-result small and proving the symbol slice survives normalization.
-
-The corresponding pytests are
-`tests/test_live_kdb_smoke.py::test_live_kdb_activity_smoke_validates_starter_output_schema`
-and
-`tests/test_live_kdb_smoke.py::test_live_kdb_liquidity_smoke_validates_starter_output_schema`.
-They skip safely when required variables are missing, import PyKX only after the
-environment gate passes, execute through `KdbMetricRunner`, and validate starter
-template output through the existing schema contracts before returning a
-`MetricTimeSeries`.
+Use the packaged `mmsr plan`, `mmsr preflight`, and `mmsr render` commands for
+live checks. The previous package-internal live-smoke harness has been removed so
+operators use one config-driven production path.
 
 ## Live test skip behavior
 
@@ -264,7 +252,7 @@ After schemas and access are confirmed, run live tests explicitly with:
 poetry run pytest -m kdb_integration
 ```
 
-The implemented starter live-smoke tests skip themselves when required
+Live integration tests skip themselves when required
 environment variables are missing, query only `MMSR_KDB_TEST_DATE` and optionally
 `MMSR_KDB_TEST_SYMBOL`, and validate q-template output through
 `mmsr.kdb.schema_contracts` before normalizing the result into

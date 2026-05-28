@@ -117,16 +117,16 @@ class CalendarConfig:
 
 @dataclass(frozen=True)
 class SymbolUniverseConfig:
-    """Symbol-universe function configuration.
+    """Backward-compatible reference-universe function configuration.
 
-    Production report runs should use a user-owned kdb function to decide which
-    symbols are in scope for each trading day. The raw trade/quote functions then
-    receive only ``date`` and the selected ``syms`` vector.
+    New production configs should use ``reference_data`` only. This class remains
+    as a compatibility shim for callers that still access ``ReportConfig.symbols``;
+    it points at the same user-owned reference function instead of a separate symbol function boundary.
     """
 
     source: str = "kdb"
     namespace: str = ".mmsr"
-    function: str = "getSymbols"
+    function: str = "getRef"
     symbol_column: str = "sym"
 
     def __post_init__(self) -> None:
@@ -136,7 +136,7 @@ class SymbolUniverseConfig:
             raise ValueError("symbols.symbol_column must be a non-empty string")
 
     def qualified_function(self) -> str:
-        """Return the configured symbol-universe function as a qualified q name."""
+        """Return the reference-universe function as a qualified q name."""
 
         return _qualified_q_function(
             self.namespace,
@@ -150,7 +150,7 @@ class ReferenceDataConfig:
     """Reference-data function configuration.
 
     The user-owned reference function returns day-specific symbol metadata such
-    as TOPIX grouping, market-cap bucket, and lot size. MMSR q templates join
+    as TOPIX capitalization group and lot size. MMSR q templates join
     this table to raw trade/quote rows inside kdb before calculating grouped
     metrics.
     """
@@ -159,12 +159,15 @@ class ReferenceDataConfig:
     namespace: str = ".mmsr"
     function: str = "getRef"
     symbol_column: str = "sym"
+    ric_column: str = "ric"
 
     def __post_init__(self) -> None:
         _validate_q_namespace(self.namespace, "reference_data.namespace")
         _validate_q_function(self.function, "reference_data.function")
         if not isinstance(self.symbol_column, str) or not self.symbol_column:
             raise ValueError("reference_data.symbol_column must be a non-empty string")
+        if not isinstance(self.ric_column, str) or not self.ric_column:
+            raise ValueError("reference_data.ric_column must be a non-empty string")
 
     def qualified_function(self) -> str:
         """Return the configured reference-data function as a qualified q name."""
@@ -180,10 +183,11 @@ class ReferenceDataConfig:
 class KdbRawDataFunctionsConfig:
     """User-defined raw data functions called by MMSR q calculations.
 
-    These functions are the production data-access boundary. Each function must
-    accept ``date`` and ``syms`` positional arguments and return a canonical raw
-    table for at most the requested day/symbol slice; MMSR-owned q templates then
-    calculate metrics inside the configured calculation namespace.
+    These functions are the production data-access boundary. The reference
+    function must accept ``date``. Trade/quote functions must accept ``date`` and
+    the active reference table. MMSR derives the reference-data universe from reference
+    data, passes the filtered reference table into raw source functions, and then
+    calculates metrics inside the configured calculation namespace.
     """
 
     namespace: str = ".mmsr"
@@ -251,7 +255,7 @@ class KdbExecutionConfig:
     """kdb execution namespace and raw source-function configuration.
 
     Production execution is date-bounded by default. Optional symbol chunking can
-    further limit the ``syms`` vector passed to user-defined source functions
+    further filter the reference table passed to user-defined source functions
     while MMSR-owned q calculations still run inside ``calculation_namespace``.
     """
 
@@ -382,7 +386,7 @@ class ToxicityConfig:
     enabled: bool = True
     section_title: str = "Cross-Venue Toxicity"
     primary_venue: str = "TSE"
-    venues: tuple[str, ...] | list[str] = ("TSE", "SBIJ", "ODX")
+    venues: tuple[str, ...] | list[str] | None = None
     reversion_horizons: tuple[str, ...] | list[str] = (
         "10ms",
         "100ms",
@@ -392,7 +396,7 @@ class ToxicityConfig:
         "10s",
     )
     default_visual: ToxicityVisualConfig = field(default_factory=ToxicityVisualConfig)
-    side_source: str = "feed"
+    side_source: str = "inferred"
     event_clustering: ToxicityEventClusteringConfig = field(
         default_factory=ToxicityEventClusteringConfig
     )
@@ -407,15 +411,17 @@ class ToxicityConfig:
         if not self.primary_venue:
             raise ValueError("primary_venue must be non-empty")
 
-        venues = _as_non_empty_tuple(self.venues, "venues")
+        venues = (
+            None
+            if self.venues is None
+            else _as_non_empty_tuple(self.venues, "venues")
+        )
         horizons = _as_non_empty_tuple(self.reversion_horizons, "reversion_horizons")
         for horizon in horizons:
             _validate_duration(horizon, "reversion_horizons")
 
-        if self.primary_venue not in venues:
-            raise ValueError("primary_venue must be present in venues")
-        if self.side_source not in {"feed", "inferred"}:
-            raise ValueError("side_source must be 'feed' or 'inferred'")
+        if self.side_source not in {"inferred"}:
+            raise ValueError("side_source must be 'inferred'")
 
         object.__setattr__(self, "venues", venues)
         object.__setattr__(self, "reversion_horizons", horizons)
@@ -423,15 +429,14 @@ class ToxicityConfig:
     def to_metric_run_parameters(self) -> dict[str, Any]:
         """Return parameters suitable for ``MetricRunRequest.parameters``.
 
-        The kdb runner currently consumes primary venue, venue filter, and stale
-        primary-quote age. The additional fields are included so downstream
+        The kdb runner currently consumes primary venue, an optional venue filter, and
+        stale quote-age settings. The additional fields are included so downstream
         query/rendering layers can apply confidence and filtering policy without
         reparsing report config.
         """
 
-        return {
+        params: dict[str, Any] = {
             "primary_venue": self.primary_venue,
-            "venues": self.venues,
             "max_primary_quote_age": self.filters.max_primary_quote_age,
             "side_source": self.side_source,
             "event_clustering_enabled": self.event_clustering.enabled,
@@ -441,6 +446,9 @@ class ToxicityConfig:
             "min_trade_count": self.confidence.min_trade_count,
             "min_notional": self.confidence.min_notional,
         }
+        if self.venues is not None:
+            params["venues"] = self.venues
+        return params
 
     def reversion_metric_names(self) -> tuple[str, ...]:
         """Return configured primary-quote reversion metric names."""

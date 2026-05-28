@@ -104,8 +104,9 @@ def test_production_query_requests_are_daily_and_use_date_syms_source_args() -> 
     assert '($"7203";$"6758")' in query_plan.query
     assert "2026.05.01;1;1]" not in query_plan.query
     assert ".desk.mmsrCalc.calcActivity:{" in query_plan.query
-    assert 'trades: (.sb.mmsr.getTrade[2026.05.01;($"7203";$"6758")]) lj refs' in query_plan.query
-    assert 'refs: `sym xkey select from (.sb.mmsr.getRef[2026.05.01;($"7203";$"6758")])' in query_plan.query
+    assert "rawRefs: select from (.sb.mmsr.getRef[2026.05.01]);" in query_plan.query
+    assert 'refs: `sym xkey select from rawRefs where sym in ($"7203";$"6758");' in query_plan.query
+    assert "trades: (.sb.mmsr.getTrade[2026.05.01;0!refs]) lj refs" in query_plan.query
 
 def test_production_planner_rejects_calendar_dates_outside_period() -> None:
     config = ReportConfig(title="Daily Monitor", metrics=["turnover"])
@@ -215,7 +216,7 @@ def test_production_plan_summary_reports_scope_and_contracts() -> None:
     assert "Target trading days: 2 (2026-05-01, 2026-05-04)" in lines
     assert "Reference trading days: 2 (2026-04-28, 2026-04-30)" in lines
     assert "Symbol chunks per trading day: 2" in lines
-    assert "Symbol universe function: none" in lines
+    assert "Reference-data universe function: none" in lines
     assert ".sb.mmsr.getTrade" in lines
     assert "outputs: date, time_bucket, sym, volume, turnover, trade_count" in lines
     assert len(runner.requests) == 0
@@ -261,7 +262,6 @@ def test_production_preflight_can_select_configured_metric(
         config=config,
         period=_period(),
         symbols=["7203", "6758"],
-        venues=["TSE"],
         metric_name=metric_name,
     )
 
@@ -299,7 +299,7 @@ class FakeCalendar:
         return [date(2026, 5, 1), date(2026, 5, 4)]
 
 class FakeSymbolUniverse:
-    function = ".sb.mmsr.getSymbols"
+    function = ".sb.mmsr.getRef"
 
     def __init__(self) -> None:
         self.requests: list[date] = []

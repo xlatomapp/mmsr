@@ -18,13 +18,13 @@ def test_kdb_symbol_universe_source_calls_configured_symbol_function() -> None:
     client = FakeKdbClient()
     source = KdbSymbolUniverseSource(
         client=client,
-        function=".sb.mmsr.getSymbols",
+        function=".sb.mmsr.getRef",
     )
 
     result = source.symbols_for_day(date(2026, 5, 1))
 
     assert result == ["7203", "6758"]
-    assert ".sb.mmsr.getSymbols[date]" in client.query
+    assert ".sb.mmsr.getRef[date]" in client.query
     assert client.args == (date(2026, 5, 1),)
 
 
@@ -35,7 +35,7 @@ def test_kdb_symbol_universe_source_accepts_vector_results() -> None:
 
     result = KdbSymbolUniverseSource(
         client=VectorClient(),
-        function=".sb.mmsr.getSymbols",
+        function=".sb.mmsr.getRef",
     ).symbols_for_day(date(2026, 5, 1))
 
     assert result == ["8306", "9984"]

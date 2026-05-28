@@ -85,7 +85,7 @@ def test_kdb_metric_runner_renders_activity_query_and_normalizes_column_result()
     }
 
     query = client.queries[0]
-    assert "from trade" in query
+    assert "trades: trade lj refs" in query
     assert "date within (2026.05.01;2026.05.02)" in query
     assert ".mmsr.timeBucket[time; session; auction; 0D00:05:00.000]" in query
     assert "market_segment" in query
@@ -143,7 +143,7 @@ def test_kdb_metric_runner_renders_liquidity_query_without_group_columns() -> No
 
     assert series.values == (12.5,)
     assert series.observations[0].group == {}
-    assert "from quote" in client.queries[0]
+    assert "quotes: quote lj refs" in client.queries[0]
     assert "by date, time_bucket:" in client.queries[0]
 
 
@@ -181,10 +181,10 @@ def test_kdb_metric_runner_renders_effective_spread_query_and_preserves_metadata
     assert series.metadata["template"] == "effective_spread.q"
 
     query = client.queries[0]
-    assert "from trade" in query
-    assert "from quote" in query
+    assert "rawTrades: trade lj refs" in query
+    assert "rawQuotes: quote lj refs" in query
     assert "aj[`date`sym`time" in query
-    assert "quote_age <= 0D00:00:00.500" in query
+    assert "quoteAge <= 0D00:00:00.500" in query
     assert "effective_spread_bps: med" in query
 
 
@@ -222,10 +222,10 @@ def test_kdb_metric_runner_renders_price_impact_query_and_preserves_metadata() -
     assert series.metadata["template"] == "price_impact.q"
 
     query = client.queries[0]
-    assert "from trade" in query
-    assert "from quote" in query
-    assert "horizon_time: time + 0D00:00:30.000" in query
-    assert "horizon_quote_age <= 0D00:00:02.000" in query
+    assert "rawTrades: trade lj refs" in query
+    assert "rawQuotes: quote lj refs" in query
+    assert "horizonTime: time + 0D00:00:30.000" in query
+    assert "horizonQuoteAge <= 0D00:00:02.000" in query
     assert "price_impact_30s_bps: med" in query
 
 
@@ -293,13 +293,16 @@ def test_kdb_metric_runner_renders_reversion_query_and_normalizes_venue_horizon(
 
     query = client.queries[0]
     assert "rawVenueTrades: venue_trade lj refs" in query
-    assert "rawPrimaryQuotes: quote lj refs" in query
+    assert "rawQuotes: quote lj refs" in query
     assert "venue in `TSE`SBIJ" in query
     assert "venue = `TSE" in query
     assert "time + 0D00:00:00.100" in query
     assert "horizon: $\"100ms\"" in query
     assert "horizon_sort_order: 2" in query
-    assert "primary_quote_age <= 0D00:00:00.500" in query
+    assert "primaryQuoteAge <= 0D00:00:00.500" in query
+    assert "venueQuoteAge <= 0D00:00:00.500" in query
+    assert "`date`sym`venue`time xasc venueQuotes" in query
+    assert "inferAggressorSide[tradePrice; venueMid]" in query
     assert "primary_quote_reversion_100ms_bps: .mmsr.weightedAverage[notional; reversion_bps]" in query
     assert "by date, time_bucket:" in query
     assert ", venue, horizon:" in query

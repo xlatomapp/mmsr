@@ -1,16 +1,13 @@
 / Activity metrics template.
 / Expected params:
-/   `trades_table`: table name or raw-data function expression returning canonical trades
-/   `ref_table`: raw-data function expression returning day/symbol reference data
-/   `calculation_namespace`: namespace where MMSR installs the calculation function
+/   `trades_table`: raw-data function expression/table returning canonical trades
+/   `ref_table`: expression/table returning day reference data
+/   `calculation_namespace`: namespace where MMSR installs calculation functions
 /   `date_filter`
+/   `ref_filter`
 /   `symbol_filter`
 /   `bucket_expr`
 /   `group_by`
-/ Output schema contract (also exposed by RenderedMetricQuery):
-/   mmsr.kdb.schema_contracts.activity_output_schema_contract
-/   date | time_bucket | optional group columns | requested metric column |
-/   sibling aggregate columns from turnover, volume, trade_count
 
 {{ calculation_namespace }}.sumNotional:{[price;size] sum price * size};
 {{ calculation_namespace }}.sumSize:{[size] sum size};
@@ -25,15 +22,18 @@
     };
 
 {{ calculation_namespace }}.calcActivity:{
-    refs: `sym xkey select from {{ ref_table }};
+    rawRefs: select from {{ ref_table }};
+    refs: `sym xkey select from rawRefs where {{ ref_filter }};
     trades: {{ trades_table }} lj refs;
     select
-        turnover: {{ calculation_namespace }}.sumNotional[trade_price; trade_size],
-        volume: {{ calculation_namespace }}.sumSize[trade_size],
+        turnover: {{ calculation_namespace }}.sumNotional[tradePrice; tradeSize],
+        volume: {{ calculation_namespace }}.sumSize[tradeSize],
         trade_count: {{ calculation_namespace }}.rowCount[i]
     by date, time_bucket: {{ bucket_expr }}{{ group_by }}
     from trades
-    where {{ date_filter }}{{ symbol_filter }}
+    where {{ date_filter }}{{ symbol_filter }},
+          tradePrice > 0,
+          tradeSize > 0
     };
 
 {{ calculation_namespace }}.calcActivity[]

@@ -1,15 +1,6 @@
 """kdb client, query loading, and metric runner APIs."""
 
 from mmsr.kdb.client import KdbClient, KdbConfig
-from mmsr.kdb.live_smoke import (
-    LiveKdbActivitySmokeConfig,
-    LiveKdbLiquiditySmokeConfig,
-    REQUIRED_LIVE_ACTIVITY_SMOKE_ENV_VARS,
-    REQUIRED_LIVE_LIQUIDITY_SMOKE_ENV_VARS,
-    run_live_activity_smoke,
-    run_live_liquidity_smoke,
-)
-
 from mmsr.kdb.production import (
     KdbProductionExecutionError,
     KdbProductionExecutionPlanner,
@@ -88,12 +79,6 @@ __all__ = [
     "KdbMetricQueryPlanner",
     "KdbMetricQueryPlanError",
     "MetricRunRequest",
-    "run_live_activity_smoke",
-    "run_live_liquidity_smoke",
-    "REQUIRED_LIVE_ACTIVITY_SMOKE_ENV_VARS",
-    "REQUIRED_LIVE_LIQUIDITY_SMOKE_ENV_VARS",
-    "LiveKdbActivitySmokeConfig",
-    "LiveKdbLiquiditySmokeConfig",
     "OutputSchemaContractError",
     "QTemplateInputTableSchemaContract",
     "QTemplateOutputSchemaContract",

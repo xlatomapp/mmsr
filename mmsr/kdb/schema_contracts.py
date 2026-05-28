@@ -15,14 +15,14 @@ TICK_STATE_REQUIRED_COLUMNS: tuple[str, ...] = ("session", "auction")
 REFERENCE_DATA_REQUIRED_COLUMNS: tuple[str, ...] = (
     "date",
     "sym",
-    "topix_bucket",
-    "market_cap_bucket",
-    "lot_size",
+    "ric",
+    "topixCapGrp",
+    "lotSize",
 )
 REFERENCE_DATA_ASSUMPTIONS: tuple[str, ...] = (
-    "one row per requested symbol and date is preferred before joining to ticks",
-    "topix_bucket and market_cap_bucket are day-specific classification labels",
-    "lot_size is the round-lot size applicable to the requested symbol/date",
+    "one row per analysis symbol and date is required before joining to ticks",
+    "topixCapGrp is the day-specific TOPIX capitalization group label",
+    "lotSize is the round-lot size applicable to the requested symbol/date",
 )
 
 ACTIVITY_TRADES_REQUIRED_COLUMNS: tuple[str, ...] = (
@@ -30,11 +30,11 @@ ACTIVITY_TRADES_REQUIRED_COLUMNS: tuple[str, ...] = (
     "time",
     "sym",
     *TICK_STATE_REQUIRED_COLUMNS,
-    "trade_price",
-    "trade_size",
+    "tradePrice",
+    "tradeSize",
 )
 ACTIVITY_TRADES_ASSUMPTIONS: tuple[str, ...] = (
-    "trade_price and trade_size are positive for included trades",
+    "tradePrice and tradeSize are positive for included trades",
     "optional symbol filtering requires a sym column",
     "session uses `am/`pm and auction uses `open/`close or null for continuous ticks",
     "requested group_by columns may be supplied by the reference-data source",
@@ -50,14 +50,14 @@ LIQUIDITY_QUOTES_REQUIRED_COLUMNS: tuple[str, ...] = (
     "time",
     "sym",
     *TICK_STATE_REQUIRED_COLUMNS,
-    "bid_price",
-    "ask_price",
-    "bid_size",
-    "ask_size",
+    "bidPrice",
+    "askPrice",
+    "bidSize",
+    "askSize",
 )
 LIQUIDITY_QUOTES_ASSUMPTIONS: tuple[str, ...] = (
-    "bid_price and ask_price are positive numeric prices with ask_price > bid_price",
-    "bid_size and ask_size are numeric top-of-book displayed sizes",
+    "bidPrice and askPrice are positive numeric prices with askPrice > bidPrice",
+    "bidSize and askSize are numeric top-of-book displayed sizes",
     "optional symbol filtering requires a sym column",
     "session uses `am/`pm and auction uses `open/`close or null for continuous ticks",
     "requested group_by columns may be supplied by the reference-data source",
@@ -81,13 +81,13 @@ REALIZED_VOLATILITY_QUOTES_REQUIRED_COLUMNS: tuple[str, ...] = (
     "time",
     "sym",
     *TICK_STATE_REQUIRED_COLUMNS,
-    "bid_price",
-    "ask_price",
+    "bidPrice",
+    "askPrice",
 )
 REALIZED_VOLATILITY_QUOTES_ASSUMPTIONS: tuple[str, ...] = (
     "sym is required so adjacent mid-price returns are computed within each symbol",
-    "bid_price and ask_price are positive numeric prices with ask_price > bid_price",
-    "requested group_by columns must be present on the source table",
+    "bidPrice and askPrice are positive numeric prices with askPrice > bidPrice",
+    "requested group_by columns may be supplied by the reference-data source",
 )
 REALIZED_VOLATILITY_OUTPUT_COLUMN = "realized_volatility"
 REALIZED_VOLATILITY_OUTPUT_METADATA_COLUMNS: tuple[str, ...] = (
@@ -101,15 +101,15 @@ FLOW_TRADES_REQUIRED_COLUMNS: tuple[str, ...] = (
     "time",
     "sym",
     *TICK_STATE_REQUIRED_COLUMNS,
-    "trade_price",
-    "trade_size",
-    "aggressor_side",
+    "tradePrice",
+    "tradeSize",
+    "aggressorSide",
 )
 FLOW_TRADES_ASSUMPTIONS: tuple[str, ...] = (
-    "aggressor_side uses buy=1 and sell=-1",
-    "trade_price and trade_size are positive for included trades",
+    "aggressorSide uses buy=1 and sell=-1",
+    "tradePrice and tradeSize are positive for included trades",
     "optional symbol filtering requires a sym column",
-    "requested group_by columns must be present on the source table",
+    "requested group_by columns may be supplied by the reference-data source",
 )
 FLOW_OUTPUT_AGGREGATE_COLUMNS: tuple[str, ...] = (
     "signed_turnover",
@@ -126,25 +126,25 @@ TRANSACTION_COST_TRADES_REQUIRED_COLUMNS: tuple[str, ...] = (
     "time",
     "sym",
     *TICK_STATE_REQUIRED_COLUMNS,
-    "trade_price",
-    "trade_size",
+    "tradePrice",
+    "tradeSize",
 )
 TRANSACTION_COST_QUOTES_REQUIRED_COLUMNS: tuple[str, ...] = (
     "date",
     "time",
     "sym",
     *TICK_STATE_REQUIRED_COLUMNS,
-    "bid_price",
-    "ask_price",
+    "bidPrice",
+    "askPrice",
 )
 TRANSACTION_COST_TRADES_ASSUMPTIONS: tuple[str, ...] = (
     "sym is required so trades can be aligned to the prevailing quote for the same symbol",
-    "trade_price and trade_size are positive for included trades",
-    "requested group_by columns must be present on the trade source",
+    "tradePrice and tradeSize are positive for included trades",
+    "requested group_by columns may be supplied by the reference-data source",
 )
 TRANSACTION_COST_QUOTES_ASSUMPTIONS: tuple[str, ...] = (
     "sym is required so quotes can be aligned to same-symbol trades",
-    "bid_price and ask_price are positive numeric prices with ask_price > bid_price",
+    "bidPrice and askPrice are positive numeric prices with askPrice > bidPrice",
     "quote timestamps are comparable to trade timestamps for as-of joins",
 )
 EFFECTIVE_SPREAD_OUTPUT_COLUMN = "effective_spread_bps"
@@ -154,10 +154,9 @@ EFFECTIVE_SPREAD_OUTPUT_METADATA_COLUMNS: tuple[str, ...] = (
 )
 PRICE_IMPACT_TRADES_REQUIRED_COLUMNS: tuple[str, ...] = (
     *TRANSACTION_COST_TRADES_REQUIRED_COLUMNS,
-    "aggressor_side",
 )
 PRICE_IMPACT_TRADES_ASSUMPTIONS: tuple[str, ...] = (
-    "aggressor_side uses buy=1 and sell=-1 so impact is measured in trade direction",
+    "MMSR infers aggressorSide from the prevailing quote midpoint",
     *TRANSACTION_COST_TRADES_ASSUMPTIONS,
 )
 PRICE_IMPACT_OUTPUT_COLUMN = "price_impact_30s_bps"
@@ -190,9 +189,8 @@ REVERSION_VENUE_TRADES_REQUIRED_COLUMNS: tuple[str, ...] = (
     "sym",
     *TICK_STATE_REQUIRED_COLUMNS,
     "venue",
-    "trade_price",
-    "trade_size",
-    "aggressor_side",
+    "tradePrice",
+    "tradeSize",
 )
 REVERSION_PRIMARY_QUOTES_REQUIRED_COLUMNS: tuple[str, ...] = (
     "date",
@@ -200,17 +198,17 @@ REVERSION_PRIMARY_QUOTES_REQUIRED_COLUMNS: tuple[str, ...] = (
     "sym",
     *TICK_STATE_REQUIRED_COLUMNS,
     "venue",
-    "bid_price",
-    "ask_price",
+    "bidPrice",
+    "askPrice",
 )
 REVERSION_VENUE_TRADES_ASSUMPTIONS: tuple[str, ...] = (
-    "aggressor_side uses buy=1 and sell=-1",
-    "trade_price and trade_size are positive for included trades",
+    "MMSR infers aggressorSide from the same-venue/same-symbol prevailing quote midpoint",
+    "tradePrice and tradeSize are positive for included trades",
     "requested group_by columns must be present after the template join/aggregation",
 )
 REVERSION_PRIMARY_QUOTES_ASSUMPTIONS: tuple[str, ...] = (
-    "venue identifies the primary exchange quote source",
-    "bid_price and ask_price are positive numeric prices with ask_price > bid_price",
+    "venue identifies the quote source; both primary exchange and PTS venue quotes may be present",
+    "bidPrice and askPrice are positive numeric prices with askPrice > bidPrice",
 )
 
 

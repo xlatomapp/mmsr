@@ -21,8 +21,9 @@ data:
   kdb:
     calculation_namespace: ".desk.mmsr"
     enforce_daily_raw_scope: true
-    # Optional: split the configured symbol universe into chunks before calling
-    # raw source functions. Each raw source function receives date and syms only.
+    # Optional: split the reference-data universe into chunks before calling
+    # raw source functions. Trade/quote functions receive date and the filtered
+    # reference table.
     symbol_chunk_size: 500
     raw_data_functions:
       namespace: ".sb.mmsr"
@@ -37,17 +38,13 @@ calendar:
   function: "getTradingCalendar"
   date_column: date
 
-symbols:
-  source: kdb
-  namespace: ".sb.mmsr"
-  function: "getSymbols"
-  symbol_column: sym
 
 reference_data:
   source: kdb
   namespace: ".sb.mmsr"
   function: "getRef"
   symbol_column: sym
+  ric_column: ric
 
 period:
   start_date: "2026-05-01"
@@ -66,8 +63,7 @@ intraday:
     sort_order_column: sort_order
 
 groups:
-  - market_cap_bucket
-  - topix_bucket
+  - topixCapGrp
 
 reference:
   method: same_intraday_bucket
@@ -108,10 +104,6 @@ toxicity:
   enabled: true
   section_title: "Cross-Venue Toxicity"
   primary_venue: "TSE"
-  venues:
-    - "TSE"
-    - "SBIJ"
-    - "ODX"
   reversion_horizons:
     - "10ms"
     - "100ms"
@@ -124,7 +116,7 @@ toxicity:
     x_axis: "horizon"
     y_axis: "reversion_bps"
     series: "venue"
-  side_source: "feed"  # feed | inferred
+  side_source: "inferred"
   event_clustering:
     enabled: true
     window: "100ms"

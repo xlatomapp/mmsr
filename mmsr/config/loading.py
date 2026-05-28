@@ -61,8 +61,11 @@ def report_config_from_mapping(raw: Mapping[str, Any]) -> ReportConfig:
     commentary_section = _mapping(raw.get("commentary", {}), "commentary")
     toxicity_section = _mapping(raw.get("toxicity", {}), "toxicity")
     calendar_section = _mapping(raw.get("calendar", {}), "calendar")
-    symbols_section = _mapping(raw.get("symbols", {}), "symbols")
     reference_data_section = _mapping(raw.get("reference_data", {}), "reference_data")
+    raw_functions_section = _mapping(
+        kdb_section.get("raw_data_functions", {}),
+        "data.kdb.raw_data_functions",
+    )
 
     metrics = raw.get("metrics")
     if not isinstance(metrics, list) or not metrics:
@@ -84,15 +87,26 @@ def report_config_from_mapping(raw: Mapping[str, Any]) -> ReportConfig:
             function=str(calendar_section.get("function", "getTradingCalendar")),
             date_column=str(calendar_section.get("date_column", "date")),
         ),
-        symbols=SymbolUniverseConfig(
-            source=str(symbols_section.get("source", "kdb")),
-            namespace=str(symbols_section.get("namespace", ".mmsr")),
-            function=str(symbols_section.get("function", "getSymbols")),
-            symbol_column=str(symbols_section.get("symbol_column", "sym")),
-        ),
         reference_data=ReferenceDataConfig(
             source=str(reference_data_section.get("source", "kdb")),
-            namespace=str(reference_data_section.get("namespace", ".mmsr")),
+            namespace=str(
+                reference_data_section.get(
+                    "namespace",
+                    raw_functions_section.get("namespace", ".mmsr"),
+                )
+            ),
+            function=str(reference_data_section.get("function", "getRef")),
+            symbol_column=str(reference_data_section.get("symbol_column", "sym")),
+            ric_column=str(reference_data_section.get("ric_column", "ric")),
+        ),
+        symbols=SymbolUniverseConfig(
+            source=str(reference_data_section.get("source", "kdb")),
+            namespace=str(
+                reference_data_section.get(
+                    "namespace",
+                    raw_functions_section.get("namespace", ".mmsr"),
+                )
+            ),
             function=str(reference_data_section.get("function", "getRef")),
             symbol_column=str(reference_data_section.get("symbol_column", "sym")),
         ),
@@ -234,7 +248,11 @@ def _toxicity_config(section: Mapping[str, Any]) -> ToxicityConfig:
         enabled=bool(section.get("enabled", True)),
         section_title=str(section.get("section_title", "Cross-Venue Toxicity")),
         primary_venue=str(section.get("primary_venue", "TSE")),
-        venues=tuple(str(value) for value in section.get("venues", ["TSE", "SBIJ", "ODX"])),
+        venues=(
+            None
+            if "venues" not in section or section.get("venues") is None
+            else tuple(str(value) for value in section["venues"])
+        ),
         reversion_horizons=tuple(
             str(value)
             for value in section.get(
@@ -248,7 +266,7 @@ def _toxicity_config(section: Mapping[str, Any]) -> ToxicityConfig:
             y_axis=str(visual.get("y_axis", "reversion_bps")),
             series=str(visual.get("series", "venue")),
         ),
-        side_source=str(section.get("side_source", "feed")),
+        side_source=str(section.get("side_source", "inferred")),
         event_clustering=ToxicityEventClusteringConfig(
             enabled=bool(clustering.get("enabled", True)),
             window=str(clustering.get("window", "100ms")),

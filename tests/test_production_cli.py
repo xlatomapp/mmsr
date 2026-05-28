@@ -12,7 +12,7 @@ from mmsr.cli import (
 
 CONFIG_YAML = """
 report:
-  title: "Production Smoke Report"
+  title: "Production Preflight Report"
   branding:
     brand_name: "Prod Brand"
 
@@ -33,24 +33,15 @@ calendar:
   function: "getTradingCalendar"
   date_column: date
 
-symbols:
-  source: kdb
-  namespace: ".sb.mmsr"
-  function: "getSymbols"
-  symbol_column: sym
-
 period:
   start_date: "2026-05-01"
   end_date: "2026-05-02"
-  trading_sessions:
-    - ["09:00:00", "11:30:00"]
-    - ["12:30:00", "15:30:00"]
 
 intraday:
   bucket_size: "5m"
 
 groups:
-  - market_cap_bucket
+  - topixCapGrp
 
 reference:
   method: same_intraday_bucket
@@ -87,8 +78,14 @@ class FakeProductionKdbClient:
             if end < date(2026, 5, 1):
                 return {"date": [date(2026, 4, 29), date(2026, 4, 30)]}
             return {"date": [date(2026, 5, 1)]}
-        if "getSymbols" in query:
-            return {"sym": ["7203", "6758", "9984"]}
+        if "getRef" in query and args:
+            return {
+                "date": [args[0], args[0], args[0]],
+                "sym": ["7203", "6758", "9984"],
+                "ric": ["7203.T", "6758.T", "9984.T"],
+                "topixCapGrp": ["Large", "Large", "Large"],
+                "lotSize": [100, 100, 100],
+            }
 
         row_date = date(2026, 5, 1)
         volume = 12345
@@ -104,7 +101,7 @@ class FakeProductionKdbClient:
                 {
                     "date": row_date,
                     "time_bucket": "09:00-09:05",
-                    "market_cap_bucket": "Large cap",
+                    "topixCapGrp": "Large",
                     "quoted_spread_bps": 3.5,
                     "top_of_book_depth": 2500,
                 }
@@ -114,7 +111,7 @@ class FakeProductionKdbClient:
             {
                 "date": row_date,
                 "time_bucket": "09:00-09:05",
-                "market_cap_bucket": "Large cap",
+                "topixCapGrp": "Large",
                 "volume": volume,
                 "turnover": 987654321,
                 "trade_count": 42,
@@ -137,15 +134,15 @@ def test_render_production_report_file_uses_live_execution_path(
         kdb_host="localhost",
         kdb_port=5001,
         symbols=["7203", "6758", "9984"],
-        venues=["TSE"],
     )
 
     assert rendered_path == output_path
     html = output_path.read_text(encoding="utf-8")
-    assert "Production Smoke Report" in html
+    assert "Production Preflight Report" in html
     assert "Prod Brand" in html
     assert "Volume" in html
-    assert "Large cap" in html
+    assert "TOPIX cap group" in html
+    assert "Large" in html
     assert "Current versus reference" in html
     assert "Reference and Target Daily Trends" in html
     assert "Reference observation unit: trading day" in html
@@ -153,7 +150,7 @@ def test_render_production_report_file_uses_live_execution_path(
     metric_queries = [
         query
         for query in FakeProductionKdbClient.queries
-        if "getTradingCalendar" not in query and "getSymbols" not in query
+        if "calcActivity" in query or "calcLiquidity" in query
     ]
     assert len(metric_queries) == 6  # 2 target chunks + 2 reference days * 2 chunks
     assert ".sb.mmsr.getTrade" in "\n".join(FakeProductionKdbClient.queries)
@@ -175,10 +172,9 @@ def test_summarize_production_report_plan_queries_calendar_not_metrics(
         kdb_host="localhost",
         kdb_port=5001,
         symbols=["7203", "6758", "9984"],
-        venues=["TSE"],
     )
 
-    assert summary.config_title == "Production Smoke Report"
+    assert summary.config_title == "Production Preflight Report"
     assert summary.target_trading_days == (date(2026, 5, 1),)
     assert summary.reference_trading_days == (
         date(2026, 4, 29),
@@ -191,7 +187,7 @@ def test_summarize_production_report_plan_queries_calendar_not_metrics(
     assert summary.metric_contracts[0].template_name == "activity.q"
     assert len(FakeProductionKdbClient.queries) == 2
     assert all("getTradingCalendar" in query for query in FakeProductionKdbClient.queries)
-    assert "Symbol universe function: .sb.mmsr.getSymbols" in "\n".join(summary.summary_lines())
+    assert "Reference-data universe function: .sb.mmsr.getRef" in "\n".join(summary.summary_lines())
     assert ".sb.mmsr.getTrade" in "\n".join(summary.summary_lines())
 
 def test_summarize_production_report_plan_uses_symbol_function_without_cli_symbols(
@@ -208,13 +204,12 @@ def test_summarize_production_report_plan_uses_symbol_function_without_cli_symbo
         config_path=config_path,
         kdb_host="localhost",
         kdb_port=5001,
-        venues=["TSE"],
     )
 
     assert summary.symbol_chunk_count == 2
     assert summary.target_step_count == 2
     assert summary.reference_step_count == 4
-    assert any("getSymbols" in query for query in FakeProductionKdbClient.queries)
+    assert any("getRef" in query for query in FakeProductionKdbClient.queries)
 
 
 def test_preflight_production_report_executes_one_bounded_metric_step(
@@ -232,16 +227,15 @@ def test_preflight_production_report_executes_one_bounded_metric_step(
         kdb_host="localhost",
         kdb_port=5001,
         symbols=["7203", "6758", "9984"],
-        venues=["TSE"],
     )
 
     assert result.ok
-    assert result.config_title == "Production Smoke Report"
+    assert result.config_title == "Production Preflight Report"
     assert result.trading_days == (date(2026, 5, 1),)
     assert result.preflight_step.metric_name == "volume"
     assert result.preflight_step.symbols == ("7203", "6758")
     assert result.rendered_query.template_name == "activity.q"
-    assert "market_cap_bucket" in result.rendered_query.required_output_columns
+    assert "topixCapGrp" in result.rendered_query.required_output_columns
     assert result.result_row_count == 1
     assert len(FakeProductionKdbClient.queries) == 2
     assert "getTradingCalendar" in FakeProductionKdbClient.queries[0]
@@ -262,7 +256,6 @@ def test_preflight_production_report_can_select_metric(
         kdb_host="localhost",
         kdb_port=5001,
         symbols=["7203", "6758", "9984"],
-        venues=["TSE"],
         metric_name="quoted_spread_bps",
     )
 
@@ -296,8 +289,6 @@ def test_main_render_command_writes_report(tmp_path, monkeypatch, capsys) -> Non
             "7203",
             "--symbol",
             "6758",
-            "--venue",
-            "TSE",
         ]
     )
 
@@ -323,8 +314,6 @@ def test_main_preflight_command_prints_diagnostics(tmp_path, monkeypatch, capsys
             "5001",
             "--symbol",
             "7203",
-            "--venue",
-            "TSE",
         ]
     )
 
@@ -356,8 +345,6 @@ def test_main_preflight_command_accepts_metric_selection(
             "5001",
             "--symbol",
             "7203",
-            "--venue",
-            "TSE",
             "--metric",
             "quoted_spread_bps",
         ]
@@ -395,8 +382,6 @@ def test_main_plan_command_prints_summary_without_metric_execution(
             "6758",
             "--symbol",
             "9984",
-            "--venue",
-            "TSE",
         ]
     )
 

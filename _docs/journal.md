@@ -748,7 +748,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 ### Open questions
 
 - What are the exact production kdb table names and schemas for venue trades and primary quotes?
-- Is `aggressor_side` guaranteed to be numeric with buy as `1` and sell as `-1`, or should the q template map from feed-specific side codes?
+- Is `aggressorSide` guaranteed to be numeric with buy as `1` and sell as `-1`, or should the q template map from feed-specific side codes?
 - Should the reversion q template emit both `horizon` label and numeric horizon sort order for downstream rendering?
 
 
@@ -822,7 +822,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 ### Open questions
 
 - What are the exact production kdb table names and schemas for venue trades and primary quotes?
-- Is `aggressor_side` guaranteed to be numeric with buy as `1` and sell as `-1`, or should the q template map from feed-specific side codes?
+- Is `aggressorSide` guaranteed to be numeric with buy as `1` and sell as `-1`, or should the q template map from feed-specific side codes?
 - Should the reversion q template emit both `horizon` label and numeric horizon sort order for downstream rendering?
 
 ## 2026-05-24 — Phase 5 iteration 4: reversion curve point conversion
@@ -892,7 +892,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 ### Open questions
 
 - What are the exact production kdb table names and schemas for venue trades and primary quotes?
-- Is `aggressor_side` guaranteed to be numeric with buy as `1` and sell as `-1`, or should the q template map from feed-specific side codes?
+- Is `aggressorSide` guaranteed to be numeric with buy as `1` and sell as `-1`, or should the q template map from feed-specific side codes?
 - Should the reversion q template emit both `horizon` label and numeric horizon sort order for downstream rendering, or is Python-side natural-duration sorting sufficient?
 
 
@@ -963,7 +963,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 ### Open questions
 
 - What are the exact production kdb table names and schemas for venue trades and primary quotes?
-- Is `aggressor_side` guaranteed to be numeric with buy as `1` and sell as `-1`, or should the q template map from feed-specific side codes?
+- Is `aggressorSide` guaranteed to be numeric with buy as `1` and sell as `-1`, or should the q template map from feed-specific side codes?
 - Should the reversion q template emit both `horizon` label and numeric horizon sort order for downstream rendering, or is Python-side natural-duration sorting sufficient?
 
 ---
@@ -1033,7 +1033,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 ### Open questions
 
 - What are the exact production kdb table names and schemas for venue trades and primary quotes?
-- Is `aggressor_side` guaranteed to be numeric with buy as `1` and sell as `-1`, or should the q template map from feed-specific side codes?
+- Is `aggressorSide` guaranteed to be numeric with buy as `1` and sell as `-1`, or should the q template map from feed-specific side codes?
 - Should the reversion q template emit both `horizon` label and numeric horizon sort order for downstream rendering, or is Python-side natural-duration sorting sufficient?
 ---
 
@@ -1101,7 +1101,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 ### Open questions
 
 - What are the exact production kdb table names and schemas for venue trades and primary quotes?
-- Is `aggressor_side` guaranteed to be numeric with buy as `1` and sell as `-1`, or should the q template map from feed-specific side codes?
+- Is `aggressorSide` guaranteed to be numeric with buy as `1` and sell as `-1`, or should the q template map from feed-specific side codes?
 - Should the reversion q template emit both `horizon` label and numeric horizon sort order for downstream rendering, or is Python-side natural-duration sorting sufficient?
 
 
@@ -1173,7 +1173,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 ### Open questions
 
 - What are the exact production kdb table names and schemas for venue trades and primary quotes?
-- Is `aggressor_side` guaranteed to be numeric with buy as `1` and sell as `-1`, or should the q template map from feed-specific side codes?
+- Is `aggressorSide` guaranteed to be numeric with buy as `1` and sell as `-1`, or should the q template map from feed-specific side codes?
 - Should the reversion q template emit both `horizon` label and numeric horizon sort order for downstream rendering, or is Python-side natural-duration sorting sufficient?
 - Does the production PyKX conversion preserve column metadata for zero-row result tables, or should live schema validation force a minimum one-row sample slice?
 ---
@@ -1246,7 +1246,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 ### Open questions
 
 - What are the exact production kdb table names and schemas for venue trades and primary quotes?
-- Is `aggressor_side` guaranteed to be numeric with buy as `1` and sell as `-1`, or should the q template map from feed-specific side codes?
+- Is `aggressorSide` guaranteed to be numeric with buy as `1` and sell as `-1`, or should the q template map from feed-specific side codes?
 - Does the production PyKX conversion preserve column metadata for zero-row result tables, or should live schema validation force a minimum one-row sample slice?
 
 ---
@@ -1258,7 +1258,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - Continued Milestone 5A with an offline production input-schema contract for `toxicity_reversion.q`.
 - Added `QTemplateInputTableSchemaContract` to make required source-table columns explicit for the venue-trade and primary-quote table roles.
 - Added `toxicity_reversion_input_schema_contracts()` and `validate_toxicity_reversion_input_schemas()` so live-kdb validation can check source-table schemas before running the q template.
-- Documented feed assumptions for `aggressor_side` and primary quote price conventions in the contract.
+- Documented feed assumptions for `aggressorSide` and primary quote price conventions in the contract.
 - Updated the reversion q-template comments, public kdb API exports, and milestone audit.
 
 ### Files changed
@@ -1275,7 +1275,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 - Added input-schema contract tests for required venue-trade columns.
 - Added input-schema contract tests for required primary-quote columns.
-- Added validation coverage for extra source columns and missing `aggressor_side`.
+- Added validation coverage for extra source columns and missing `aggressorSide`.
 - Updated public API import coverage for the new input-schema helpers.
 
 ### Validation performed
@@ -1300,7 +1300,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 ### Remaining work before milestone completion
 
 - Run live-kdb validation against confirmed production venue-trade and primary-quote tables.
-- Confirm exact production table names and whether `aggressor_side` is numeric with buy as `1` and sell as `-1`, or requires feed-specific mapping before the q template.
+- Confirm exact production table names and whether `aggressorSide` is numeric with buy as `1` and sell as `-1`, or requires feed-specific mapping before the q template.
 - Confirm whether production PyKX conversion preserves column metadata for zero-row result tables, or whether live validation should force a minimum one-row sample slice.
 
 ### Best next deterministic step
@@ -1316,7 +1316,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 ### Open questions
 
 - What are the exact production kdb table names and schemas for venue trades and primary quotes?
-- Is `aggressor_side` guaranteed to be numeric with buy as `1` and sell as `-1`, or should the q template map from feed-specific side codes?
+- Is `aggressorSide` guaranteed to be numeric with buy as `1` and sell as `-1`, or should the q template map from feed-specific side codes?
 - Does the production PyKX conversion preserve column metadata for zero-row result tables, or should live schema validation force a minimum one-row sample slice?
 
 
@@ -1387,7 +1387,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 ### Open questions
 
-- When live validation is re-enabled, are production `aggressor_side` values numeric buy `1` / sell `-1`, or feed-specific codes requiring mapping?
+- When live validation is re-enabled, are production `aggressorSide` values numeric buy `1` / sell `-1`, or feed-specific codes requiring mapping?
 - Should page-level commentary group by metric category first, by report dimension first, or by severity first?
 
 
@@ -1460,7 +1460,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 ### Open questions
 
-- When live validation is re-enabled, are production `aggressor_side` values numeric buy `1` / sell `-1`, or feed-specific codes requiring mapping?
+- When live validation is re-enabled, are production `aggressorSide` values numeric buy `1` / sell `-1`, or feed-specific codes requiring mapping?
 - Should section summary thresholds count every comparison row, only displayed metric cards, or a configured subset of headline metrics?
 
 
@@ -1534,7 +1534,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 ### Open questions
 
-- When live validation is re-enabled, are production `aggressor_side` values numeric buy `1` / sell `-1`, or feed-specific codes requiring mapping?
+- When live validation is re-enabled, are production `aggressorSide` values numeric buy `1` / sell `-1`, or feed-specific codes requiring mapping?
 - Should the metric definitions appendix be embedded as a final HTML report page by default, or exposed as an opt-in builder for callers to append explicitly?
 
 ---
@@ -5371,7 +5371,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
   existing internal kdb conventions? This implementation uses one-based IDs for
   user readability.
 - Should full-universe runs with no explicit `syms` use server-side chunk IDs in
-  the raw functions, or should MMSR require an explicit symbol universe before
+  the raw functions, or should MMSR require an explicit reference-data universe before
   enabling `symbol_chunk_size`?
 
 
@@ -5794,7 +5794,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 ### Open questions
 
 - Should `quoted_spread_ticks` remain in the minimal production config by default, or should it move to an optional example when a client quote function does not yet join `tick_size`?
-- Should flow metrics use feed-provided `aggressor_side` first, with quote-based signing as a later fallback, to keep the next q-template slice simple and production-friendly?
+- Should flow metrics use feed-provided `aggressorSide` first, with quote-based signing as a later fallback, to keep the next q-template slice simple and production-friendly?
 
 ---
 
@@ -5804,11 +5804,11 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 - Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, and `_docs/journal.md` before changing the report metric execution layer.
 - Implemented a focused `flow.q` production template for `signed_turnover` and `trade_imbalance`.
-- Kept the first flow slice deterministic by using feed-provided `aggressor_side` with buy=1 and sell=-1; quote-based trade signing remains a later explicit enhancement.
+- Kept the first flow slice deterministic by using feed-provided `aggressorSide` with buy=1 and sell=-1; quote-based trade signing remains a later explicit enhancement.
 - Added flow input and output schema contracts, including required trade-source columns and normalized output metadata (`signed_volume`, `volume`, and `trade_count`).
 - Wired flow metrics into `KdbMetricQueryPlanner`, `template_for_metric()`, source-function rendering, symbol filtering, and output-schema dispatch.
 - Updated starter metric definitions so flow metrics document the feed-side signing requirement.
-- Added `signed_turnover` and `trade_imbalance` to `config/report.production_minimal.yaml` with a removal note when `aggressor_side` is unavailable.
+- Added `signed_turnover` and `trade_imbalance` to `config/report.production_minimal.yaml` with a removal note when `aggressorSide` is unavailable.
 - Updated production and kdb integration docs to reflect the new runnable flow metric coverage and the canonical trade-source requirement.
 
 ### Files changed
@@ -5831,7 +5831,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 ### Tests added or updated
 
 - Added schema-contract tests for `flow.q` input requirements, output requirements, result validation, dispatch, and non-flow metric rejection.
-- Added query-planner tests for `signed_turnover` and `trade_imbalance`, including user-defined trade source-function rendering and `aggressor_side` requirements.
+- Added query-planner tests for `signed_turnover` and `trade_imbalance`, including user-defined trade source-function rendering and `aggressorSide` requirements.
 - Updated production minimal config coverage to include the new flow q-template metrics.
 
 ### Validation performed
@@ -5869,7 +5869,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 ### Open questions
 
-- Should a later flow enhancement add quote-based aggressor-side inference for venues that do not provide `aggressor_side`, or should MMSR continue requiring feed-side signing for production flow metrics?
+- Should a later flow enhancement add quote-based aggressor-side inference for venues that do not provide `aggressorSide`, or should MMSR continue requiring feed-side signing for production flow metrics?
 
 
 ---
@@ -6033,8 +6033,8 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 - Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, and `_docs/journal.md` before changing the runnable report-metric layer.
 - Implemented the remaining registered transaction-cost starter metric, `price_impact_30s_bps`, as a focused production q-template slice.
-- Added `price_impact.q`, which aligns trades to the prevailing same-symbol quote mid and the same-symbol quote mid at trade time plus the fixed 30-second horizon, then calculates signed price impact in basis points using feed-provided `aggressor_side`.
-- Added price-impact input and output schema contracts requiring canonical trade `aggressor_side` and canonical same-symbol quote fields, with `trade_count` and `notional` metadata preserved for report diagnostics.
+- Added `price_impact.q`, which aligns trades to the prevailing same-symbol quote mid and the same-symbol quote mid at trade time plus the fixed 30-second horizon, then calculates signed price impact in basis points using feed-provided `aggressorSide`.
+- Added price-impact input and output schema contracts requiring canonical trade `aggressorSide` and canonical same-symbol quote fields, with `trade_count` and `notional` metadata preserved for report diagnostics.
 - Wired `price_impact_30s_bps` into q-template dispatch, query planning, source-function rendering, symbol filtering, horizon/freshness parameter rendering, output-schema dispatch, runner support, starter metric documentation, and `config/report.production_minimal.yaml`.
 - Updated README, kdb integration docs, production readiness docs, roadmap, and milestone status to describe the runnable price-impact metric and keep validation utility expansion frozen.
 
@@ -6176,7 +6176,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 ### Summary
 
 - Updated the primary-quote reversion convention per user direction to:
-  `aggressor_side * (future_mid - mid_at_trade) / future_mid * 10000`.
+  `aggressorSide * (future_mid - mid_at_trade) / future_mid * 10000`.
 - Changed `toxicity_reversion.q` to divide by `post_mid` and require `post_mid > 0` for valid scored rows.
 - Updated metric-definition formula text, Cross-Venue Toxicity help text, deterministic commentary docs, roadmap wording, production readiness notes, and kdb integration docs to use the future-mid denominator consistently.
 - Added regression coverage so the packaged q template cannot drift back to the old `primary_mid` denominator.
@@ -6540,7 +6540,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 ---
 
-## 2026-05-27 — Phase 10 iteration 73: simplify source functions and add symbol-universe function
+## 2026-05-27 — Phase 10 iteration 73: simplify source functions and add reference-data universe function
 
 ### Implemented
 
@@ -6548,15 +6548,15 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - Simplified raw trade/quote source-function rendering from the broader positional argument list to the minimal production boundary:
   - `date`
   - `syms`
-- Added first-class symbol-universe configuration:
+- Added first-class reference-data universe configuration:
   - `symbols.namespace`
   - `symbols.function`
   - `symbols.symbol_column`
 - Added `KdbSymbolUniverseSource`, which calls the configured user-owned q function as `{[date] .namespace.function[date]}` and accepts either a symbol vector or a table/dict with the configured symbol column.
-- Updated `KdbProductionExecutor`, `KdbProductionExecutionPlanner`, and preflight planning so production runs use the configured symbol-universe function by default, while explicit CLI `--symbol` values remain a bounded smoke/debug override.
-- Updated production plan summaries to show the configured symbol-universe function.
+- Updated `KdbProductionExecutor`, `KdbProductionExecutionPlanner`, and preflight planning so production runs use the configured reference-data universe function by default, while explicit CLI `--symbol` values remain a bounded smoke/debug override.
+- Updated production plan summaries to show the configured reference-data universe function.
 - Removed `symbolChunkId` and `symbolChunkCount` from raw source-function calls; chunking remains an MMSR-side execution-plan detail that determines which `syms` vector each source call receives.
-- Updated production/example configs and operator documentation to describe the new `getSymbols[date]`, `getTrade[date;syms]`, and `getQuote[date;syms]` contracts.
+- Updated production/example configs and operator documentation to describe the new `getRef[date]`, `getTrade[date;syms]`, and `getQuote[date;syms]` contracts.
 
 ### Files changed
 
@@ -6588,8 +6588,8 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - Added `tests/test_symbols.py` for `KdbSymbolUniverseSource` function calls and vector coercion.
 - Updated config model/config-file tests for `SymbolUniverseConfig` and `symbols:` YAML loading.
 - Updated query-plan tests to assert raw source functions are called as `function[date;syms]` with no request dictionary and no chunk-id arguments.
-- Updated production execution tests to assert day-specific symbol universes drive symbol chunks when CLI symbols are not provided.
-- Updated production CLI tests to fake the configured symbol-universe function and verify plan summaries include it.
+- Updated production execution tests to assert day-specific reference-data universes drive symbol chunks when CLI symbols are not provided.
+- Updated production CLI tests to fake the configured reference-data universe function and verify plan summaries include it.
 
 ### Validation performed
 
@@ -6606,7 +6606,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 ### Current milestone progress
 
-- Minimal `date;syms` raw source-function boundary and user-owned symbol-universe function support are complete: 100%.
+- Minimal `date;syms` raw source-function boundary and user-owned reference-data universe function support are complete: 100%.
 - Milestone 10 is approximately 99.97% complete for a first market-monitoring live run.
 
 ### Remaining work before milestone completion
@@ -6633,7 +6633,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 ### Summary
 
-Implemented MMSR-owned q aggregation helpers under the configured calculation namespace so user-owned kdb functions remain limited to calendar, symbol-universe, and canonical source-row access while MMSR owns metric calculation logic.
+Implemented MMSR-owned q aggregation helpers under the configured calculation namespace so user-owned kdb functions remain limited to calendar, reference-data universe, and canonical source-row access while MMSR owns metric calculation logic.
 
 ### Files changed
 
@@ -6784,7 +6784,7 @@ packaged live-kdb example config is included in the package.
 
 - Run a bounded live-kdb trial using `config/report.production_minimal.yaml`, one
   known-good trading day, one liquid symbol, configured `getTradingCalendar`,
-  `getSymbols`, `getRef`, `getTrade`, and `getQuote` functions, and the MMSR
+  `getRef`, `getRef`, `getTrade`, and `getQuote` functions, and the MMSR
   calculation namespace.
 
 ### Package phase and iteration
@@ -6796,6 +6796,313 @@ packaged live-kdb example config is included in the package.
 ### Open questions
 
 - Confirm whether `getRef` should support client-specific additional taxonomy
-  columns beyond `topix_bucket`, `market_cap_bucket`, and `lot_size` before
+  columns beyond `topix_bucket`, `market_cap_bucket`, and `lotSize` before
   those columns are enabled in `groups`.
 
+
+## 2026-05-27 - Phase 10 Iteration 76
+
+### Summary
+
+Aligned the live kdb reference-data boundary with the current available
+taxonomy: renamed the TOPIX grouping field from `topix_bucket` to `topixCapGrp`
+and removed `market_cap_bucket` from the required `getRef[date;syms]` schema and
+packaged production starter configs because MMSR does not currently calculate or
+source a market-cap group by default.
+
+### Files changed
+
+- `README.md`
+- `_docs/journal.md`
+- `config/report.example.yaml`
+- `config/report.production_minimal.yaml`
+- `docs/kdb_integration_testing.md`
+- `docs/production_readiness.md`
+- `mmsr/config/models.py`
+- `mmsr/examples/config/live_kdb_report.yaml`
+- `mmsr/kdb/query_plan.py`
+- `mmsr/kdb/schema_contracts.py`
+- `mmsr/presentation/labels.py`
+- `tests/test_display_labels.py`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_kdb_schema_contracts.py`
+- `tests/test_production_cli.py`
+
+### Tests added or updated
+
+- Updated kdb query-plan tests so reference-data contracts require
+  `topixCapGrp` and no longer require `market_cap_bucket`.
+- Updated schema-contract tests to cover `topixCapGrp` as the default live
+  taxonomy group.
+- Updated production CLI tests and fake live results to use `topixCapGrp`.
+- Added a display-label assertion for the human-facing `TOPIX cap group` label.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_kdb_query_plan.py tests/test_kdb_schema_contracts.py tests/test_production_cli.py tests/test_config_models.py tests/test_display_labels.py -q --tb=short --color=no`: passed with 1 expected live-schema skip.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest -q -ra --tb=short --color=no`: passed with 3 expected live-kdb/schema skips.
+- Ran `python -m black --check .`: not run successfully because Black is not installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Milestone 10 / first live-kdb market-report readiness.
+- Validation utility expansion remains frozen per user feedback.
+
+### Current milestone progress
+
+- Production kdb source-boundary alignment with the current user-owned calendar,
+  symbol, reference, trade, and quote functions is complete: 100%.
+- Milestone 10 is approximately 99.99% complete for a first market-monitoring
+  live run.
+
+### Remaining work before milestone completion
+
+- Live production validation remains pending until a real kdb+ process,
+  credentials, configured calendar/symbol/reference/trade/quote functions, and
+  production-like schemas are available.
+- Optional historical/offline market-cap drilldown support remains in the report
+  layer, but `market_cap_bucket` is no longer a required live reference-data
+  column or a packaged production default group.
+
+### Best next deterministic step
+
+- Run a bounded live-kdb trial using `config/report.production_minimal.yaml`, one
+  known-good trading day, one liquid symbol, configured `getTradingCalendar`,
+  `getRef`, `getRef`, `getTrade`, and `getQuote` functions, and the MMSR
+  calculation namespace.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 76.
+- Delivery archive name: `mmsr_phase10_iteration76.zip`.
+
+### Open questions
+
+- None.
+
+
+
+## 2026-05-27 - Phase 10 Iteration 77
+
+### Summary
+
+Simplified the live kdb source boundary around a single reference-data universe
+function and removed the legacy live-smoke harness. `getRef[date]` now owns the
+analysis universe and reference attributes, raw source functions receive the
+filtered reference table, live contracts use camelCase source columns, and MMSR
+infers `aggressorSide` inside q for default reversion/price-impact-style
+calculations instead of requiring it from the trade source.
+
+### Files changed
+
+- `README.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `config/report.example.yaml`
+- `config/report.production_minimal.yaml`
+- `docs/kdb_integration_testing.md`
+- `mmsr/config/loading.py`
+- `mmsr/config/models.py`
+- `mmsr/examples/config/live_kdb_report.yaml`
+- `mmsr/kdb/__init__.py`
+- `mmsr/kdb/calculation_functions.q`
+- `mmsr/kdb/production.py`
+- `mmsr/kdb/query_plan.py`
+- `mmsr/kdb/q_templates/activity.q`
+- `mmsr/kdb/q_templates/effective_spread.q`
+- `mmsr/kdb/q_templates/flow.q`
+- `mmsr/kdb/q_templates/liquidity.q`
+- `mmsr/kdb/q_templates/liquidity_ticks.q`
+- `mmsr/kdb/q_templates/price_impact.q`
+- `mmsr/kdb/q_templates/realized_volatility.q`
+- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/kdb/schema_contracts.py`
+- `mmsr/periods/symbols.py`
+- `tests/test_config_files.py`
+- `tests/test_config_models.py`
+- `tests/test_docs_governance.py`
+- `tests/test_kdb_metric_runner.py`
+- `tests/test_kdb_production_execution.py`
+- `tests/test_kdb_query_loader.py`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_kdb_schema_contracts.py`
+- `tests/test_production_cli.py`
+- `tests/test_symbols.py`
+
+Removed files:
+
+- `mmsr/kdb/live_smoke.py`
+- `tests/test_live_kdb_smoke.py`
+
+### Tests added or updated
+
+- Updated config and production CLI tests to use `getRef[date]` instead of a
+  separate `getSymbols` function.
+- Updated q-template planning tests so source functions are rendered as
+  `getTrade[date;0!refs]` and `getQuote[date;0!refs]` after MMSR filters the
+  `getRef[date]` table.
+- Updated schema-contract tests for camelCase live source columns and MMSR-owned
+  `aggressorSide` inference in reversion and price-impact templates.
+- Updated docs-governance tests to describe the production preflight path rather
+  than the removed live-smoke harness.
+
+### Validation performed
+
+- Ran `python -m pytest tests/test_config_files.py tests/test_config_models.py tests/test_symbols.py tests/test_kdb_query_plan.py tests/test_kdb_production_execution.py tests/test_production_cli.py tests/test_kdb_query_loader.py -q --tb=short --color=no`: passed.
+- Ran `python -m pytest tests/test_docs_governance.py tests/test_kdb_metric_runner.py tests/test_kdb_schema_contracts.py -q --tb=short --color=no`: passed with 1 expected live-schema skip.
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest -q -ra --tb=short --color=no`: passed with 1 expected live-schema skip.
+- Ran `python -m black --check .`: not run successfully because Black is not installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before Python validation commands, but pytest and compileall returned success.
+
+### Current milestone
+
+- Active milestone: Milestone 10 / first live-kdb market-report readiness.
+- Validation utility expansion remains frozen per user feedback.
+
+### Current milestone progress
+
+- Production kdb source-boundary alignment with the user-owned calendar,
+  reference-data universe, trade, and quote functions is complete: 100%.
+- Milestone 10 is approximately 99.99% complete for a first market-monitoring
+  live run.
+
+### Remaining work before milestone completion
+
+- Live production validation remains pending until a real kdb+ process,
+  credentials, configured `getTradingCalendar`, `getRef`, `getTrade`, and
+  `getQuote` functions, and production-like schemas are available.
+- Optional historical/offline market-cap drilldown support remains in the report
+  layer, but `market_cap_bucket` is not a packaged production default group.
+
+### Best next deterministic step
+
+- Run a bounded production preflight with one known-good trading day and one
+  liquid symbol using `config/report.production_minimal.yaml`, the configured
+  user-owned source functions, and the MMSR calculation namespace.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 77.
+- Delivery archive name: `mmsr_phase10_iteration77.zip`.
+
+### Open questions
+
+- None.
+## 2026-05-28 - Phase 10 Iteration 78
+
+### Current milestone and next deterministic step
+
+- Active milestone: Milestone 10 / first live-kdb market-report readiness.
+- Smallest deterministic task: remove the production `--venue` override, keep the
+  default analysis target anchored to TSE via `toxicity.primary_venue`, and fix
+  reversion-side inference so `aggressorSide` is calculated per venue and per
+  symbol from the matched prevailing quote before measuring the future primary
+  quote path.
+
+### Implemented in this step
+
+- Removed the production CLI/API venue override from `plan`, `preflight`, and
+  `render`; production runs now rely on the configured TSE primary venue and the
+  source functions' reference-data universe instead of an operator `--venue`
+  filter.
+- Changed `ToxicityConfig.venues` to an optional venue filter. When omitted, the
+  reversion q template discovers venues present in the trade and quote rows; when
+  supplied, it remains a narrow explicit filter for controlled diagnostics.
+- Updated `toxicity_reversion.q` so each trade is matched to the prevailing quote
+  by `date`, `sym`, `venue`, and `time`, infers `aggressorSide` from that
+  same-venue/same-symbol midpoint, then separately uses the TSE/primary quote
+  path for at-trade and future mids in the reversion formula.
+- Added a matched-venue quote staleness guard through `max_venue_quote_age`,
+  defaulting to the primary quote-age threshold unless explicitly supplied.
+- Removed static PTS venue lists from the packaged production/example configs so
+  PTS venues come from available trade/quote data by default.
+- Updated metric definitions, schema-contract assumptions, docs, and tests to
+  document MMSR-owned side inference for reversion and the TSE primary target.
+
+### Files changed
+
+- `README.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/journal.md`
+- `config/report.example.yaml`
+- `config/report.production_minimal.yaml`
+- `docs/kdb_integration_testing.md`
+- `docs/production_readiness.md`
+- `docs/report_scope.md`
+- `mmsr/cli.py`
+- `mmsr/config/loading.py`
+- `mmsr/config/models.py`
+- `mmsr/examples/config/live_kdb_report.yaml`
+- `mmsr/kdb/production.py`
+- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/kdb/query_plan.py`
+- `mmsr/kdb/schema_contracts.py`
+- `mmsr/metrics/starter_definitions.py`
+- `tests/test_config_models.py`
+- `tests/test_kdb_metric_runner.py`
+- `tests/test_kdb_production_execution.py`
+- `tests/test_kdb_query_loader.py`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_kdb_schema_contracts.py`
+- `tests/test_production_cli.py`
+
+### Tests added or updated
+
+- Updated config-model and config-file tests for the new `venues=None` default
+  and optional venue-filter serialization.
+- Updated query-loader, query-planner, and metric-runner tests to assert the
+  reversion q renders all-venue quote sourcing, same-venue as-of quote matching,
+  `venueMid`-based `aggressorSide` inference, and `max_venue_quote_age`.
+- Updated production CLI/executor tests to remove `--venue` and programmatic
+  venue overrides.
+- Updated schema-contract tests so reversion trades no longer require a
+  feed-provided `aggressorSide`.
+
+### Validation performed
+
+- Ran `python -m compileall -q mmsr tests`: passed.
+- Ran `python -m pytest -q -ra --tb=short --color=no`: passed with 1 expected
+  live-schema skip.
+- Ran `python -m black --check .`: not run successfully because Black is not
+  installed in this execution environment.
+- Ran `python -m ruff check .`: not run successfully because Ruff is not
+  installed in this execution environment.
+- The environment emitted the recurring spreadsheet runtime warmup warning before
+  Python validation commands, but compileall and pytest returned success.
+
+### Current milestone progress
+
+- Venue override removal and per-venue/per-symbol reversion-side inference are
+  complete for this implementation slice: 100%.
+- Milestone 10 is approximately 99.99% complete for a first market-monitoring
+  live run.
+
+### Remaining work before milestone completion
+
+- Live production validation remains pending until a real kdb+ process,
+  credentials, configured `getTradingCalendar`, `getRef`, `getTrade`, and
+  `getQuote` functions, and production-like schemas are available.
+- Optional historical/offline market-cap drilldown support remains in the report
+  layer, but `market_cap_bucket` is not a packaged production default group.
+
+### Best next deterministic step
+
+- Run a bounded production preflight with one known-good trading day and one
+  liquid symbol using `config/report.production_minimal.yaml`, the configured
+  user-owned source functions, and the MMSR calculation namespace.
+
+### Package phase and iteration
+
+- Phase: 10.
+- Iteration: 78.
+- Delivery archive name: `mmsr_phase10_iteration78.zip`.
+
+### Open questions
+
+- None.

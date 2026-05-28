@@ -2,10 +2,10 @@
 
 This module owns the production execution shape that sits above individual q
 metric templates. It deliberately builds one-trading-day ``MetricRunRequest``
-objects and, when configured, symbol chunks. User-owned symbol-universe functions
-choose the analysis universe; raw trade/quote rows remain inside kdb and are
-provided by user-defined source functions; MMSR q templates perform the metric
-calculations under the configured namespace.
+objects and, when configured, reference-universe symbol chunks. The user-owned
+reference-data function chooses the analysis universe; raw trade/quote rows
+remain inside kdb and are provided by user-defined source functions; MMSR q
+templates perform the metric calculations under the configured namespace.
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ class KdbProductionPlanSummary:
     reference_step_count: int
     calculation_namespace: str
     source_functions: tuple[tuple[str, str], ...]
-    symbol_function: str | None
+    reference_data_function: str | None
     metric_contracts: tuple[KdbProductionMetricContract, ...]
 
     @property
@@ -97,7 +97,10 @@ class KdbProductionPlanSummary:
             f"Total metric steps: {self.total_step_count}",
             f"Calculation namespace: {self.calculation_namespace}",
             "Source functions: " + _format_source_functions(self.source_functions),
-            "Symbol universe function: " + (self.symbol_function or "none"),
+            (
+                "Reference-data universe function: "
+                + (self.reference_data_function or "none")
+            ),
             "Source-function contracts:",
         ]
         lines.extend(
@@ -158,9 +161,9 @@ class ProductionMetricRunStep:
     """One bounded kdb metric execution unit.
 
     A step is always scoped to one trading date. ``symbols`` contains the
-    current symbol slice passed as the ``syms`` argument to the raw source
-    function. It is empty only for legacy direct-planner callers that deliberately
-    do not use a symbol-universe source or explicit CLI symbols.
+    current symbol slice used to filter the reference table passed to raw source
+    functions. It is empty only for direct-planner callers that deliberately do
+    not use a reference-data source or explicit CLI symbols.
     """
 
     trading_day: date
@@ -219,7 +222,6 @@ class KdbProductionExecutionPlanner:
         period: ReportPeriod,
         trading_days: Sequence[date],
         symbols: Sequence[str] | None = None,
-        venues: Sequence[str] | None = None,
         symbols_by_day: Mapping[date, Sequence[str]] | None = None,
     ) -> KdbProductionRunPlan:
         """Return an ordered date/chunk/metric execution plan."""
@@ -230,8 +232,6 @@ class KdbProductionExecutionPlanner:
             symbols=symbols,
             symbols_by_day=symbols_by_day,
         )
-        venue_filter = _clean_string_tuple(venues, "venues")
-
         steps: list[ProductionMetricRunStep] = []
         for trading_day in bounded_days:
             daily_period = _daily_period(period, trading_day)
@@ -245,8 +245,6 @@ class KdbProductionExecutionPlanner:
                     parameters = dict(config.metric_parameters_for(metric_name))
                     if chunk_symbols:
                         parameters["symbols"] = chunk_symbols
-                    if venue_filter and "venues" not in parameters:
-                        parameters["venues"] = venue_filter
                     steps.append(
                         ProductionMetricRunStep(
                             trading_day=trading_day,
@@ -299,7 +297,6 @@ class KdbProductionExecutor:
         config: ReportConfig,
         period: ReportPeriod,
         symbols: Sequence[str] | None = None,
-        venues: Sequence[str] | None = None,
     ) -> KdbProductionRunPlan:
         """Build the target-period execution plan using the configured calendar."""
 
@@ -312,7 +309,6 @@ class KdbProductionExecutor:
             period=period,
             trading_days=trading_days,
             symbols=symbols,
-            venues=venues,
             symbols_by_day=self._symbols_by_day(
                 trading_days,
                 explicit_symbols=symbols,
@@ -339,7 +335,6 @@ class KdbProductionExecutor:
         config: ReportConfig,
         period: ReportPeriod,
         symbols: Sequence[str] | None = None,
-        venues: Sequence[str] | None = None,
     ) -> KdbProductionRunPlan:
         """Build a bounded reference-period plan from ``reference.lookback_days``."""
 
@@ -349,7 +344,6 @@ class KdbProductionExecutor:
             period=window.period,
             trading_days=window.trading_days,
             symbols=symbols,
-            venues=venues,
             symbols_by_day=self._symbols_by_day(
                 window.trading_days,
                 explicit_symbols=symbols,
@@ -362,7 +356,6 @@ class KdbProductionExecutor:
         config: ReportConfig,
         period: ReportPeriod,
         symbols: Sequence[str] | None = None,
-        venues: Sequence[str] | None = None,
     ) -> KdbProductionPlanSummary:
         """Summarize target/reference production execution without metric IO."""
 
@@ -370,7 +363,6 @@ class KdbProductionExecutor:
             config=config,
             period=period,
             symbols=symbols,
-            venues=venues,
         )
         reference_window = self.build_reference_window(config=config, period=period)
         reference_plan = self.planner.build_plan(
@@ -378,7 +370,6 @@ class KdbProductionExecutor:
             period=reference_window.period,
             trading_days=reference_window.trading_days,
             symbols=symbols,
-            venues=venues,
             symbols_by_day=self._symbols_by_day(
                 reference_window.trading_days,
                 explicit_symbols=symbols,
@@ -394,7 +385,7 @@ class KdbProductionExecutor:
             reference_step_count=len(reference_plan.steps),
             calculation_namespace=config.kdb.calculation_namespace,
             source_functions=tuple(sorted(config.kdb.source_functions().items())),
-            symbol_function=_symbol_source_label(self.symbol_source),
+            reference_data_function=_symbol_source_label(self.symbol_source),
             metric_contracts=_metric_contracts_from_plan(
                 runner=self.runner,
                 plan=target_plan,
@@ -407,7 +398,6 @@ class KdbProductionExecutor:
         config: ReportConfig,
         period: ReportPeriod,
         symbols: Sequence[str] | None = None,
-        venues: Sequence[str] | None = None,
     ) -> tuple[MetricTimeSeries, ...]:
         """Execute target-period metric steps and combine rows by metric name."""
 
@@ -415,7 +405,6 @@ class KdbProductionExecutor:
             config=config,
             period=period,
             symbols=symbols,
-            venues=venues,
         )
         return self._run_plan(config=config, plan=plan, execution_role="target")
 
@@ -425,7 +414,6 @@ class KdbProductionExecutor:
         config: ReportConfig,
         period: ReportPeriod,
         symbols: Sequence[str] | None = None,
-        venues: Sequence[str] | None = None,
     ) -> tuple[MetricTimeSeries, ...]:
         """Execute bounded reference observations before the target period."""
 
@@ -435,7 +423,6 @@ class KdbProductionExecutor:
             period=window.period,
             trading_days=window.trading_days,
             symbols=symbols,
-            venues=venues,
             symbols_by_day=self._symbols_by_day(
                 window.trading_days,
                 explicit_symbols=symbols,
@@ -554,7 +541,6 @@ class KdbProductionPreflight:
         config: ReportConfig,
         period: ReportPeriod,
         symbols: Sequence[str] | None = None,
-        venues: Sequence[str] | None = None,
         metric_name: str | None = None,
     ) -> KdbProductionPreflightResult:
         """Execute one bounded metric step and return preflight diagnostics."""
@@ -623,7 +609,6 @@ class KdbProductionPreflight:
             period=period,
             trading_days=trading_days,
             symbols=symbols,
-            venues=venues,
             symbols_by_day=symbols_by_day,
         )
         if not plan.steps:
@@ -780,7 +765,7 @@ def _symbols_by_trading_day(
     for trading_day in trading_days:
         if trading_day not in symbols_by_day:
             raise KdbProductionExecutionError(
-                "symbol universe did not return symbols for "
+                "reference-data universe did not return symbols for "
                 f"{trading_day.isoformat()}"
             )
         clean_symbols = _clean_string_tuple(
@@ -789,7 +774,7 @@ def _symbols_by_trading_day(
         )
         if not clean_symbols:
             raise KdbProductionExecutionError(
-                "symbol universe returned no symbols for "
+                "reference-data universe returned no symbols for "
                 f"{trading_day.isoformat()}"
             )
         resolved[trading_day] = clean_symbols

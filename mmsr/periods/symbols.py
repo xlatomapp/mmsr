@@ -1,8 +1,8 @@
-"""Symbol-universe source abstractions.
+"""Reference-data-backed universe source abstractions.
 
-Production symbol universes should come from a dedicated user-owned data source.
-For this project, that source is expected to be a kdb+ function that returns the
-symbols to analyze for a single trading day.
+Production reference-data universes come from the user-owned reference-data function.
+The same ``getRef[date]`` function controls the analysis universe and returns
+symbol attributes used for grouping and raw-source filtering.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from typing import Any, Protocol
 
 
 class SymbolUniverseSource(Protocol):
-    """Interface for retrieving analysis symbols for a trading day."""
+    """Interface for retrieving analysis symbols from reference data."""
 
     def symbols_for_day(self, day: date) -> list[str]:
         """Return symbols to analyze for ``day``."""
@@ -22,18 +22,18 @@ class SymbolUniverseSource(Protocol):
 
 @dataclass(frozen=True)
 class KdbSymbolUniverseSource:
-    """Symbol universe source backed by a user-defined kdb+ function.
+    """Symbol universe source backed by the user-defined reference function.
 
     The configured function must accept one positional ``date`` argument and
-    return either a symbol vector or a table/dict with ``symbol_column``.
+    return a reference table/dict containing at least ``symbol_column``.
     """
 
     client: Any
-    function: str = ".mmsr.getSymbols"
+    function: str = ".mmsr.getRef"
     symbol_column: str = "sym"
 
     def symbols_for_day(self, day: date) -> list[str]:
-        """Return analysis symbols by querying the configured universe function."""
+        """Return analysis symbols by querying the configured reference function."""
 
         query = f"{{[date] {_q_function_identifier(self.function)}[date]}}"
         result = self.client.execute(query, day)
@@ -81,12 +81,12 @@ def _q_function_identifier(value: str) -> str:
     """Validate and return a q function identifier used in a symbol call."""
 
     if not isinstance(value, str) or not value:
-        raise ValueError("symbol universe function must be a non-empty q function name")
+        raise ValueError("reference-data function must be a non-empty q function name")
     candidate = value[1:] if value.startswith(".") else value
     parts = candidate.split(".")
     if not parts or any(part == "" for part in parts):
-        raise ValueError(f"invalid symbol universe function: {value!r}")
+        raise ValueError(f"invalid reference-data function: {value!r}")
     for part in parts:
         if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", part) is None:
-            raise ValueError(f"invalid symbol universe function: {value!r}")
+            raise ValueError(f"invalid reference-data function: {value!r}")
     return value

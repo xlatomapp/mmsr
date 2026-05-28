@@ -319,11 +319,6 @@ def _plan_command(
             "multiple symbols; configured symbol_chunk_size is applied."
         ),
     ),
-    venue: list[str] | None = typer.Option(
-        None,
-        "--venue",
-        help="Optional venue filter. Repeat the option for multiple venues.",
-    ),
 ) -> int:
     """Print target/reference execution scope without running metric q."""
 
@@ -334,7 +329,6 @@ def _plan_command(
         kdb_username=kdb_username,
         kdb_password=kdb_password,
         symbols=symbol,
-        venues=venue,
     )
     for line in summary.summary_lines():
         typer.echo(line)
@@ -391,11 +385,6 @@ def _render_command(
             "configured symbol_chunk_size is applied before kdb execution."
         ),
     ),
-    venue: list[str] | None = typer.Option(
-        None,
-        "--venue",
-        help="Optional venue filter. Repeat the option for multiple venues.",
-    ),
     template_dir: Path | None = typer.Option(
         None,
         "--template-dir",
@@ -412,7 +401,6 @@ def _render_command(
         kdb_username=kdb_username,
         kdb_password=kdb_password,
         symbols=symbol,
-        venues=venue,
         template_dir=template_dir,
     )
     typer.echo(f"Rendered production kdb-backed report: {output_path}")
@@ -472,11 +460,6 @@ def _preflight_command(
             "configured metric."
         ),
     ),
-    venue: list[str] | None = typer.Option(
-        None,
-        "--venue",
-        help="Optional venue filter. Repeat the option for multiple venues.",
-    ),
 ) -> int:
     """Run one bounded production metric step and print diagnostics."""
 
@@ -487,7 +470,6 @@ def _preflight_command(
         kdb_username=kdb_username,
         kdb_password=kdb_password,
         symbols=symbol,
-        venues=venue,
         metric_name=metric,
     )
     for line in result.summary_lines():
@@ -512,12 +494,12 @@ def _kdb_symbol_source(
     client: KdbClient,
     report_config: ReportConfig,
 ) -> KdbSymbolUniverseSource:
-    """Build the configured user-function-backed kdb symbol-universe source."""
+    """Build the reference-data-backed kdb universe source."""
 
     return KdbSymbolUniverseSource(
         client=client,
-        function=report_config.symbols.qualified_function(),
-        symbol_column=report_config.symbols.symbol_column,
+        function=report_config.reference_data.qualified_function(),
+        symbol_column=report_config.reference_data.symbol_column,
     )
 
 
@@ -529,7 +511,6 @@ def summarize_production_report_plan(
     kdb_username: str | None = None,
     kdb_password: str | None = None,
     symbols: Sequence[str] | None = None,
-    venues: Sequence[str] | None = None,
 ) -> KdbProductionPlanSummary:
     """Return a production execution summary without executing metric q."""
 
@@ -554,7 +535,6 @@ def summarize_production_report_plan(
         config=report_config,
         period=period,
         symbols=symbols,
-        venues=venues,
     )
 
 
@@ -566,7 +546,6 @@ def preflight_production_report(
     kdb_username: str | None = None,
     kdb_password: str | None = None,
     symbols: Sequence[str] | None = None,
-    venues: Sequence[str] | None = None,
     metric_name: str | None = None,
 ) -> KdbProductionPreflightResult:
     """Run a bounded production preflight against the configured kdb endpoint."""
@@ -592,7 +571,6 @@ def preflight_production_report(
         config=report_config,
         period=period,
         symbols=symbols,
-        venues=venues,
         metric_name=metric_name,
     )
 
@@ -606,7 +584,6 @@ def render_production_report_file(
     kdb_username: str | None = None,
     kdb_password: str | None = None,
     symbols: Sequence[str] | None = None,
-    venues: Sequence[str] | None = None,
     template_dir: str | Path | None = None,
 ) -> Path:
     """Render a production report through the production kdb executor.
@@ -641,13 +618,11 @@ def render_production_report_file(
         config=report_config,
         period=period,
         symbols=symbols,
-        venues=venues,
     )
     reference_series = executor.run_reference(
         config=report_config,
         period=period,
         symbols=symbols,
-        venues=venues,
     )
 
     registry = build_default_registry()

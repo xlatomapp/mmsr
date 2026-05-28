@@ -56,7 +56,7 @@ def _activity_result() -> dict[str, list[object]]:
     return {
         "date": [date(2026, 5, 1)],
         "time_bucket": ["09:00-09:05"],
-        "market_cap_bucket": ["Large"],
+        "topixCapGrp": ["Large"],
         "turnover": [1_500_000.0],
         "volume": [1_000],
         "trade_count": [25],
@@ -144,8 +144,8 @@ def test_activity_input_contract_lists_source_columns_and_extras() -> None:
         "sym",
         "session",
         "auction",
-        "trade_price",
-        "trade_size",
+        "tradePrice",
+        "tradeSize",
         "sector",
     )
 
@@ -165,10 +165,10 @@ def test_liquidity_input_contract_lists_quote_columns_and_extras() -> None:
         "sym",
         "session",
         "auction",
-        "bid_price",
-        "ask_price",
-        "bid_size",
-        "ask_size",
+        "bidPrice",
+        "askPrice",
+        "bidSize",
+        "askSize",
         "market_segment",
     )
 
@@ -188,10 +188,10 @@ def test_liquidity_ticks_input_contract_requires_tick_size() -> None:
         "sym",
         "session",
         "auction",
-        "bid_price",
-        "ask_price",
-        "bid_size",
-        "ask_size",
+        "bidPrice",
+        "askPrice",
+        "bidSize",
+        "askSize",
         "tick_size",
         "sector",
     )
@@ -213,8 +213,8 @@ def test_realized_volatility_input_contract_requires_symbol_for_returns() -> Non
         "sym",
         "session",
         "auction",
-        "bid_price",
-        "ask_price",
+        "bidPrice",
+        "askPrice",
         "sector",
     )
     assert "within each symbol" in contract.assumptions[0]
@@ -235,9 +235,9 @@ def test_flow_input_contract_requires_feed_side() -> None:
         "sym",
         "session",
         "auction",
-        "trade_price",
-        "trade_size",
-        "aggressor_side",
+        "tradePrice",
+        "tradeSize",
+        "aggressorSide",
         "sector",
     )
     assert "buy=1" in contract.assumptions[0]
@@ -259,8 +259,8 @@ def test_effective_spread_input_contracts_require_trade_and_quote_symbols() -> N
         "sym",
         "session",
         "auction",
-        "trade_price",
-        "trade_size",
+        "tradePrice",
+        "tradeSize",
         "sector",
     )
     assert quote_contract.table_role == "quotes"
@@ -271,13 +271,13 @@ def test_effective_spread_input_contracts_require_trade_and_quote_symbols() -> N
         "sym",
         "session",
         "auction",
-        "bid_price",
-        "ask_price",
+        "bidPrice",
+        "askPrice",
     )
     assert "same symbol" in trade_contract.assumptions[0]
 
 
-def test_price_impact_input_contracts_require_feed_side_and_quotes() -> None:
+def test_price_impact_input_contracts_infer_side_and_require_quotes() -> None:
     trade_contract, quote_contract = price_impact_input_schema_contracts(
         trades_table="trade_l1",
         quotes_table="quote_l1",
@@ -292,9 +292,8 @@ def test_price_impact_input_contracts_require_feed_side_and_quotes() -> None:
         "sym",
         "session",
         "auction",
-        "trade_price",
-        "trade_size",
-        "aggressor_side",
+        "tradePrice",
+        "tradeSize",
         "sector",
     )
     assert quote_contract.template_name == "price_impact.q"
@@ -305,23 +304,23 @@ def test_price_impact_input_contracts_require_feed_side_and_quotes() -> None:
         "sym",
         "session",
         "auction",
-        "bid_price",
-        "ask_price",
+        "bidPrice",
+        "askPrice",
     )
-    assert "buy=1" in trade_contract.assumptions[0]
+    assert "infers aggressorSide" in trade_contract.assumptions[0]
 
 
 def test_activity_contract_lists_all_template_output_columns() -> None:
     contract = activity_output_schema_contract(
         "volume",
-        group_by=("market_cap_bucket",),
+        group_by=("topixCapGrp",),
     )
 
     assert contract.template_name == "activity.q"
     assert contract.required_columns == (
         "date",
         "time_bucket",
-        "market_cap_bucket",
+        "topixCapGrp",
         "volume",
         "turnover",
         "trade_count",
@@ -332,7 +331,7 @@ def test_activity_contract_validates_result_and_rejects_missing_aggregate() -> N
     validate_activity_output_schema(
         metric_name="volume",
         result=_activity_result(),
-        group_by=("market_cap_bucket",),
+        group_by=("topixCapGrp",),
     )
 
     result = _activity_result()
@@ -341,7 +340,7 @@ def test_activity_contract_validates_result_and_rejects_missing_aggregate() -> N
         validate_activity_output_schema(
             metric_name="volume",
             result=result,
-            group_by=("market_cap_bucket",),
+            group_by=("topixCapGrp",),
         )
 
 
@@ -603,11 +602,10 @@ def test_toxicity_reversion_input_contracts_list_required_source_columns() -> No
         "session",
         "auction",
         "venue",
-        "trade_price",
-        "trade_size",
-        "aggressor_side",
+        "tradePrice",
+        "tradeSize",
     )
-    assert "buy=1" in venue_contract.assumptions[0]
+    assert "same-venue/same-symbol prevailing quote" in venue_contract.assumptions[0]
 
     assert quote_contract.table_role == "primary_quotes"
     assert quote_contract.table_name == "quote_primary_l1"
@@ -618,12 +616,12 @@ def test_toxicity_reversion_input_contracts_list_required_source_columns() -> No
         "session",
         "auction",
         "venue",
-        "bid_price",
-        "ask_price",
+        "bidPrice",
+        "askPrice",
     )
     assert reference_contract.table_role == "reference_data"
     assert reference_contract.table_name == "ref_l1"
-    assert "ask_price > bid_price" in quote_contract.assumptions[1]
+    assert "askPrice > bidPrice" in quote_contract.assumptions[1]
 
 
 def test_toxicity_reversion_input_contracts_validate_extra_columns() -> None:
@@ -637,9 +635,9 @@ def test_toxicity_reversion_input_contracts_validate_extra_columns() -> None:
             "session",
             "auction",
             "venue",
-            "trade_price",
-            "trade_size",
-            "aggressor_side",
+            "tradePrice",
+            "tradeSize",
+            "aggressorSide",
             "exec_id",
         ),
         primary_quotes_columns=(
@@ -649,16 +647,16 @@ def test_toxicity_reversion_input_contracts_validate_extra_columns() -> None:
             "session",
             "auction",
             "venue",
-            "bid_price",
-            "ask_price",
-            "bid_size",
-            "ask_size",
+            "bidPrice",
+            "askPrice",
+            "bidSize",
+            "askSize",
         ),
     )
 
 
-def test_toxicity_reversion_input_contracts_reject_missing_trade_side() -> None:
-    with pytest.raises(OutputSchemaContractError, match="aggressor_side"):
+def test_toxicity_reversion_input_contracts_reject_missing_venue() -> None:
+    with pytest.raises(OutputSchemaContractError, match="venue"):
         validate_toxicity_reversion_input_schemas(
             venue_trades_columns=(
                 "date",
@@ -666,9 +664,8 @@ def test_toxicity_reversion_input_contracts_reject_missing_trade_side() -> None:
                 "sym",
                 "session",
                 "auction",
-                "venue",
-                "trade_price",
-                "trade_size",
+                "tradePrice",
+                "tradeSize",
             ),
             primary_quotes_columns=(
                 "date",
@@ -677,8 +674,8 @@ def test_toxicity_reversion_input_contracts_reject_missing_trade_side() -> None:
                 "session",
                 "auction",
                 "venue",
-                "bid_price",
-                "ask_price",
+                "bidPrice",
+                "askPrice",
             ),
         )
 
@@ -783,13 +780,13 @@ def test_output_schema_contract_dispatch_validates_template_results() -> None:
     contract = output_schema_contract_for_template(
         template_name="activity.q",
         metric_name="volume",
-        group_by=("market_cap_bucket",),
+        group_by=("topixCapGrp",),
     )
 
     assert contract.required_columns == (
         "date",
         "time_bucket",
-        "market_cap_bucket",
+        "topixCapGrp",
         "volume",
         "turnover",
         "trade_count",

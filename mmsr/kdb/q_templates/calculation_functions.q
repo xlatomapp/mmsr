@@ -11,6 +11,7 @@
 {{ calculation_namespace }}.medianTopOfBookDepth:{[bidSize;askSize] med bidSize + askSize};
 {{ calculation_namespace }}.weightedAverage:{[weights;values] wavg[weights; values]};
 {{ calculation_namespace }}.positiveRatio:{[values] avg values > 0};
+{{ calculation_namespace }}.inferAggressorSide:{[tradePrice;mid] ?[tradePrice>mid;1;?[tradePrice<mid;-1;0]]};
 
 {{ calculation_namespace }}.timeBucket:{[t;session;auction;bucket]
     labels:`$string bucket xbar t;

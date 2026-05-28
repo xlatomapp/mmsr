@@ -71,13 +71,15 @@ required reversion formula is:
 
 ```text
 reversion_horizon_bps =
-  aggressor_side * (future_mid - mid_at_trade) / future_mid * 10000
+  aggressorSide * (future_primary_mid - primary_mid_at_trade) / future_primary_mid * 10000
 ```
 
-where `aggressor_side` is `1` for buyer-initiated trades and `-1` for
-seller-initiated trades. The report should describe the sign convention
-explicitly near the visual and should avoid relabeling this metric as price
-impact.
+where `aggressorSide` is `1` for buyer-initiated trades and `-1` for
+seller-initiated trades. In the live kdb template, that side is inferred from the
+prevailing same-venue/same-symbol quote for each trade, while the at-trade and
+future mids used in the reversion value remain the configured primary venue
+(TSE by default). The report should describe the sign convention explicitly near
+the visual and should avoid relabeling this metric as price impact.
 
 ## Implementation gate
 

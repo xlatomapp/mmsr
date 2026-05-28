@@ -83,7 +83,7 @@ def test_packaged_activity_template_parameters_ignore_documentation_comments() -
     template = load_q_template("activity.q")
 
     assert template_parameters(template) == frozenset(
-        {"trades_table", "ref_table", "calculation_namespace", "date_filter", "bucket_expr", "group_by", "symbol_filter"}
+        {"trades_table", "ref_table", "ref_filter", "calculation_namespace", "date_filter", "bucket_expr", "group_by", "symbol_filter"}
     )
 
 
@@ -100,7 +100,7 @@ def test_packaged_liquidity_template_parameters_include_bucket_expr() -> None:
     template = load_q_template("liquidity.q")
 
     assert template_parameters(template) == frozenset(
-        {"quotes_table", "ref_table", "calculation_namespace", "date_filter", "bucket_expr", "group_by", "symbol_filter"}
+        {"quotes_table", "ref_table", "ref_filter", "calculation_namespace", "date_filter", "bucket_expr", "group_by", "symbol_filter"}
     )
 
 
@@ -112,6 +112,7 @@ def test_packaged_toxicity_reversion_template_parameters_are_strict() -> None:
             "venue_trades_table",
             "primary_quotes_table",
             "ref_table",
+            "ref_filter",
             "calculation_namespace",
             "date_filter",
             "bucket_expr",
@@ -123,6 +124,7 @@ def test_packaged_toxicity_reversion_template_parameters_are_strict() -> None:
             "horizon_label",
             "horizon_sort_order",
             "max_primary_quote_age",
+            "max_venue_quote_age",
             "value_column",
         }
     )
@@ -132,11 +134,13 @@ def test_toxicity_reversion_template_uses_future_mid_denominator() -> None:
     template = load_q_template("toxicity_reversion.q")
 
     assert (
-        "reversion_bps: aggressor_side * 10000 * "
-        "(post_mid - primary_mid) % post_mid" in template
+        "reversion_bps: aggressorSide * 10000 * "
+        "(postMid - primaryMid) % postMid" in template
     )
-    assert "post_mid > 0" in template
-    assert "% primary_mid" not in template
+    assert "postMid > 0" in template
+    assert "% primaryMid" not in template
+    assert "`date`sym`venue`time xasc venueQuotes" in template
+    assert "inferAggressorSide[tradePrice; venueMid]" in template
 
 
 def test_render_calculation_function_bootstrap_installs_helpers_in_namespace() -> None:

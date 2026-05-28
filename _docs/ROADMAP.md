@@ -147,8 +147,8 @@ product scope explicitly changes.
 - Production plans can call user-defined raw-data functions such as
   `.sb.mmsr.getTrade[date;syms]` and `.sb.mmsr.getQuote[date;syms]` instead of
   querying physical trade/quote tables directly. Production planning can also
-  call user-owned calendar, symbol-universe, and reference-data functions such as
-  `.sb.mmsr.getTradingCalendar[start;end]`, `.sb.mmsr.getSymbols[date]`, and
+  call user-owned calendar, reference-data universe, and reference-data functions such as
+  `.sb.mmsr.getTradingCalendar[start;end]`, `.sb.mmsr.getRef[date]`, and
   `.sb.mmsr.getRef[date;syms]` so operators control trading days, the analysis
   universe, TOPIX/cap/lot-size reference data, and taxonomy outside MMSR code.
   Trade and quote source rows carry per-tick `session`/`auction` state instead
@@ -437,7 +437,7 @@ users define raw trade/quote access while MMSR owns metric q calculations.
   `flow.q`). Existing transaction-cost templates remain tested for compatibility
   but are not part of the default market report.
 - The mock-vs-live integration-test boundary remains explicit, and live-kdb
-  execution remains environment-gated: `mmsr.kdb.live_smoke` now builds bounded
+  execution remains environment-gated: `mmsr plan` and `mmsr preflight` now build bounded
   `activity.q` and `liquidity.q` smoke requests from documented `MMSR_KDB_*`
   variables, skips safely in pytest when variables are absent, and reuses the
   existing `KdbMetricRunner` output schema-contract boundary before

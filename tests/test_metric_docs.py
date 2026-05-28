@@ -83,7 +83,7 @@ def test_build_metric_definitions_appendix_page_contains_full_help_fields() -> N
 
     assert "Quoted Spread" in html
     assert "Formula" in html
-    assert "ask_price" in html
+    assert "askPrice" in html
     assert "Default aggregation" in html
     assert "Lower values are generally better" in html
     assert "Required tables" in html
@@ -106,7 +106,7 @@ def test_metric_definitions_appendix_escapes_metric_text() -> None:
         supports_intraday=True,
         supports_symbol_level=False,
         required_tables=["quotes<script>"],
-        required_columns=["bid_price"],
+        required_columns=["bidPrice"],
         caveats=["Watch <html> escaping."],
     )
 
@@ -144,7 +144,7 @@ def test_metric_definitions_markdown_is_deterministic_and_complete() -> None:
 
     assert "## Quoted Spread" in markdown
     assert "**Name:** `quoted_spread_bps`" in markdown
-    assert "**Formula:** `10000 * (ask_price - bid_price)" in markdown
+    assert "**Formula:** `10000 * (askPrice - bidPrice)" in markdown
     assert "**Direction:** Lower values are generally better" in markdown
     assert "**Caveats:** Can be distorted by stale" in markdown
 
