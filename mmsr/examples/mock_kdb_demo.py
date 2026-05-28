@@ -304,9 +304,15 @@ def _mock_rows_for_query(query: str) -> list[dict[str, Any]]:
 
 
 def _query_role(query: str) -> str:
-    if "date within (2026.05.22;2026.05.22)" in query:
+    if (
+        "date within (2026.05.22;2026.05.22)" in query
+        or "2026.05.22;2026.05.22" in query
+    ):
         return "current"
-    if "date within (2026.04.06;2026.05.21)" in query:
+    if (
+        "date within (2026.04.06;2026.05.21)" in query
+        or "2026.04.06;2026.05.21" in query
+    ):
         return "reference"
     raise ValueError("mock kdb client received an unknown date range")
 

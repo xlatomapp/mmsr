@@ -152,7 +152,7 @@ def test_render_production_report_file_uses_live_execution_path(
     metric_queries = [
         query
         for query in FakeProductionKdbClient.queries
-        if "calcActivity" in query or "calcLiquidity" in query
+        if query.strip().startswith(".desk.mmsr.runMetricDay")
     ]
     assert len(metric_queries) == 3  # one q-side day/chunk/rollup call for target and each reference day
     assert ".sb.mmsr.getTrade" in "\n".join(FakeProductionKdbClient.queries)

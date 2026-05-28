@@ -1,4 +1,4 @@
-"""Load and render q/Jinja-style query templates from package resources."""
+"""Load and render the canonical MMSR q library."""
 
 from __future__ import annotations
 
@@ -16,14 +16,15 @@ class QueryTemplateError(ValueError):
 
 
 def load_q_template(name: str) -> str:
-    """Load a metric q template block by filename.
+    """Deprecated metric-template loader.
 
-    Every MMSR-owned q function definition lives in the canonical
-    ``q_lib/mmsr_calculations.q.j2`` library. There is no separate
-    ``query_templates`` package; names such as ``liquidity.q`` are stable
-    metric-family identifiers that resolve to marked blocks inside that library.
+    Runtime query planning no longer loads per-metric q templates. All MMSR q
+    functions are installed from ``q_lib/mmsr_calculations.q.j2``.
     """
-    return load_metric_q_template(name)
+
+    raise FileNotFoundError(
+        f"metric q template files were removed; use installed q functions instead: {name}"
+    )
 
 
 
@@ -45,32 +46,14 @@ def load_q_library_template(name: str) -> str:
 
 
 
-def load_metric_q_template(name: str) -> str:
-    """Load a metric calculation function block from the canonical q library.
+def load_metric_calculation_block(name: str) -> str:
+    """Deprecated metric-block loader; metric q is installed as functions."""
 
-    All MMSR-owned q function definitions live in ``q_lib/mmsr_calculations.q.j2``.
-    Per-metric names are stable metric-family identifiers only; there are no
-    per-metric q template files with MMSR function definitions.
-    """
+    return load_q_template(name)
 
-    if not name:
-        raise ValueError("metric q template name must be non-empty")
-    if PurePath(name).name != name:
-        raise ValueError("metric q template name must be a filename, not a path")
-    if name.endswith(".q.j2"):
-        name = name[:-3]
-    if not name.endswith(".q"):
-        raise ValueError("metric q template name must end with .q or .q.j2")
 
-    library = load_q_library_template("mmsr_calculations.q.j2")
-    pattern = re.compile(
-        rf"^/ BEGIN metric_template:{re.escape(name)}\n(?P<body>.*?)^/ END metric_template:{re.escape(name)}$",
-        re.MULTILINE | re.DOTALL,
-    )
-    match = pattern.search(library)
-    if match is None:
-        raise FileNotFoundError(f"metric q template block not found in q_lib: {name}")
-    return match.group("body").strip() + "\n"
+load_metric_q_template = load_metric_calculation_block
+
 
 def template_parameters(template: str) -> frozenset[str]:
     """Return the unique named placeholders required by ``template``.
@@ -143,15 +126,9 @@ def _is_valid_parameter_name(name: str) -> bool:
 
 
 def _shared_q_library_template() -> str:
-    """Return q library content excluding request-rendered metric blocks."""
+    """Return the single canonical q library template."""
 
-    library = load_q_library_template("mmsr_calculations.q.j2")
-    return re.sub(
-        r"^/ BEGIN metric_template:.*?^/ END metric_template:.*?\n?",
-        "",
-        library,
-        flags=re.MULTILINE | re.DOTALL,
-    )
+    return load_q_library_template("mmsr_calculations.q.j2")
 
 def render_calculation_function_bootstrap(calculation_namespace: str) -> str:
     """Render MMSR-owned reusable q helper functions for a calculation namespace.

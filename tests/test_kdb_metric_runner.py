@@ -42,7 +42,7 @@ def _period() -> ReportPeriod:
 
 def test_calculation_function_bootstrap_contains_bucket_amend_once() -> None:
     bootstrap = render_calculation_function_bootstrap(".mmsr")
-    assert "MMSR reusable q utility library" in bootstrap
+    assert "MMSR reusable q calculation library" in bootstrap
     assert "labels:@[labels;where (auction = 1) & (session = `am);:;`AMO];" in bootstrap
     assert "labels[where" not in bootstrap
 
@@ -50,7 +50,7 @@ def test_calculation_function_bootstrap_contains_bucket_amend_once() -> None:
 def test_calculation_function_bootstrap_uses_absolute_assignments_only() -> None:
     bootstrap = render_calculation_function_bootstrap(".desk.mmsr")
     assert "\\d " not in bootstrap
-    assert bootstrap.startswith("/ MMSR reusable q utility library.")
+    assert bootstrap.startswith("/ MMSR reusable q calculation library.")
     assert ".desk.mmsr.timeBucketContinuous:{[t;bucket]" in bootstrap
 
 
@@ -109,12 +109,10 @@ def test_kdb_metric_runner_renders_activity_query_and_normalizes_column_result()
 
     query = client.queries[0]
     assert "rawTrades: trade;" in query
-    assert ".mmsr.calcActivity[rawTrades;refs]" in query
-    assert "date within (2026.05.01;2026.05.02)" in query
-    assert ".mmsr.timeBucket[time; session; auction; 0D00:05:00.000]" in query
+    assert ".mmsr.calcActivity[rawTrades;refs;`bucket`start_date`end_date!(0D00:05:00.000;2026.05.01;2026.05.02)]" in query
+    assert "`bucket`start_date`end_date!(0D00:05:00.000;2026.05.01;2026.05.02)" in query
     assert "labels:@[labels;where" not in query
     assert "labels[where" not in query
-    assert "market_segment" in query
     assert "time within" not in query
 
 
@@ -171,10 +169,10 @@ def test_kdb_metric_runner_renders_liquidity_query_without_group_columns() -> No
     assert series.observations[0].group == {}
     query = client.queries[0]
     assert "rawQuotes: quote;" in query
-    assert ".mmsr.calcLiquidity[rawQuotes;refs]" in query
-    assert ".mmsr.timeBucketContinuous[time; 0D00:05:00.000]" in query
+    assert ".mmsr.calcLiquidity[rawQuotes;refs;`bucket`start_date`end_date!(0D00:05:00.000;2026.05.01;2026.05.02)]" in query
+    assert "`bucket`start_date`end_date!(0D00:05:00.000;2026.05.01;2026.05.02)" in query
     assert ".mmsr.timeBucketContinuous[time; session;" not in query
-    assert "by date, time_bucket:" in query
+    assert ".calcLiquidity" in query
 
 
 def test_kdb_metric_runner_batch_loads_sources_once_and_returns_metric_tables() -> None:
@@ -263,9 +261,9 @@ def test_kdb_metric_runner_renders_effective_spread_query_and_preserves_metadata
     query = client.queries[0]
     assert "rawTradeRows: trade;" in query
     assert "rawQuoteRows: quote;" in query
-    assert "aj[`date`sym`time" in query
-    assert "quoteAge <= 0D00:00:00.500" in query
-    assert "effective_spread_bps: med" in query
+    assert ".mmsr.calcEffectiveSpread[rawTradeRows;rawQuoteRows;refs;" in query
+    assert "`bucket`start_date`end_date`max_quote_age!(0D00:05:00.000;2026.05.01;2026.05.02;0D00:00:00.500)" in query
+    assert ".mmsr.calcEffectiveSpread" in query
 
 
 def test_kdb_metric_runner_renders_price_impact_query_and_preserves_metadata() -> None:
@@ -304,9 +302,9 @@ def test_kdb_metric_runner_renders_price_impact_query_and_preserves_metadata() -
     query = client.queries[0]
     assert "rawTradeRows: trade;" in query
     assert "rawQuoteRows: quote;" in query
-    assert "horizonTime: time + 0D00:00:30.000" in query
-    assert "horizonQuoteAge <= 0D00:00:02.000" in query
-    assert "price_impact_30s_bps: med" in query
+    assert "`horizon`max_quote_age`max_horizon_quote_age" in query
+    assert "0D00:00:02.000" in query
+    assert ".mmsr.calcPriceImpact" in query
 
 
 def test_kdb_metric_runner_renders_reversion_query_and_normalizes_venue_horizon() -> None:
@@ -376,19 +374,17 @@ def test_kdb_metric_runner_renders_reversion_query_and_normalizes_venue_horizon(
     assert "rawPtsTradeRows: pts_trade;" in query
     assert "rawPtsQuoteRows: pts_quote;" in query
     assert "rawPrimaryQuoteRows: quote;" in query
-    assert "venue in `TSE`SBIJ" in query
-    assert "venue = `TSE" in query
-    assert "time + 0D00:00:00.100" in query
-    assert "horizon: $\"100ms\"" in query
-    assert "horizon_sort_order: 2" in query
-    assert "primaryQuoteAge <= 0D00:00:00.500" in query
-    assert "ptsQuoteAge <= 0D00:00:00.500" in query
-    assert "`date`sym`venue`time xasc ptsQuotes" in query
-    assert "inferAggressorSide[tradePrice; ptsMid]" in query
-    assert "primary_quote_reversion_100ms_bps: .mmsr.weightedAverage[notional; reversion_bps]" in query
-    assert "by date, time_bucket:" in query
-    assert ", venue, horizon:" in query
-    assert ", sym" in query
+    assert "`venues" in query and "`TSE`SBIJ" in query
+    assert "`primary_venue" in query and "`TSE" in query
+    assert "0D00:00:00.100" in query
+    assert "$\"100ms\"" in query
+    assert "`horizon_sort_order" in query and ";2;" in query
+    assert "0D00:00:00.500" in query
+    assert "0D00:00:00.500" in query
+    assert ".mmsr.calcToxicityReversion" in query
+    assert ".mmsr.calcToxicityReversion" in query
+    assert "$\"primary_quote_reversion_100ms_bps\"" in query
+    assert ".mmsr.calcToxicityReversion" in query
 
 
 

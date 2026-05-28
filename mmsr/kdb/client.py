@@ -43,8 +43,8 @@ class KdbClient:
         self._connection = kx.QConnection(
             host=self.config.host,
             port=self.config.port,
-            username=self.config.username,
-            password=self.config.password,
+            username=self.config.username or "",
+            password=self.config.password or "",
         )
         LOGGER.info("Connected to kdb+ at %s:%s", self.config.host, self.config.port)
 

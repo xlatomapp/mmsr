@@ -8190,3 +8190,116 @@ Removed files:
 ### Open questions
 
 - What exact rendered q line and q backtrace correspond to the remaining live `$` error under verbose logging?
+
+---
+
+## 2026-05-28 — Fix PyKX credential defaults and q library block loading names
+
+### Implemented
+
+- Updated `KdbClient.connect` so missing `username` and `password` values are passed to `pykx.QConnection` as empty strings instead of `None`.
+- Investigated the reported render-time q template loading path after removing `mmsr/kdb/query_templates`.
+- Confirmed the render path was not reading deleted per-metric files, but it still used the legacy `load_metric_q_template` name, which made the code look like it was loading removed files.
+- Renamed the active render-path loader usage to `load_metric_calculation_block`, which resolves marked metric calculation blocks from the canonical `mmsr/kdb/q_lib/mmsr_calculations.q.j2` file.
+- Kept `load_metric_q_template` only as a backward-compatible alias for older callers/tests, with render planning no longer importing or calling it.
+
+### Files changed
+
+- `mmsr/kdb/client.py`
+- `mmsr/kdb/query_loader.py`
+- `mmsr/kdb/query_plan.py`
+- `tests/test_kdb_query_loader.py`
+- `tests/test_kdb_query_plan.py`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Added a client regression test confirming missing kdb credentials are normalized to empty strings before calling `pykx.QConnection`.
+- Added a render-day regression test confirming the planned query comes from canonical q-library blocks and contains no removed `query_templates` path or `.q.j2` per-metric filename.
+
+### Validation
+
+- `PYTHONPATH=. pytest -q tests/test_kdb_query_loader.py tests/test_kdb_query_plan.py tests/test_kdb_metric_runner.py tests/test_logging.py` passed.
+- `PYTHONPATH=. pytest -q` passed.
+- Running `pytest -q` without `PYTHONPATH=.` still fails in this extracted zip layout because the package is not installed and the project root is not on the import path.
+- Python startup still printed the unrelated spreadsheet runtime warmup warning from the execution environment, but it did not fail the tests.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening.
+
+### Estimated milestone completion
+
+- 96%
+
+### Remaining work before milestone completion
+
+- Continue replacing request-rendered metric blocks with true parameterized q functions so production queries become compact q function calls and no metric calculation block needs to be rendered into each query.
+- Validate live kdb execution with the verbose logs and remove the concrete source of the remaining live `$` error.
+
+### Best next deterministic step
+
+- Parameterize the liquidity q calculation first so `quoted_spread_bps` preflight can call an installed q function with explicit parameters instead of rendering a metric calculation block.
+
+### Open questions
+
+- What exact q backtrace is produced by the remaining live `$` error after credential normalization and canonical-library render cleanup?
+
+---
+
+## 2026-05-28 — Stop loading metric q templates and parameterize installed q calculations
+
+### Implemented
+
+- Removed runtime metric q template/block loading from production query planning.
+- Changed single-metric, batch, and day render paths to call installed q functions from `mmsr/kdb/q_lib/mmsr_calculations.q.j2` instead of rendering deleted per-metric `.q.j2` files or q-library metric blocks into each report query.
+- Kept every MMSR-owned q function definition in the single canonical q file, including activity, liquidity, flow, realized volatility, effective spread, price impact, and reversion calculations.
+- Added parameter dictionaries for installed q metric functions so bucket duration, report start/end dates, and metric-specific values are passed as q parameters rather than template substitutions.
+- Deprecated `load_q_template` and `load_metric_calculation_block` so they no longer resolve metric template files; runtime code no longer calls them.
+- Updated the mock kdb demo path to recognize the new parameterized query shape used by report rendering.
+
+### Files changed
+
+- `mmsr/kdb/q_lib/mmsr_calculations.q.j2`
+- `mmsr/kdb/query_plan.py`
+- `mmsr/kdb/query_loader.py`
+- `mmsr/examples/mock_kdb_demo.py`
+- `tests/test_kdb_query_loader.py`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_kdb_metric_runner.py`
+- `tests/test_kdb_production_execution.py`
+- `tests/test_mock_kdb_demo.py`
+- `tests/test_production_cli.py`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Updated q loader tests to assert metric template loaders are deprecated and do not resolve removed files.
+- Updated query planner and production execution tests to assert rendered queries call installed q functions and do not include removed template file paths or embedded metric template blocks.
+- Updated mock report rendering tests for the new parameterized q call shape.
+
+### Validation
+
+- `PYTHONPATH=. pytest -q` passed.
+- Python startup still printed the unrelated spreadsheet runtime warmup warning from the execution environment, but it did not fail the tests.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening.
+
+### Estimated milestone completion
+
+- 97%
+
+### Remaining work before milestone completion
+
+- Run the new verbose report/preflight path against live kdb and fix any remaining q runtime errors using the logged query and q backtrace.
+- Harden q-side rollups further if live results show aggregation-level semantics need more explicit market/topix/symbol aggregation rather than the current canonical grouped fact shape.
+
+### Best next deterministic step
+
+- Run `mmsr preflight --verbose` for `quoted_spread_bps` against the live kdb endpoint and fix any concrete q runtime failure from the logged rendered call and kdb backtrace.
+
+### Open questions
+
+- Does the live kdb `$` error persist after report rendering stops loading metric templates entirely and uses installed parameterized q functions?

@@ -1,4 +1,6 @@
 from pathlib import Path
+import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -6,29 +8,30 @@ from mmsr.kdb.client import KdbClient, KdbConfig
 from mmsr.kdb.query_loader import (
     QueryTemplateError,
     load_q_template,
+    load_q_library_template,
     render_template,
     render_calculation_function_bootstrap,
     template_parameters,
 )
 
 
-def test_load_q_template_reads_metric_block_from_calculation_library() -> None:
-    template = load_q_template("liquidity.q")
+def test_load_q_library_template_reads_single_calculation_library() -> None:
+    template = load_q_library_template("mmsr_calculations.q.j2")
 
     assert ".calcLiquidity" in template
-    assert "callTradingCalendar" not in template
+    assert ".callTradingCalendar" in template
 
 
-def test_load_q_template_rejects_paths_and_non_q_names() -> None:
+def test_load_q_library_template_rejects_paths_and_non_q_library_names() -> None:
     with pytest.raises(ValueError, match="filename"):
-        load_q_template("../trading_calendar.q")
+        load_q_library_template("../mmsr_calculations.q.j2")
 
-    with pytest.raises(ValueError, match="end with .q"):
-        load_q_template("trading_calendar.txt")
+    with pytest.raises(ValueError, match="end with .q.j2"):
+        load_q_library_template("mmsr_calculations.q")
 
 
-def test_load_q_template_reports_missing_metric_block() -> None:
-    with pytest.raises(FileNotFoundError, match="missing_template.q"):
+def test_load_q_template_reports_removed_metric_templates() -> None:
+    with pytest.raises(FileNotFoundError, match="metric q template files were removed"):
         load_q_template("missing_template.q")
 
 
@@ -87,14 +90,6 @@ def test_render_template_requires_string_parameter_values() -> None:
         render_template("select from {{ table }}", {"table": 123})  # type: ignore[dict-item]
 
 
-def test_packaged_activity_template_parameters_ignore_documentation_comments() -> None:
-    template = load_q_template("activity.q")
-
-    assert template_parameters(template) == frozenset(
-        {"calculation_namespace", "date_filter", "bucket_expr", "group_by", "symbol_filter"}
-    )
-
-
 def test_kdb_client_can_be_instantiated_from_config_without_importing_pykx() -> None:
     config = KdbConfig(host="localhost", port=5000, username="user", password="pw")
     client = KdbClient(config)
@@ -104,38 +99,8 @@ def test_kdb_client_can_be_instantiated_from_config_without_importing_pykx() -> 
     assert client.config.port == 5000
 
 
-def test_packaged_liquidity_template_parameters_include_bucket_expr() -> None:
-    template = load_q_template("liquidity.q")
-
-    assert template_parameters(template) == frozenset(
-        {"calculation_namespace", "date_filter", "bucket_expr", "group_by", "symbol_filter"}
-    )
-
-
-def test_packaged_toxicity_reversion_template_parameters_are_strict() -> None:
-    template = load_q_template("toxicity_reversion.q")
-
-    assert template_parameters(template) == frozenset(
-        {
-            "calculation_namespace",
-            "date_filter",
-            "bucket_expr",
-            "group_by",
-            "venue_filter",
-            "auction_filter",
-            "primary_venue",
-            "horizon",
-            "horizon_label",
-            "horizon_sort_order",
-            "max_primary_quote_age",
-            "max_pts_quote_age",
-            "value_column",
-        }
-    )
-
-
-def test_toxicity_reversion_template_uses_future_mid_denominator() -> None:
-    template = load_q_template("toxicity_reversion.q")
+def test_toxicity_reversion_installed_function_uses_future_mid_denominator() -> None:
+    template = load_q_library_template("mmsr_calculations.q.j2")
 
     assert (
         "reversion_bps: aggressorSide * 10000 * "
@@ -164,3 +129,23 @@ def test_render_calculation_function_bootstrap_validates_namespace() -> None:
 
 def test_no_separate_q_template_directory_exists() -> None:
     assert not (Path(__file__).resolve().parents[1] / "mmsr" / "kdb" / "query_templates").exists()
+
+
+def test_kdb_client_uses_empty_strings_for_missing_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_q_connection(**kwargs: object) -> object:
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setitem(
+        sys.modules,
+        "pykx",
+        SimpleNamespace(QConnection=fake_q_connection),
+    )
+
+    client = KdbClient(KdbConfig(host="localhost", port=5000))
+    client.connect()
+
+    assert captured["username"] == ""
+    assert captured["password"] == ""

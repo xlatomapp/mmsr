@@ -42,11 +42,11 @@ def test_mock_kdb_demo_executes_q_templates_and_builds_report() -> None:
     assert len(result.comparisons) == 6
     assert len(result.executed_queries) == 6
     assert all("select" in query for query in result.executed_queries)
-    assert all("by date, time_bucket:" in query for query in result.executed_queries)
+    assert all("calc" in query or "MMSR reusable q calculation library" in query for query in result.executed_queries)
     assert any("mock_trade" in query for query in result.executed_queries)
     assert any("mock_quote" in query for query in result.executed_queries)
-    assert any("date within (2026.05.22;2026.05.22)" in query for query in result.executed_queries)
-    assert any("date within (2026.04.06;2026.05.21)" in query for query in result.executed_queries)
+    assert any("2026.05.22;2026.05.22" in query for query in result.executed_queries)
+    assert any("2026.04.06;2026.05.21" in query for query in result.executed_queries)
 
     summary_page = result.document.pages[0]
     trend_page = result.document.pages[1]

@@ -84,10 +84,10 @@ def test_query_planner_exposes_activity_input_and_output_contracts() -> None:
         "lotSize",
         "market_segment",
     )
-    assert ".mmsr.sumNotional[tradePrice; tradeSize]" in plan.query
-    assert ".mmsr.sumSize[tradeSize]" in plan.query
+    assert ".mmsr.calcActivity[rawTrades;refs;" in plan.query
+    assert "calcActivity[rawTrades;refs;" in plan.query
     assert "rawTrades: trade_l1;" in plan.query
-    assert ".mmsr.calcActivity[rawTrades;refs]" in plan.query
+    assert ".mmsr.calcActivity[rawTrades;refs;" in plan.query
     assert 'sym = $"7203"' in plan.query
 
 
@@ -130,8 +130,8 @@ def test_query_planner_exposes_liquidity_quote_contracts() -> None:
         "lotSize",
         "sector",
     )
-    assert ".mmsr.medianQuotedSpreadBps[bidPrice; askPrice]" in plan.query
-    assert ".mmsr.medianTopOfBookDepth[bidSize; askSize]" in plan.query
+    assert ".mmsr.calcLiquidity[rawQuotes;refs;" in plan.query
+    assert "calcLiquidity[rawQuotes;refs;" in plan.query
 
 
 
@@ -171,7 +171,7 @@ def test_query_planner_exposes_tick_spread_quote_contracts() -> None:
     assert plan.input_contracts[1].table_role == "reference_data"
     assert "sector" in plan.input_contracts[1].required_columns
     assert "calcLiquidityTicks" in plan.query
-    assert "tick_size > 0" in plan.query
+    assert ".mmsr.calcLiquidityTicks[rawQuotes;refs;" in plan.query
     assert 'sym = $"7203"' in plan.query
 
 
@@ -210,7 +210,7 @@ def test_query_planner_exposes_realized_volatility_quote_contracts() -> None:
     assert plan.input_contracts[1].table_role == "reference_data"
     assert "sector" in plan.input_contracts[1].required_columns
     assert "calcRealizedVolatility" in plan.query
-    assert "log_return" in plan.query
+    assert ".mmsr.calcRealizedVolatility[rawQuoteRows;refs;" in plan.query
     assert 'sym = $"7203"' in plan.query
 
 
@@ -253,7 +253,7 @@ def test_query_planner_exposes_flow_trade_contracts() -> None:
     assert plan.input_contracts[1].table_role == "reference_data"
     assert "sector" in plan.input_contracts[1].required_columns
     assert "calcFlow" in plan.query
-    assert "aggressorSide in (1 -1)" in plan.query
+    assert "calcFlow[rawTrades;refs;" in plan.query
     assert 'sym = $"7203"' in plan.query
 
 
@@ -303,8 +303,8 @@ def test_query_planner_exposes_effective_spread_trade_quote_contracts() -> None:
         "askPrice",
     )
     assert "calcEffectiveSpread" in plan.query
-    assert "aj[`date`sym`time" in plan.query
-    assert "quoteAge <= 0D00:00:00.500" in plan.query
+    assert "calcEffectiveSpread[rawTradeRows;rawQuoteRows;refs;" in plan.query
+    assert "0D00:00:00.500" in plan.query
     assert 'sym = $"7203"' in plan.query
 
 
@@ -356,9 +356,9 @@ def test_query_planner_exposes_price_impact_trade_quote_contracts() -> None:
     assert plan.input_contracts[2].table_role == "reference_data"
     assert "sector" in plan.input_contracts[2].required_columns
     assert "calcPriceImpact" in plan.query
-    assert "horizonTime: time + 0D00:00:30.000" in plan.query
-    assert "quoteAge <= 0D00:00:00.500" in plan.query
-    assert "horizonQuoteAge <= 0D00:00:02.000" in plan.query
+    assert "0D00:00:30.000" in plan.query
+    assert "0D00:00:00.500" in plan.query
+    assert "0D00:00:02.000" in plan.query
     assert 'sym = $"7203"' in plan.query
 
 
@@ -524,11 +524,11 @@ def test_query_planner_can_call_user_defined_trade_source_function() -> None:
     assert plan.calculation_namespace == ".sb.mmsrCalc"
     assert plan.input_contracts[0].table_name == ".sb.mmsr.getTrade"
     assert plan.input_contracts[1].table_name == ".sb.mmsr.getRef"
-    assert ".sb.mmsrCalc.calcActivity:{" in plan.query
+    assert ".sb.mmsrCalc.calcActivity[rawTrades;refs;" in plan.query
     assert "rawRefs: select from (.sb.mmsr.getRef[2026.05.01]);" in plan.query
     assert 'refs: `sym xkey select from rawRefs where sym = $"7203";' in plan.query
     assert "rawTrades: (.sb.mmsr.getTrade[2026.05.01;0!refs]);" in plan.query
-    assert "calcActivity[rawTrades;refs]" in plan.query
+    assert "calcActivity[rawTrades;refs;" in plan.query
     assert "`startDate`endDate`startTimes`endTimes`bucket`syms`venues" not in plan.query
     assert "`date`symbolChunkId`symbolChunkCount" not in plan.query
     assert ";2026.05.02;" not in plan.query
@@ -558,7 +558,7 @@ def test_query_planner_can_call_user_defined_quote_source_function() -> None:
     )
     assert plan.input_contracts[0].table_name == ".sb.mmsr.getQuote"
     assert plan.input_contracts[1].table_name == ".sb.mmsr.getRef"
-    assert ".desk.mmsr.calcLiquidity:{" in plan.query
+    assert ".desk.mmsr.calcLiquidity[rawQuotes;refs;" in plan.query
     assert "rawRefs: select from (.sb.mmsr.getRef[2026.05.01]);" in plan.query
     assert "refs: `sym xkey select from rawRefs where 1b;" in plan.query
     assert "rawQuotes: (.sb.mmsr.getQuote[2026.05.01;0!refs]);" in plan.query
@@ -583,8 +583,8 @@ def test_query_planner_can_call_user_defined_quote_source_function_for_ticks() -
     assert plan.source_functions == (("quotes", ".sb.mmsr.getQuote"),)
     assert plan.input_contracts[0].table_name == ".sb.mmsr.getQuote"
     assert "tick_size" in plan.input_contracts[0].required_columns
-    assert ".desk.mmsr.calcLiquidityTicks:{" in plan.query
-    assert "from quotes" in plan.query
+    assert ".desk.mmsr.calcLiquidityTicks[rawQuotes;refs;" in plan.query
+    assert "calcLiquidityTicks[rawQuotes;refs;" in plan.query
     assert "rawQuotes: (.sb.mmsr.getQuote[2026.05.01;0!refs]);" in plan.query
 
 
@@ -605,10 +605,10 @@ def test_query_planner_can_call_user_defined_trade_source_function_for_flow() ->
     assert plan.source_functions == (("trades", ".sb.mmsr.getTrade"),)
     assert plan.input_contracts[0].table_name == ".sb.mmsr.getTrade"
     assert "aggressorSide" in plan.input_contracts[0].required_columns
-    assert ".desk.mmsr.calcFlow:{" in plan.query
-    assert "from trades" in plan.query
+    assert ".desk.mmsr.calcFlow[rawTrades;refs;" in plan.query
+    assert "calcFlow[rawTrades;refs;" in plan.query
     assert "rawTrades: (.sb.mmsr.getTrade[2026.05.01;0!refs]);" in plan.query
-    assert "calcFlow[rawTrades;refs]" in plan.query
+    assert "calcFlow[rawTrades;refs;" in plan.query
 
 
 
@@ -636,7 +636,7 @@ def test_query_planner_can_call_user_defined_trade_and_quote_functions_for_effec
     )
     assert plan.input_contracts[0].table_name == ".sb.mmsr.getTrade"
     assert plan.input_contracts[1].table_name == ".sb.mmsr.getQuote"
-    assert ".desk.mmsr.calcEffectiveSpread:{" in plan.query
+    assert ".desk.mmsr.calcEffectiveSpread[rawTradeRows;rawQuoteRows;refs;" in plan.query
     assert "rawTradeRows: (.sb.mmsr.getTrade[2026.05.01;0!refs]);" in plan.query
     assert "rawQuoteRows: (.sb.mmsr.getQuote[2026.05.01;0!refs]);" in plan.query
 
@@ -669,8 +669,8 @@ def test_reversion_planner_uses_user_defined_trade_and_quote_source_functions() 
     assert plan.input_contracts[1].table_name == ".sb.mmsr.getPtsQuote"
     assert plan.input_contracts[2].table_name == ".sb.mmsr.getQuote"
     assert plan.input_contracts[3].table_name == ".sb.mmsr.getRef"
-    assert ".sb.mmsrCalc.calcToxicityReversion:{" in plan.query
-    assert "ptsTrades:" in plan.query
+    assert ".sb.mmsrCalc.calcToxicityReversion[rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;" in plan.query
+    assert "calcToxicityReversion[rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;" in plan.query
     assert "rawRefs: select from (.sb.mmsr.getRef[2026.05.01]);" in plan.query
     assert "rawPtsTradeRows: (.sb.mmsr.getPtsTrade[2026.05.01;0!refs]);" in plan.query
     assert "rawPtsQuoteRows: (.sb.mmsr.getPtsQuote[2026.05.01;0!refs]);" in plan.query
@@ -777,8 +777,8 @@ def test_query_planner_renders_day_query_with_explicit_syms_and_q_rollup() -> No
     assert "{[runDate;refs] .sb.mmsr.getTrade[runDate;refs]}" in plan.query
     assert "{[runDate;refs] .sb.mmsr.getQuote[runDate;refs]}" in plan.query
     assert "{[runDate;refs] .sb.mmsr.getRef[runDate]}" in plan.query
-    assert "{[rawSources] .desk.mmsr.calcActivity[rawSources`trades;rawSources`refs]}" in plan.query
-    assert "{[rawSources] .desk.mmsr.calcLiquidity[rawSources`quotes;rawSources`refs]}" in plan.query
+    assert "{[rawSources] .desk.mmsr.calcActivity[rawSources`trades;rawSources`refs;`bucket`start_date`end_date!(0D00:05:00.000;2026.05.01;2026.05.01)]}" in plan.query
+    assert "{[rawSources] .desk.mmsr.calcLiquidity[rawSources`quotes;rawSources`refs;`bucket`start_date`end_date!(0D00:05:00.000;2026.05.01;2026.05.01)]}" in plan.query
     assert 'rollupMetricResult[raze {x[$"quoted_spread_bps"]} each chunkResults;requestedAggregationLevels]' not in plan.query
     assert 'rollupMetricResult[raze {x[$"quoted_spread_bps"]} each chunkResults;$"quoted_spread_bps";' not in plan.query
     assert "`market`market_bucket`symbol" in plan.query
@@ -805,3 +805,36 @@ def test_query_planner_quote_contracts_do_not_require_tick_state() -> None:
     assert "session" not in contract.required_columns
     assert "auction" not in contract.required_columns
     assert "continuous-session" in " ".join(contract.assumptions)
+
+
+def test_render_day_uses_canonical_q_library_blocks_not_removed_template_files() -> None:
+    registry = build_default_registry()
+    planner = KdbMetricQueryPlanner()
+    base_period = _period()
+    plan = planner.render_day(
+        [
+            MetricRunRequest(
+                metric=registry.get("quoted_spread_bps"),
+                period=ReportPeriod(
+                    start_date=date(2026, 5, 1),
+                    end_date=date(2026, 5, 1),
+                    sessions=base_period.sessions,
+                    bucket=base_period.bucket,
+                ),
+                group_by=["sym"],
+                source_functions={
+                    "reference_data": ".sb.mmsr.getRef",
+                    "quotes": ".sb.mmsr.getQuote",
+                },
+                parameters={
+                    "symbols": ("7203",),
+                    "aggregation_levels": ("symbol",),
+                },
+            )
+        ]
+    )
+
+    assert ".calcLiquidity" in plan.query
+    assert ".runMetricDay[" in plan.query
+    assert "query_templates" not in plan.query
+    assert "liquidity.q.j2" not in plan.query

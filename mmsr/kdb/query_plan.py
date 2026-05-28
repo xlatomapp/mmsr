@@ -14,7 +14,6 @@ from dataclasses import dataclass, field
 from datetime import date, time
 from typing import Any
 
-from mmsr.kdb.query_loader import load_metric_q_template, render_template, template_parameters
 from mmsr.kdb.schema_contracts import (
     QTemplateInputTableSchemaContract,
     QTemplateOutputSchemaContract,
@@ -213,7 +212,6 @@ class KdbMetricQueryPlanner:
         """Render ``request`` into a deterministic query plan."""
 
         template_name = template_for_metric(request.metric.name)
-        template = load_metric_q_template(template_name)
         query_group_by = _query_group_by_for_template(template_name, request.group_by)
         result_group_by = group_by_for_metric_result(
             request.metric.name,
@@ -226,10 +224,11 @@ class KdbMetricQueryPlanner:
         )
         params = _template_parameters_for_request(request)
 
-        rendered_template = _render_template_with_used_params(template, params)
-        query = rendered_template + "\n" + _single_metric_execution_block(
+        query = _single_metric_execution_block(
             template_name=template_name,
+            metric_name=request.metric.name,
             params=params,
+            request=request,
         )
         return RenderedMetricQuery(
             metric_name=request.metric.name,
@@ -282,19 +281,6 @@ class KdbMetricQueryPlanner:
         chunk_size = _day_chunk_size(clean_requests, all_symbols)
         aggregation_levels = _aggregation_level_values(clean_requests[0].parameters)
 
-        template_blocks: list[str] = []
-        seen_templates: set[str] = set()
-        for metric_query, request in zip(metric_queries, representative_requests, strict=True):
-            if metric_query.template_name in seen_templates:
-                continue
-            seen_templates.add(metric_query.template_name)
-            template_blocks.append(
-                _render_template_with_used_params(
-                    load_metric_q_template(metric_query.template_name),
-                    _template_parameters_for_request(request),
-                )
-            )
-
         loader_roles = ("reference_data", *source_roles)
         source_loaders = _q_function_dictionary(
             loader_roles,
@@ -312,26 +298,23 @@ class KdbMetricQueryPlanner:
             [metric_query.metric_name for metric_query in metric_queries],
             [
                 _metric_function_expression(
+                    request.metric.name,
                     metric_query.template_name,
                     metric_query.calculation_namespace,
+                    request,
                 )
-                for metric_query in metric_queries
+                for metric_query, request in zip(metric_queries, representative_requests, strict=True)
             ],
             label="metric_functions",
         )
 
-        query = "\n".join(
-            (
-                *template_blocks,
-                f"""{calculation_namespace}.runMetricDay[
+        query = f"""{calculation_namespace}.runMetricDay[
     {_q_date(clean_requests[0].period.start_date)};
     {_q_symbol_vector_from_strings(all_symbols)};
     {chunk_size};
     {_q_symbol_vector(aggregation_levels, 'aggregation_levels')};
     {source_loaders};
-    {metric_functions}]""",
-            )
-        )
+    {metric_functions}]"""
 
         return RenderedMetricDayQuery(
             query=query,
@@ -375,18 +358,10 @@ class KdbMetricQueryPlanner:
             start=1,
         ):
             params = _template_parameters_for_request(request)
-            rendered_template = _render_template_with_used_params(
-                load_metric_q_template(metric_query.template_name),
-                params,
-            )
             result_variable = f"metricResult{index}"
             body_lines.append("")
-            body_lines.extend(
-                "    " + line if line else ""
-                for line in rendered_template.splitlines()
-            )
             body_lines.append(
-                f"    {result_variable}: {_metric_call_expression(metric_query.template_name, metric_query.calculation_namespace)};"
+                f"    {result_variable}: {_metric_call_expression(metric_query.metric_name, metric_query.template_name, metric_query.calculation_namespace, _metric_params_expression(request))};"
             )
             result_symbols.append(_q_symbol_from_string(metric_query.metric_name))
             result_variables.append(result_variable)
@@ -663,7 +638,9 @@ def _template_parameters_for_request(request: MetricRunRequest) -> dict[str, str
 def _single_metric_execution_block(
     *,
     template_name: str,
+    metric_name: str,
     params: Mapping[str, str],
+    request: MetricRunRequest,
 ) -> str:
     """Return the top-level q expression for a single metric query."""
 
@@ -676,37 +653,49 @@ def _single_metric_execution_block(
     ]
     lines.extend(_batch_source_load_lines(source_roles, params))
     lines.append(
-        f"    result: {_metric_call_expression(template_name, params['calculation_namespace'])};"
+        "    result: "
+        + _metric_call_expression(
+            metric_name,
+            template_name,
+            params["calculation_namespace"],
+            _metric_params_expression(request),
+        )
+        + ";"
     )
     lines.append("    result")
     lines.append("    }[]")
     return "\n".join(lines)
 
 
-def _metric_call_expression(template_name: str, calculation_namespace: str) -> str:
+def _metric_call_expression(
+    metric_name: str,
+    template_name: str,
+    calculation_namespace: str,
+    metric_params: str,
+) -> str:
     """Return the q call that passes already-loaded raw rows into calc function."""
 
     calls = {
-        "activity.q": f"{calculation_namespace}.calcActivity[rawTrades;refs]",
-        "liquidity.q": f"{calculation_namespace}.calcLiquidity[rawQuotes;refs]",
+        "activity.q": f"{calculation_namespace}.calcActivity[rawTrades;refs;{metric_params}]",
+        "liquidity.q": f"{calculation_namespace}.calcLiquidity[rawQuotes;refs;{metric_params}]",
         "liquidity_ticks.q": (
-            f"{calculation_namespace}.calcLiquidityTicks[rawQuotes;refs]"
+            f"{calculation_namespace}.calcLiquidityTicks[rawQuotes;refs;{metric_params}]"
         ),
         "realized_volatility.q": (
-            f"{calculation_namespace}.calcRealizedVolatility[rawQuoteRows;refs]"
+            f"{calculation_namespace}.calcRealizedVolatility[rawQuoteRows;refs;{metric_params}]"
         ),
-        "flow.q": f"{calculation_namespace}.calcFlow[rawTrades;refs]",
+        "flow.q": f"{calculation_namespace}.calcFlow[rawTrades;refs;{metric_params}]",
         "effective_spread.q": (
             f"{calculation_namespace}.calcEffectiveSpread["
-            "rawTradeRows;rawQuoteRows;refs]"
+            f"rawTradeRows;rawQuoteRows;refs;{metric_params}]"
         ),
         "price_impact.q": (
             f"{calculation_namespace}.calcPriceImpact["
-            "rawTradeRows;rawQuoteRows;refs]"
+            f"rawTradeRows;rawQuoteRows;refs;{metric_params}]"
         ),
         _REVERSION_TEMPLATE: (
             f"{calculation_namespace}.calcToxicityReversion["
-            "rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs]"
+            f"rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;{metric_params}]"
         ),
     }
     try:
@@ -716,30 +705,37 @@ def _metric_call_expression(template_name: str, calculation_namespace: str) -> s
             f"unsupported q template for metric call: {template_name!r}"
         ) from exc
 
-def _metric_function_expression(template_name: str, calculation_namespace: str) -> str:
+
+def _metric_function_expression(
+    metric_name: str,
+    template_name: str,
+    calculation_namespace: str,
+    request: MetricRunRequest,
+) -> str:
     """Return an anonymous q function that runs one metric against loaded sources."""
 
+    metric_params = _metric_params_expression(request)
     calls = {
-        "activity.q": f"{{[rawSources] {calculation_namespace}.calcActivity[rawSources`trades;rawSources`refs]}}",
-        "liquidity.q": f"{{[rawSources] {calculation_namespace}.calcLiquidity[rawSources`quotes;rawSources`refs]}}",
+        "activity.q": f"{{[rawSources] {calculation_namespace}.calcActivity[rawSources`trades;rawSources`refs;{metric_params}]}}",
+        "liquidity.q": f"{{[rawSources] {calculation_namespace}.calcLiquidity[rawSources`quotes;rawSources`refs;{metric_params}]}}",
         "liquidity_ticks.q": (
-            f"{{[rawSources] {calculation_namespace}.calcLiquidityTicks[rawSources`quotes;rawSources`refs]}}"
+            f"{{[rawSources] {calculation_namespace}.calcLiquidityTicks[rawSources`quotes;rawSources`refs;{metric_params}]}}"
         ),
         "realized_volatility.q": (
-            f"{{[rawSources] {calculation_namespace}.calcRealizedVolatility[rawSources`quotes;rawSources`refs]}}"
+            f"{{[rawSources] {calculation_namespace}.calcRealizedVolatility[rawSources`quotes;rawSources`refs;{metric_params}]}}"
         ),
-        "flow.q": f"{{[rawSources] {calculation_namespace}.calcFlow[rawSources`trades;rawSources`refs]}}",
+        "flow.q": f"{{[rawSources] {calculation_namespace}.calcFlow[rawSources`trades;rawSources`refs;{metric_params}]}}",
         "effective_spread.q": (
             f"{{[rawSources] {calculation_namespace}.calcEffectiveSpread["
-            "rawSources`trades;rawSources`quotes;rawSources`refs]}}"
+            f"rawSources`trades;rawSources`quotes;rawSources`refs;{metric_params}]}}"
         ),
         "price_impact.q": (
             f"{{[rawSources] {calculation_namespace}.calcPriceImpact["
-            "rawSources`trades;rawSources`quotes;rawSources`refs]}}"
+            f"rawSources`trades;rawSources`quotes;rawSources`refs;{metric_params}]}}"
         ),
         _REVERSION_TEMPLATE: (
             f"{{[rawSources] {calculation_namespace}.calcToxicityReversion["
-            "rawSources`pts_trades;rawSources`pts_quotes;rawSources`primary_quotes;rawSources`refs]}}"
+            f"rawSources`pts_trades;rawSources`pts_quotes;rawSources`primary_quotes;rawSources`refs;{metric_params}]}}"
         ),
     }
     try:
@@ -748,6 +744,67 @@ def _metric_function_expression(template_name: str, calculation_namespace: str) 
         raise KdbMetricQueryPlanError(
             f"unsupported q template for metric function: {template_name!r}"
         ) from exc
+
+
+def _metric_params_expression(request: MetricRunRequest) -> str:
+    """Return a q dictionary of scalar metric parameters for installed q functions."""
+
+    template_name = template_for_metric(request.metric.name)
+    bucket = _bucket_duration(request.period.bucket)
+    keys = ["bucket", "start_date", "end_date"]
+    values = [bucket, _q_date(request.period.start_date), _q_date(request.period.end_date)]
+
+    if template_name == "effective_spread.q":
+        extra = _effective_spread_template_parameters(request)
+        keys.append("max_quote_age")
+        values.append(extra["max_quote_age"])
+    elif template_name == "price_impact.q":
+        extra = _price_impact_template_parameters(request)
+        keys.extend(["horizon", "max_quote_age", "max_horizon_quote_age"])
+        values.extend(
+            [extra["horizon"], extra["max_quote_age"], extra["max_horizon_quote_age"]]
+        )
+    elif template_name == _REVERSION_TEMPLATE:
+        extra = _reversion_template_parameters(request)
+        keys.extend(
+            [
+                "value_column",
+                "primary_venue",
+                "venues",
+                "exclude_auction",
+                "horizon",
+                "horizon_label",
+                "horizon_sort_order",
+                "max_primary_quote_age",
+                "max_pts_quote_age",
+            ]
+        )
+        values.extend(
+            [
+                extra["value_column"],
+                extra["primary_venue"],
+                _q_symbol_vector_or_empty(request.parameters.get("venues")),
+                "1b" if request.parameters.get("exclude_auction", False) else "0b",
+                extra["horizon"],
+                extra["horizon_label"],
+                extra["horizon_sort_order"],
+                extra["max_primary_quote_age"],
+                extra["max_pts_quote_age"],
+            ]
+        )
+
+    return _q_dictionary_expression(keys, values, "metric parameter keys")
+
+
+def _q_dictionary_expression(keys: Sequence[str], values: Sequence[str], label: str) -> str:
+    """Return q dictionary syntax for rendered symbol keys and rendered values."""
+
+    if len(keys) != len(values) or not keys:
+        raise KdbMetricQueryPlanError(f"{label} and values must be non-empty and aligned")
+    rendered_keys = _q_symbol_vector(keys, label)
+    if len(values) == 1:
+        return f"{rendered_keys}!enlist {values[0]}"
+    return f"{rendered_keys}!(" + ";".join(values) + ")"
 
 
 def _q_source_loader_expression(
@@ -1183,7 +1240,7 @@ def _reversion_template_parameters(request: MetricRunRequest) -> dict[str, str]:
 
     primary_venue_symbol = _q_symbol(primary_venue, "primary_venue")
     return {
-        "value_column": _q_identifier(request.metric.name, "metric value column"),
+        "value_column": _q_symbol_from_string(request.metric.name),
         "primary_venue": primary_venue_symbol,
         "venue_filter": (
             f"venue in {_q_symbol_vector(venues, 'venues')}"

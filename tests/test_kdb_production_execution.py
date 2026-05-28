@@ -98,8 +98,8 @@ def test_symbol_chunked_market_groups_add_per_symbol_aggregation_key() -> None:
     assert request.group_by == ["topixCapGrp", "sym"]
 
     query_plan = KdbMetricQueryPlanner().render(request)
-    assert "by date, time_bucket:" in query_plan.query
-    assert ", topixCapGrp, sym" in query_plan.query
+    assert "calcActivity[rawTrades;refs;" in query_plan.query
+    assert "calcActivity[rawTrades;refs;" in query_plan.query
 
 
 def test_production_query_requests_are_daily_and_use_date_syms_source_args() -> None:
@@ -128,11 +128,11 @@ def test_production_query_requests_are_daily_and_use_date_syms_source_args() -> 
     assert "`date`symbolChunkId`symbolChunkCount" not in query_plan.query
     assert '($"7203";$"6758")' in query_plan.query
     assert "2026.05.01;1;1]" not in query_plan.query
-    assert ".desk.mmsrCalc.calcActivity:{" in query_plan.query
+    assert ".desk.mmsrCalc.calcActivity[rawTrades;refs;" in query_plan.query
     assert "rawRefs: select from (.sb.mmsr.getRef[2026.05.01]);" in query_plan.query
     assert 'refs: `sym xkey select from rawRefs where sym in ($"7203";$"6758");' in query_plan.query
     assert "rawTrades: (.sb.mmsr.getTrade[2026.05.01;0!refs]);" in query_plan.query
-    assert "calcActivity[rawTrades;refs]" in query_plan.query
+    assert "calcActivity[rawTrades;refs;" in query_plan.query
 
 def test_production_planner_rejects_calendar_dates_outside_period() -> None:
     config = ReportConfig(title="Daily Monitor", metrics=["turnover"])

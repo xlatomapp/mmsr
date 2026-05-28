@@ -1,7 +1,6 @@
-/ MMSR reusable q utility library.
+/ MMSR reusable q calculation library.
 / Render and install this once into the configured calculation namespace before
-/ running metric calculations. Metric query templates intentionally do not
-/ redefine these helpers, so first-time readers see one canonical utility surface.
+/ running metric calculations. All MMSR-owned q functions live in this file.
 
 {{ calculation_namespace }}.sumNotional:{[price;size] sum price * size};
 {{ calculation_namespace }}.sumSize:{[size] sum size};
@@ -14,9 +13,7 @@
 {{ calculation_namespace }}.callTradingCalendar:{[calendarFunction;start;end] calendarFunction[start;end]};
 
 {{ calculation_namespace }}.timeBucket:{[t;session;auction;bucket]
-    / Trade rows may include integer auction flags. Start from the continuous
-    / time bucket labels, then amend only rows explicitly marked as auction
-    / prints. Auction code 1=open, 2=close, 0=continuous.
+    / Auction code 1=open, 2=close, 0=continuous.
     labels:`$string bucket xbar t;
     labels:@[labels;where (auction = 1) & (session = `am);:;`AMO];
     labels:@[labels;where (auction = 2) & (session = `am);:;`AMC];
@@ -26,7 +23,6 @@
     };
 
 {{ calculation_namespace }}.timeBucketContinuous:{[t;bucket]
-    / Quote rows are continuous-session rows. They do not carry auction state.
     `$string bucket xbar t
     };
 
@@ -35,13 +31,6 @@
     };
 
 {{ calculation_namespace }}.rollupMetricResult:{[facts;aggregationLevels]
-    / Chunk outputs are razed in kdb before this function is called. This
-    / function emits standardized report-scope metadata for the configured
-    / aggregation levels while preserving metric-family result columns.
-    / Avoid q reserved words as local names: `cols` is a q table keyword and
-    / assigning to it raises 'assign in kdb+.
-    / Avoid $ conditional branching here too; production q errors surfaced
-    / through PyKX are much clearer with explicit if/appends.
     if[0=count facts; :facts];
     mmsrColumnNames: cols facts;
     mmsrHasBucket:`time_bucket in mmsrColumnNames;
@@ -70,10 +59,350 @@
     raze mmsrRollups
     };
 
+{{ calculation_namespace }}.calcActivity:{[rawTrades;refs;params]
+    trades: rawTrades lj refs;
+    result: select
+        turnover: {{ calculation_namespace }}.sumNotional[tradePrice; tradeSize],
+        volume: {{ calculation_namespace }}.sumSize[tradeSize],
+        trade_count: {{ calculation_namespace }}.rowCount[i]
+    by date,
+       time_bucket: {{ calculation_namespace }}.timeBucket[time; session; auction; params`bucket],
+       sym,
+       topixCapGrp
+    from trades
+    where date within (params`start_date; params`end_date),
+          tradePrice > 0,
+          tradeSize > 0,
+          not null sym;
+    result
+    };
+
+{{ calculation_namespace }}.calcLiquidity:{[rawQuotes;refs;params]
+    quotes: rawQuotes lj refs;
+    result: select
+        quoted_spread_bps: {{ calculation_namespace }}.medianQuotedSpreadBps[bidPrice; askPrice],
+        top_of_book_depth: {{ calculation_namespace }}.medianTopOfBookDepth[bidSize; askSize]
+    by date,
+       time_bucket: {{ calculation_namespace }}.timeBucketContinuous[time; params`bucket],
+       sym,
+       topixCapGrp
+    from quotes
+    where date within (params`start_date; params`end_date),
+          bidPrice > 0,
+          askPrice > bidPrice,
+          not null sym;
+    result
+    };
+
+{{ calculation_namespace }}.calcLiquidityTicks:{[rawQuotes;refs;params]
+    quotes: rawQuotes lj refs;
+    result: select
+        quoted_spread_ticks: med (askPrice - bidPrice) % tick_size
+    by date,
+       time_bucket: {{ calculation_namespace }}.timeBucketContinuous[time; params`bucket],
+       sym,
+       topixCapGrp
+    from quotes
+    where date within (params`start_date; params`end_date),
+          bidPrice > 0,
+          askPrice > bidPrice,
+          tick_size > 0,
+          not null sym;
+    result
+    };
+
+{{ calculation_namespace }}.calcFlow:{[rawTrades;refs;params]
+    trades: rawTrades lj refs;
+    result: select
+        signed_turnover: sum aggressorSide * tradePrice * tradeSize,
+        trade_imbalance: (sum aggressorSide * tradeSize) % sum tradeSize,
+        signed_volume: sum aggressorSide * tradeSize,
+        volume: sum tradeSize,
+        trade_count: count i
+    by date,
+       time_bucket: {{ calculation_namespace }}.timeBucket[time; session; auction; params`bucket],
+       sym,
+       topixCapGrp
+    from trades
+    where date within (params`start_date; params`end_date),
+          tradePrice > 0,
+          tradeSize > 0,
+          aggressorSide in 1 -1,
+          not null sym;
+    result
+    };
+
+{{ calculation_namespace }}.calcRealizedVolatility:{[rawQuoteRows;refs;params]
+    quotes: rawQuoteRows lj refs;
+    cleanQuotes:
+        select from quotes
+        where date within (params`start_date; params`end_date),
+              bidPrice > 0,
+              askPrice > bidPrice,
+              not null sym;
+    quoteMids:
+        update mid: (bidPrice + askPrice) % 2 from cleanQuotes;
+    quoteReturns:
+        update log_return: log_mid - prev log_mid
+        by date, sym
+        from `date`sym`time xasc update log_mid: log mid from quoteMids;
+    result: select
+        realized_volatility: 10000 * sqrt avg log_return * log_return,
+        return_count: count i,
+        first_mid: first mid,
+        last_mid: last mid
+    by date,
+       time_bucket: {{ calculation_namespace }}.timeBucketContinuous[time; params`bucket],
+       sym,
+       topixCapGrp
+    from quoteReturns
+    where not null log_return;
+    result
+    };
+
+{{ calculation_namespace }}.calcEffectiveSpread:{[rawTradeRows;rawQuoteRows;refs;params]
+    rawTrades: rawTradeRows lj refs;
+    rawQuotes: rawQuoteRows lj refs;
+    trades:
+        select
+            date,
+            time,
+            sym,
+            topixCapGrp,
+            tradePrice,
+            tradeSize,
+            session,
+            auction,
+            notional: tradePrice * tradeSize
+        from rawTrades
+        where date within (params`start_date; params`end_date),
+              tradePrice > 0,
+              tradeSize > 0,
+              not null sym;
+    quotes:
+        select
+            date,
+            time,
+            quoteTime: time,
+            sym,
+            mid: (bidPrice + askPrice) % 2
+        from rawQuotes
+        where date within (params`start_date; params`end_date),
+              bidPrice > 0,
+              askPrice > bidPrice,
+              not null sym;
+    tradeWithMid: aj[`date`sym`time; `date`sym`time xasc trades; `date`sym`time xasc quotes];
+    scored:
+        update
+            quoteAge: time - quoteTime,
+            effective_spread_bps: 20000 * abs[tradePrice - mid] % mid
+        from tradeWithMid;
+    result: select
+        effective_spread_bps: med effective_spread_bps,
+        trade_count: count i,
+        notional: sum notional
+    by date,
+       time_bucket: {{ calculation_namespace }}.timeBucket[time; session; auction; params`bucket],
+       sym,
+       topixCapGrp
+    from scored
+    where quoteAge <= params`max_quote_age,
+          not null mid,
+          mid > 0;
+    result
+    };
+
+{{ calculation_namespace }}.calcPriceImpact:{[rawTradeRows;rawQuoteRows;refs;params]
+    rawTrades: rawTradeRows lj refs;
+    rawQuotes: rawQuoteRows lj refs;
+    trades:
+        select
+            date,
+            time,
+            sym,
+            topixCapGrp,
+            tradePrice,
+            tradeSize,
+            session,
+            auction,
+            notional: tradePrice * tradeSize
+        from rawTrades
+        where date within (params`start_date; params`end_date),
+              tradePrice > 0,
+              tradeSize > 0,
+              not null sym;
+    quotes:
+        select
+            date,
+            time,
+            quoteTime: time,
+            sym,
+            mid: (bidPrice + askPrice) % 2
+        from rawQuotes
+        where date within (params`start_date; params`end_date),
+              bidPrice > 0,
+              askPrice > bidPrice,
+              not null sym;
+    tradesWithBefore:
+        aj[`date`sym`time; `date`sym`time xasc trades; `date`sym`time xasc quotes];
+    horizonRequests:
+        update
+            aggressorSide: {{ calculation_namespace }}.inferAggressorSide[tradePrice; mid],
+            horizonTime: time + params`horizon,
+            quoteAge: time - quoteTime
+        from tradesWithBefore;
+    horizonQuotes:
+        select
+            date,
+            sym,
+            horizonTime: time,
+            horizonQuoteTime: time,
+            horizonMid: mid
+        from quotes;
+    scored:
+        update
+            horizonQuoteAge: horizonTime - horizonQuoteTime,
+            price_impact_30s_bps: aggressorSide * 10000 * (horizonMid - mid) % mid
+        from aj[
+            `date`sym`horizonTime;
+            `date`sym`horizonTime xasc horizonRequests;
+            `date`sym`horizonTime xasc horizonQuotes
+        ];
+    result: select
+        price_impact_30s_bps: med price_impact_30s_bps,
+        trade_count: count i,
+        notional: sum notional
+    by date,
+       time_bucket: {{ calculation_namespace }}.timeBucket[time; session; auction; params`bucket],
+       sym,
+       topixCapGrp
+    from scored
+    where quoteAge <= params`max_quote_age,
+          horizonQuoteAge <= params`max_horizon_quote_age,
+          aggressorSide in 1 -1,
+          not null mid,
+          not null horizonMid,
+          mid > 0;
+    result
+    };
+
+{{ calculation_namespace }}.calcToxicityReversion:{[rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;params]
+    rawPtsTrades: rawPtsTradeRows lj refs;
+    rawPtsQuotes: rawPtsQuoteRows lj refs;
+    rawPrimaryQuotes: rawPrimaryQuoteRows lj refs;
+    ptsTrades:
+        select
+            date,
+            time,
+            sym,
+            topixCapGrp,
+            session,
+            auction,
+            venue,
+            tradePrice,
+            tradeSize,
+            notional: tradePrice * tradeSize
+        from rawPtsTrades
+        where date within (params`start_date; params`end_date),
+              ((0=count params`venues) | venue in params`venues),
+              ((not params`exclude_auction) | auction = 0),
+              tradeSize > 0,
+              tradePrice > 0,
+              not null venue,
+              not null sym;
+    ptsQuotes:
+        select
+            date,
+            time,
+            ptsQuoteTime: time,
+            sym,
+            venue,
+            ptsMid: (bidPrice + askPrice) % 2
+        from rawPtsQuotes
+        where date within (params`start_date; params`end_date),
+              ((0=count params`venues) | venue in params`venues),
+              bidPrice > 0,
+              askPrice > bidPrice,
+              not null venue,
+              not null sym;
+    primaryQuotes:
+        select
+            date,
+            time,
+            primaryQuoteTime: time,
+            sym,
+            bidPrice,
+            askPrice,
+            primaryMid: (bidPrice + askPrice) % 2
+        from rawPrimaryQuotes
+        where date within (params`start_date; params`end_date),
+              venue = params`primary_venue,
+              bidPrice > 0,
+              askPrice > bidPrice,
+              not null sym;
+    tradeWithPtsQuote:
+        aj[
+            `date`sym`venue`time;
+            `date`sym`venue`time xasc ptsTrades;
+            `date`sym`venue`time xasc ptsQuotes
+        ];
+    tradeWithPreMid:
+        aj[
+            `date`sym`time;
+            `date`sym`time xasc tradeWithPtsQuote;
+            `date`sym`time xasc primaryQuotes
+        ];
+    tradeForHorizon:
+        update
+            aggressorSide: {{ calculation_namespace }}.inferAggressorSide[tradePrice; ptsMid],
+            horizonTime: time + params`horizon,
+            ptsQuoteAge: time - ptsQuoteTime,
+            primaryQuoteAge: time - primaryQuoteTime
+        from tradeWithPreMid;
+    postQuotes:
+        select
+            date,
+            horizonTime: time,
+            postQuoteTime: time,
+            sym,
+            postMid: primaryMid
+        from primaryQuotes;
+    tradeWithPostMid: aj[`date`sym`horizonTime; `date`sym`horizonTime xasc tradeForHorizon; `date`sym`horizonTime xasc postQuotes];
+    scored:
+        update
+            reversion_bps: aggressorSide * 10000 * (postMid - primaryMid) % postMid,
+            horizon_sort_order: params`horizon_sort_order,
+            valid_primary_quote: (primaryQuoteAge <= params`max_primary_quote_age) &
+                (horizonTime - postQuoteTime) <= params`max_primary_quote_age,
+            valid_pts_quote: ptsQuoteAge <= params`max_pts_quote_age
+        from tradeWithPostMid;
+    result: select
+        reversion_bps: {{ calculation_namespace }}.weightedAverage[notional; reversion_bps],
+        horizon_sort_order: first horizon_sort_order,
+        positive_reversion_ratio: {{ calculation_namespace }}.positiveRatio[reversion_bps],
+        trade_count: {{ calculation_namespace }}.rowCount[i],
+        notional: sum notional,
+        valid_primary_quote_ratio: avg valid_primary_quote
+    by date,
+       time_bucket: {{ calculation_namespace }}.timeBucket[time; session; auction; params`bucket],
+       venue,
+       horizon: params`horizon_label,
+       sym,
+       topixCapGrp
+    from scored
+    where valid_primary_quote,
+          valid_pts_quote,
+          aggressorSide in 1 -1,
+          not null ptsMid,
+          not null primaryMid,
+          not null postMid,
+          postMid > 0;
+    result: xcol[`date`time_bucket`venue`horizon`sym`topixCapGrp`reversion_bps`horizon_sort_order`positive_reversion_ratio`trade_count`notional`valid_primary_quote_ratio; result];
+    result: @[cols result; where (cols result)=`reversion_bps; :; params`value_column] xcol result;
+    result
+    };
+
 {{ calculation_namespace }}.runMetricDay:{[runDate;allSyms;chunkSize;requestedAggregationLevels;sourceLoaders;metricFunctions]
-    / Production day runner. Python passes validated q values and function
-    / handles; kdb owns the chunk loop, source loading, metric dispatch, and
-    / report rollups.
     chunks: enlist 0#`;
     if[0<count allSyms; chunks: chunkSize cut allSyms];
     metricNames: key metricFunctions;
@@ -105,448 +434,3 @@
             requestedAggregationLevels]
         }[chunkResults;requestedAggregationLevels] each metricNames)
     };
-
-
-
-/ BEGIN metric_template:activity.q
-/ Activity metrics template.
-/ Expected params:
-/   `trades_table`: raw-data function expression/table returning canonical trades
-/   `ref_table`: expression/table returning day reference data
-/   `calculation_namespace`: namespace where MMSR installs calculation functions
-/   `date_filter`
-/   `ref_filter`
-/   `symbol_filter`
-/   `bucket_expr`
-/   `group_by`
-/
-/ Execution contract:
-/   1. Build the filtered reference universe.
-/   2. Call the user raw-data function with date and that universe.
-/   3. Pass raw tables into the MMSR calc function.
-/   4. Return the final select result to PyKX. No kdb table is persisted.
-
-{{ calculation_namespace }}.calcActivity:{[rawTrades;refs]
-    trades: rawTrades lj refs;
-    result: select
-        turnover: {{ calculation_namespace }}.sumNotional[tradePrice; tradeSize],
-        volume: {{ calculation_namespace }}.sumSize[tradeSize],
-        trade_count: {{ calculation_namespace }}.rowCount[i]
-    by date, time_bucket: {{ bucket_expr }}{{ group_by }}
-    from trades
-    where {{ date_filter }}{{ symbol_filter }},
-          tradePrice > 0,
-          tradeSize > 0;
-    result
-    };
-/ END metric_template:activity.q
-
-/ BEGIN metric_template:effective_spread.q
-/ Effective-spread transaction-cost compatibility template.
-/ Source functions receive `date` and the filtered reference table.
-/ The final expression returns the aggregated table to PyKX; no result table is
-/ persisted in kdb.
-
-{{ calculation_namespace }}.calcEffectiveSpread:{[rawTradeRows;rawQuoteRows;refs]
-    rawTrades: rawTradeRows lj refs;
-    rawQuotes: rawQuoteRows lj refs;
-
-    trades:
-        select
-            date,
-            time,
-            sym,
-            tradePrice,
-            tradeSize,
-            notional: tradePrice * tradeSize{{ group_by }}
-        from rawTrades
-        where {{ date_filter }}{{ symbol_filter }},
-              tradePrice > 0,
-              tradeSize > 0,
-              not null sym;
-
-    quotes:
-        select
-            date,
-            time,
-            quoteTime: time,
-            sym,
-            mid: (bidPrice + askPrice) % 2
-        from rawQuotes
-        where {{ date_filter }}{{ symbol_filter }},
-              bidPrice > 0,
-              askPrice > bidPrice,
-              not null sym;
-
-    tradeWithMid: aj[`date`sym`time; `date`sym`time xasc trades; `date`sym`time xasc quotes];
-
-    scored:
-        update
-            quoteAge: time - quoteTime,
-            effective_spread_bps: 20000 * abs[tradePrice - mid] % mid
-        from tradeWithMid;
-
-    result: select
-        effective_spread_bps: med effective_spread_bps,
-        trade_count: count i,
-        notional: sum notional
-    by date, time_bucket: {{ bucket_expr }}{{ group_by }}
-    from scored
-    where quoteAge <= {{ max_quote_age }},
-          not null mid,
-          mid > 0;
-    result
-    };
-/ END metric_template:effective_spread.q
-
-/ BEGIN metric_template:flow.q
-/ Signed flow compatibility template.
-/ Flow still requires an aggressorSide column on the enriched trade source.
-/ The final expression returns the aggregated table to PyKX; MMSR does not
-/ persist an intermediate or result table in kdb.
-
-{{ calculation_namespace }}.calcFlow:{[rawTrades;refs]
-    trades: rawTrades lj refs;
-    result: select
-        signed_turnover: sum aggressorSide * tradePrice * tradeSize,
-        trade_imbalance: (sum aggressorSide * tradeSize) % sum tradeSize,
-        signed_volume: sum aggressorSide * tradeSize,
-        volume: sum tradeSize,
-        trade_count: count i
-    by date, time_bucket: {{ bucket_expr }}{{ group_by }}
-    from trades
-    where {{ date_filter }}{{ symbol_filter }},
-          tradePrice > 0,
-          tradeSize > 0,
-          aggressorSide in (1 -1);
-    result
-    };
-/ END metric_template:flow.q
-
-/ BEGIN metric_template:liquidity.q
-/ Liquidity metrics template.
-/ Expected params:
-/   `quotes_table`: raw-data function expression/table returning canonical quotes
-/   `ref_table`: expression/table returning day reference data
-/   `calculation_namespace`: namespace where MMSR installs calculation functions
-/   `date_filter`
-/   `ref_filter`
-/   `symbol_filter`
-/   `bucket_expr`
-/   `group_by`
-/
-/ The final expression returns the aggregated table to PyKX; no result table is
-/ persisted in kdb.
-
-{{ calculation_namespace }}.calcLiquidity:{[rawQuotes;refs]
-    quotes: rawQuotes lj refs;
-    result: select
-        quoted_spread_bps: {{ calculation_namespace }}.medianQuotedSpreadBps[bidPrice; askPrice],
-        top_of_book_depth: {{ calculation_namespace }}.medianTopOfBookDepth[bidSize; askSize]
-    by date, time_bucket: {{ bucket_expr }}{{ group_by }}
-    from quotes
-    where {{ date_filter }}{{ symbol_filter }},
-          bidPrice > 0,
-          askPrice > bidPrice;
-    result
-    };
-/ END metric_template:liquidity.q
-
-/ BEGIN metric_template:liquidity_ticks.q
-/ Tick-normalized quoted-spread template.
-/ Expected params:
-/   `quotes_table`: raw-data function expression/table returning canonical quotes
-/   `ref_table`: expression/table returning day reference data
-/   `calculation_namespace`
-/   `date_filter`
-/   `ref_filter`
-/   `symbol_filter`
-/   `bucket_expr`
-/   `group_by`
-
-{{ calculation_namespace }}.calcLiquidityTicks:{[rawQuotes;refs]
-    quotes: rawQuotes lj refs;
-    result: select
-        quoted_spread_ticks: med (askPrice - bidPrice) % tick_size
-    by date, time_bucket: {{ bucket_expr }}{{ group_by }}
-    from quotes
-    where {{ date_filter }}{{ symbol_filter }},
-          bidPrice > 0,
-          askPrice > bidPrice,
-          tick_size > 0;
-    result
-    };
-/ END metric_template:liquidity_ticks.q
-
-/ BEGIN metric_template:price_impact.q
-/ Price-impact transaction-cost compatibility template.
-/ MMSR infers aggressorSide from the prevailing quote midpoint.
-/ The final expression returns the aggregated table to PyKX; no result table is
-/ persisted in kdb.
-
-{{ calculation_namespace }}.calcPriceImpact:{[rawTradeRows;rawQuoteRows;refs]
-    rawTrades: rawTradeRows lj refs;
-    rawQuotes: rawQuoteRows lj refs;
-
-    trades:
-        select
-            date,
-            time,
-            sym,
-            tradePrice,
-            tradeSize,
-            notional: tradePrice * tradeSize{{ group_by }}
-        from rawTrades
-        where {{ date_filter }}{{ symbol_filter }},
-              tradePrice > 0,
-              tradeSize > 0,
-              not null sym;
-
-    quotes:
-        select
-            date,
-            time,
-            quoteTime: time,
-            sym,
-            mid: (bidPrice + askPrice) % 2
-        from rawQuotes
-        where {{ date_filter }}{{ symbol_filter }},
-              bidPrice > 0,
-              askPrice > bidPrice,
-              not null sym;
-
-    tradesWithBefore:
-        aj[`date`sym`time; `date`sym`time xasc trades; `date`sym`time xasc quotes];
-
-    horizonRequests:
-        update
-            aggressorSide: {{ calculation_namespace }}.inferAggressorSide[tradePrice; mid],
-            horizonTime: time + {{ horizon }},
-            quoteAge: time - quoteTime
-        from tradesWithBefore;
-
-    horizonQuotes:
-        select
-            date,
-            sym,
-            horizonTime: time,
-            horizonQuoteTime: time,
-            horizonMid: mid
-        from quotes;
-
-    scored:
-        update
-            horizonQuoteAge: horizonTime - horizonQuoteTime,
-            price_impact_30s_bps: aggressorSide * 10000 * (horizonMid - mid) % mid
-        from aj[
-            `date`sym`horizonTime;
-            `date`sym`horizonTime xasc horizonRequests;
-            `date`sym`horizonTime xasc horizonQuotes
-        ];
-
-    result: select
-        price_impact_30s_bps: med price_impact_30s_bps,
-        trade_count: count i,
-        notional: sum notional
-    by date, time_bucket: {{ bucket_expr }}{{ group_by }}
-    from scored
-    where quoteAge <= {{ max_quote_age }},
-          horizonQuoteAge <= {{ max_horizon_quote_age }},
-          aggressorSide in (1 -1),
-          not null mid,
-          not null horizonMid,
-          mid > 0;
-    result
-    };
-/ END metric_template:price_impact.q
-
-/ BEGIN metric_template:realized_volatility.q
-/ Quote-mid realized-volatility template.
-/ Expected params:
-/   `quotes_table`: raw-data function expression/table returning canonical quotes
-/   `ref_table`: expression/table returning day reference data
-/   `calculation_namespace`
-/   `date_filter`
-/   `ref_filter`
-/   `symbol_filter`
-/   `bucket_expr`
-/   `group_by`
-/
-/ The final expression returns the aggregated table to PyKX; no result table is
-/ persisted in kdb.
-
-{{ calculation_namespace }}.calcRealizedVolatility:{[rawQuoteRows;refs]
-    quotes: rawQuoteRows lj refs;
-
-    cleanQuotes:
-        select from quotes
-        where {{ date_filter }}{{ symbol_filter }},
-              bidPrice > 0,
-              askPrice > bidPrice,
-              not null sym;
-
-    quoteMids:
-        update
-            mid: (bidPrice + askPrice) % 2
-        from cleanQuotes;
-
-    quoteReturns:
-        update
-            log_return: log_mid - prev log_mid
-        by date, sym
-        from `date`sym`time xasc update log_mid: log mid from quoteMids;
-
-    result: select
-        realized_volatility: 10000 * sqrt avg log_return * log_return,
-        return_count: count i,
-        first_mid: first mid,
-        last_mid: last mid
-    by date, time_bucket: {{ bucket_expr }}{{ group_by }}
-    from quoteReturns
-    where not null log_return;
-    result
-    };
-/ END metric_template:realized_volatility.q
-
-/ BEGIN metric_template:toxicity_reversion.q
-/ Primary-quote reversion query template.
-/ Expected params:
-/   `pts_trades_table`: raw-data function expression/table returning PTS venue trades
-/   `pts_quotes_table`: raw-data function expression/table returning PTS quotes
-/   `primary_quotes_table`: raw-data function expression/table returning primary/TSE quotes
-/   `ref_table`: expression/table returning day reference data
-/   `calculation_namespace`: namespace where MMSR installs calculation functions
-/   `date_filter`
-/   `ref_filter`
-/   `bucket_expr`
-/   `group_by`
-/   `venue_filter`
-/   `auction_filter`
-/   `primary_venue`
-/   `horizon`
-/   `horizon_label`
-/   `horizon_sort_order`
-/   `max_primary_quote_age`
-/   `max_pts_quote_age`
-/   `value_column`
-/
-/ Reversion convention: inferred aggressorSide * (future TSE/primary mid - primary mid at trade) / future TSE/primary mid * 10000.
-/ Aggressor side is inferred from each trade's own PTS venue/symbol prevailing quote.
-/ The final expression returns the aggregated table to PyKX; no result table is
-/ persisted in kdb.
-
-{{ calculation_namespace }}.calcToxicityReversion:{[rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs]
-    rawPtsTrades: rawPtsTradeRows lj refs;
-    rawPtsQuotes: rawPtsQuoteRows lj refs;
-    rawPrimaryQuotes: rawPrimaryQuoteRows lj refs;
-
-    ptsTrades:
-        select
-            date,
-            time,
-            sym,
-            session,
-            auction,
-            venue,
-            tradePrice,
-            tradeSize,
-            notional: tradePrice * tradeSize
-        from rawPtsTrades
-        where {{ date_filter }},
-              {{ venue_filter }},
-              {{ auction_filter }},
-              tradeSize > 0,
-              tradePrice > 0,
-              not null venue;
-
-    ptsQuotes:
-        select
-            date,
-            time,
-            ptsQuoteTime: time,
-            sym,
-            venue,
-            ptsMid: (bidPrice + askPrice) % 2
-        from rawPtsQuotes
-        where {{ date_filter }},
-              {{ venue_filter }},
-              bidPrice > 0,
-              askPrice > bidPrice,
-              not null venue;
-
-    primaryQuotes:
-        select
-            date,
-            time,
-            primaryQuoteTime: time,
-            sym,
-            bidPrice,
-            askPrice,
-            primaryMid: (bidPrice + askPrice) % 2
-        from rawPrimaryQuotes
-        where {{ date_filter }},
-              venue = {{ primary_venue }},
-              bidPrice > 0,
-              askPrice > bidPrice;
-
-    tradeWithPtsQuote:
-        aj[
-            `date`sym`venue`time;
-            `date`sym`venue`time xasc ptsTrades;
-            `date`sym`venue`time xasc ptsQuotes
-        ];
-
-    tradeWithPreMid:
-        aj[
-            `date`sym`time;
-            `date`sym`time xasc tradeWithPtsQuote;
-            `date`sym`time xasc primaryQuotes
-        ];
-
-    tradeForHorizon:
-        update
-            aggressorSide: {{ calculation_namespace }}.inferAggressorSide[tradePrice; ptsMid],
-            horizonTime: time + {{ horizon }},
-            ptsQuoteAge: time - ptsQuoteTime,
-            primaryQuoteAge: time - primaryQuoteTime
-        from tradeWithPreMid;
-
-    postQuotes:
-        select
-            date,
-            horizonTime: time,
-            postQuoteTime: time,
-            sym,
-            postMid: primaryMid
-        from primaryQuotes;
-
-    tradeWithPostMid: aj[`date`sym`horizonTime; `date`sym`horizonTime xasc tradeForHorizon; `date`sym`horizonTime xasc postQuotes];
-
-    scored:
-        update
-            reversion_bps: aggressorSide * 10000 * (postMid - primaryMid) % postMid,
-            horizon_sort_order: {{ horizon_sort_order }},
-            valid_primary_quote: (primaryQuoteAge <= {{ max_primary_quote_age }}) &
-                (horizonTime - postQuoteTime) <= {{ max_primary_quote_age }},
-            valid_pts_quote: ptsQuoteAge <= {{ max_pts_quote_age }}
-        from tradeWithPostMid;
-
-    result: select
-        {{ value_column }}: {{ calculation_namespace }}.weightedAverage[notional; reversion_bps],
-        horizon_sort_order: first horizon_sort_order,
-        positive_reversion_ratio: {{ calculation_namespace }}.positiveRatio[reversion_bps],
-        trade_count: {{ calculation_namespace }}.rowCount[i],
-        notional: sum notional,
-        valid_primary_quote_ratio: avg valid_primary_quote
-    by date, time_bucket: {{ bucket_expr }}, venue, horizon: {{ horizon_label }}{{ group_by }}
-    from scored
-    where valid_primary_quote,
-          valid_pts_quote,
-          aggressorSide in (1 -1),
-          not null ptsMid,
-          not null primaryMid,
-          not null postMid,
-          postMid > 0;
-    result
-    };
-/ END metric_template:toxicity_reversion.q
