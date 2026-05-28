@@ -18,13 +18,8 @@ from mmsr.kdb.schema_contracts import (
     QTemplateInputTableSchemaContract,
     QTemplateOutputSchemaContract,
     activity_input_schema_contract,
-    effective_spread_input_schema_contracts,
-    flow_input_schema_contract,
     liquidity_input_schema_contract,
-    liquidity_ticks_input_schema_contract,
     output_schema_contract_for_template,
-    price_impact_input_schema_contracts,
-    realized_volatility_input_schema_contract,
     reference_data_input_schema_contract,
     toxicity_reversion_input_schema_contracts,
 )
@@ -34,11 +29,6 @@ from mmsr.periods.models import IntradayBucketSpec, ReportPeriod
 
 _ACTIVITY_METRICS = frozenset({"turnover", "volume", "trade_count"})
 _LIQUIDITY_METRICS = frozenset({"quoted_spread_bps", "top_of_book_depth"})
-_LIQUIDITY_TICKS_METRICS = frozenset({"quoted_spread_ticks"})
-_FLOW_METRICS = frozenset({"signed_turnover", "trade_imbalance"})
-_EFFECTIVE_SPREAD_METRICS = frozenset({"effective_spread_bps"})
-_PRICE_IMPACT_METRICS = frozenset({"price_impact_30s_bps"})
-_REALIZED_VOLATILITY_METRICS = frozenset({"realized_volatility"})
 _REVERSION_METRIC_PATTERN = re.compile(
     r"^primary_quote_reversion_(?P<horizon>10ms|100ms|500ms|1s|5s|10s)_bps$"
 )
@@ -51,41 +41,20 @@ _REVERSION_HORIZON_SORT_ORDER = {
     "5s": 5,
     "10s": 6,
 }
-_REVERSION_TEMPLATE = "toxicity_reversion.q"
+_REVERSION_TEMPLATE = "toxicity_reversion"
 _REVERSION_METRICS = frozenset(
     f"primary_quote_reversion_{horizon}_bps"
     for horizon in ("10ms", "100ms", "500ms", "1s", "5s", "10s")
 )
 
 _METRIC_TEMPLATE_MAP = {
-    **{metric_name: "activity.q" for metric_name in _ACTIVITY_METRICS},
-    **{metric_name: "liquidity.q" for metric_name in _LIQUIDITY_METRICS},
-    **{metric_name: "liquidity_ticks.q" for metric_name in _LIQUIDITY_TICKS_METRICS},
-    **{
-        metric_name: "realized_volatility.q"
-        for metric_name in _REALIZED_VOLATILITY_METRICS
-    },
-    **{metric_name: "flow.q" for metric_name in _FLOW_METRICS},
-    **{metric_name: "effective_spread.q" for metric_name in _EFFECTIVE_SPREAD_METRICS},
-    **{metric_name: "price_impact.q" for metric_name in _PRICE_IMPACT_METRICS},
+    **{metric_name: "activity" for metric_name in _ACTIVITY_METRICS},
+    **{metric_name: "liquidity" for metric_name in _LIQUIDITY_METRICS},
     **{metric_name: _REVERSION_TEMPLATE for metric_name in _REVERSION_METRICS},
 }
 _METRIC_TABLE_PARAMETER_MAP = {
-    "activity.q": (("trades", "trades_table"), ("reference_data", "ref_table")),
-    "liquidity.q": (("quotes", "quotes_table"), ("reference_data", "ref_table")),
-    "liquidity_ticks.q": (("quotes", "quotes_table"), ("reference_data", "ref_table")),
-    "realized_volatility.q": (("quotes", "quotes_table"), ("reference_data", "ref_table")),
-    "flow.q": (("trades", "trades_table"), ("reference_data", "ref_table")),
-    "effective_spread.q": (
-        ("trades", "trades_table"),
-        ("quotes", "quotes_table"),
-        ("reference_data", "ref_table"),
-    ),
-    "price_impact.q": (
-        ("trades", "trades_table"),
-        ("quotes", "quotes_table"),
-        ("reference_data", "ref_table"),
-    ),
+    "activity": (("trades", "trades_table"), ("reference_data", "ref_table")),
+    "liquidity": (("quotes", "quotes_table"), ("reference_data", "ref_table")),
     _REVERSION_TEMPLATE: (
         ("pts_trades", "pts_trades_table"),
         ("pts_quotes", "pts_quotes_table"),
@@ -413,7 +382,7 @@ def metric_family_for_metric(metric_name: str) -> str:
     """Return the q metric family for logs and diagnostics."""
 
     template_name = template_for_metric(metric_name)
-    return template_name.removesuffix(".q")
+    return template_name
 
 
 def group_by_for_metric_result(metric_name: str, group_by: Sequence[str]) -> list[str]:
@@ -437,7 +406,7 @@ def _input_contracts_for_template(
     query_group_by: Sequence[str],
     parameters: Mapping[str, Any],
 ) -> Sequence[QTemplateInputTableSchemaContract]:
-    if template_name == "activity.q":
+    if template_name == "activity":
         raw_extra = _raw_source_extra_columns(parameters)
         ref_extra = _reference_extra_columns(query_group_by)
         return (
@@ -455,7 +424,7 @@ def _input_contracts_for_template(
                 template_name=template_name,
             ),
         )
-    if template_name == "liquidity.q":
+    if template_name == "liquidity":
         raw_extra = _raw_source_extra_columns(parameters)
         ref_extra = _reference_extra_columns(query_group_by)
         return (
@@ -469,78 +438,6 @@ def _input_contracts_for_template(
                     table_names,
                     source_functions,
                 ),
-                extra_required_columns=ref_extra,
-                template_name=template_name,
-            ),
-        )
-    if template_name == "liquidity_ticks.q":
-        raw_extra = _raw_source_extra_columns(parameters)
-        ref_extra = _reference_extra_columns(query_group_by)
-        return (
-            liquidity_ticks_input_schema_contract(
-                quotes_table=_source_label("quotes", table_names, source_functions),
-                extra_required_columns=raw_extra,
-            ),
-            reference_data_input_schema_contract(
-                reference_table=_source_label("reference_data", table_names, source_functions),
-                extra_required_columns=ref_extra,
-                template_name=template_name,
-            ),
-        )
-    if template_name == "realized_volatility.q":
-        raw_extra = _raw_source_extra_columns(parameters)
-        ref_extra = _reference_extra_columns(query_group_by)
-        return (
-            realized_volatility_input_schema_contract(
-                quotes_table=_source_label("quotes", table_names, source_functions),
-                extra_required_columns=raw_extra,
-            ),
-            reference_data_input_schema_contract(
-                reference_table=_source_label("reference_data", table_names, source_functions),
-                extra_required_columns=ref_extra,
-                template_name=template_name,
-            ),
-        )
-    if template_name == "flow.q":
-        raw_extra = _raw_source_extra_columns(parameters)
-        ref_extra = _reference_extra_columns(query_group_by)
-        return (
-            flow_input_schema_contract(
-                trades_table=_source_label("trades", table_names, source_functions),
-                extra_required_columns=raw_extra,
-            ),
-            reference_data_input_schema_contract(
-                reference_table=_source_label("reference_data", table_names, source_functions),
-                extra_required_columns=ref_extra,
-                template_name=template_name,
-            ),
-        )
-    if template_name == "effective_spread.q":
-        raw_extra = _raw_source_extra_columns(parameters)
-        ref_extra = _reference_extra_columns(query_group_by)
-        return (
-            *effective_spread_input_schema_contracts(
-                trades_table=_source_label("trades", table_names, source_functions),
-                quotes_table=_source_label("quotes", table_names, source_functions),
-                extra_trade_required_columns=raw_extra,
-            ),
-            reference_data_input_schema_contract(
-                reference_table=_source_label("reference_data", table_names, source_functions),
-                extra_required_columns=ref_extra,
-                template_name=template_name,
-            ),
-        )
-    if template_name == "price_impact.q":
-        raw_extra = _raw_source_extra_columns(parameters)
-        ref_extra = _reference_extra_columns(query_group_by)
-        return (
-            *price_impact_input_schema_contracts(
-                trades_table=_source_label("trades", table_names, source_functions),
-                quotes_table=_source_label("quotes", table_names, source_functions),
-                extra_trade_required_columns=raw_extra,
-            ),
-            reference_data_input_schema_contract(
-                reference_table=_source_label("reference_data", table_names, source_functions),
                 extra_required_columns=ref_extra,
                 template_name=template_name,
             ),
@@ -639,20 +536,8 @@ def _template_parameters_for_request(request: MetricRunRequest) -> dict[str, str
         "calculation_namespace": calculation_namespace,
         "ref_filter": _ref_symbol_filter(request.parameters),
     }
-    if template_name in {
-        "activity.q",
-        "liquidity.q",
-        "liquidity_ticks.q",
-        "realized_volatility.q",
-        "flow.q",
-        "effective_spread.q",
-        "price_impact.q",
-    }:
+    if template_name in {"activity", "liquidity"}:
         params["symbol_filter"] = _optional_symbol_filter(request.parameters)
-    if template_name == "effective_spread.q":
-        params.update(_effective_spread_template_parameters(request))
-    if template_name == "price_impact.q":
-        params.update(_price_impact_template_parameters(request))
     if template_name == _REVERSION_TEMPLATE:
         params.update(_reversion_template_parameters(request))
     return params
@@ -699,23 +584,8 @@ def _metric_call_expression(
     """Return the q call that passes already-loaded raw rows into calc function."""
 
     calls = {
-        "activity.q": f"{calculation_namespace}.calcActivity[rawTrades;refs;{metric_params}]",
-        "liquidity.q": f"{calculation_namespace}.calcLiquidity[rawQuotes;refs;{metric_params}]",
-        "liquidity_ticks.q": (
-            f"{calculation_namespace}.calcLiquidityTicks[rawQuotes;refs;{metric_params}]"
-        ),
-        "realized_volatility.q": (
-            f"{calculation_namespace}.calcRealizedVolatility[rawQuoteRows;refs;{metric_params}]"
-        ),
-        "flow.q": f"{calculation_namespace}.calcFlow[rawTrades;refs;{metric_params}]",
-        "effective_spread.q": (
-            f"{calculation_namespace}.calcEffectiveSpread["
-            f"rawTradeRows;rawQuoteRows;refs;{metric_params}]"
-        ),
-        "price_impact.q": (
-            f"{calculation_namespace}.calcPriceImpact["
-            f"rawTradeRows;rawQuoteRows;refs;{metric_params}]"
-        ),
+        "activity": f"{calculation_namespace}.calcActivity[rawTrades;refs;{metric_params}]",
+        "liquidity": f"{calculation_namespace}.calcLiquidity[rawQuotes;refs;{metric_params}]",
         _REVERSION_TEMPLATE: (
             f"{calculation_namespace}.calcToxicityReversion["
             f"rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;{metric_params}]"
@@ -739,23 +609,8 @@ def _metric_function_expression(
 
     metric_params = _metric_params_expression(request)
     calls = {
-        "activity.q": f"{{[rawSources] {calculation_namespace}.calcActivity[rawSources`trades;rawSources`refs;{metric_params}]}}",
-        "liquidity.q": f"{{[rawSources] {calculation_namespace}.calcLiquidity[rawSources`quotes;rawSources`refs;{metric_params}]}}",
-        "liquidity_ticks.q": (
-            f"{{[rawSources] {calculation_namespace}.calcLiquidityTicks[rawSources`quotes;rawSources`refs;{metric_params}]}}"
-        ),
-        "realized_volatility.q": (
-            f"{{[rawSources] {calculation_namespace}.calcRealizedVolatility[rawSources`quotes;rawSources`refs;{metric_params}]}}"
-        ),
-        "flow.q": f"{{[rawSources] {calculation_namespace}.calcFlow[rawSources`trades;rawSources`refs;{metric_params}]}}",
-        "effective_spread.q": (
-            f"{{[rawSources] {calculation_namespace}.calcEffectiveSpread["
-            f"rawSources`trades;rawSources`quotes;rawSources`refs;{metric_params}]}}"
-        ),
-        "price_impact.q": (
-            f"{{[rawSources] {calculation_namespace}.calcPriceImpact["
-            f"rawSources`trades;rawSources`quotes;rawSources`refs;{metric_params}]}}"
-        ),
+        "activity": f"{{[rawSources] {calculation_namespace}.calcActivity[rawSources`trades;rawSources`refs;{metric_params}]}}",
+        "liquidity": f"{{[rawSources] {calculation_namespace}.calcLiquidity[rawSources`quotes;rawSources`refs;{metric_params}]}}",
         _REVERSION_TEMPLATE: (
             f"{{[rawSources] {calculation_namespace}.calcToxicityReversion["
             f"rawSources`pts_trades;rawSources`pts_quotes;rawSources`primary_quotes;rawSources`refs;{metric_params}]}}"
@@ -777,17 +632,7 @@ def _metric_params_expression(request: MetricRunRequest) -> str:
     keys = ["bucket", "start_date", "end_date"]
     values = [bucket, _q_date(request.period.start_date), _q_date(request.period.end_date)]
 
-    if template_name == "effective_spread.q":
-        extra = _effective_spread_template_parameters(request)
-        keys.append("max_quote_age")
-        values.append(extra["max_quote_age"])
-    elif template_name == "price_impact.q":
-        extra = _price_impact_template_parameters(request)
-        keys.extend(["horizon", "max_quote_age", "max_horizon_quote_age"])
-        values.extend(
-            [extra["horizon"], extra["max_quote_age"], extra["max_horizon_quote_age"]]
-        )
-    elif template_name == _REVERSION_TEMPLATE:
+    if template_name == _REVERSION_TEMPLATE:
         extra = _reversion_template_parameters(request)
         keys.extend(
             [
@@ -1308,38 +1153,6 @@ def _optional_symbol_filter(parameters: Mapping[str, Any]) -> str:
     return f", sym in {_q_symbol_vector_from_strings(symbols)}"
 
 
-def _effective_spread_template_parameters(request: MetricRunRequest) -> dict[str, str]:
-    """Return effective-spread q parameters with a conservative freshness default."""
-
-    max_quote_age = request.parameters.get("max_quote_age", "1s")
-    if not isinstance(max_quote_age, str):
-        raise KdbMetricQueryPlanError("parameter 'max_quote_age' must be a string")
-    return {
-        "max_quote_age": _q_duration(max_quote_age, "max_quote_age"),
-    }
-
-
-def _price_impact_template_parameters(request: MetricRunRequest) -> dict[str, str]:
-    """Return price-impact q parameters for the fixed 30s metric horizon."""
-
-    max_quote_age = request.parameters.get("max_quote_age", "1s")
-    max_horizon_quote_age = request.parameters.get("max_horizon_quote_age", "1s")
-    if not isinstance(max_quote_age, str):
-        raise KdbMetricQueryPlanError("parameter 'max_quote_age' must be a string")
-    if not isinstance(max_horizon_quote_age, str):
-        raise KdbMetricQueryPlanError(
-            "parameter 'max_horizon_quote_age' must be a string"
-        )
-    return {
-        "horizon": _q_duration("30s", "price_impact horizon"),
-        "max_quote_age": _q_duration(max_quote_age, "max_quote_age"),
-        "max_horizon_quote_age": _q_duration(
-            max_horizon_quote_age,
-            "max_horizon_quote_age",
-        ),
-    }
-
-
 def _reversion_template_parameters(request: MetricRunRequest) -> dict[str, str]:
     horizon = _reversion_horizon_from_metric(request.metric.name)
     primary_venue = _required_string_parameter(request, "primary_venue")
@@ -1579,11 +1392,7 @@ def _bucket_expr_for_template(
 ) -> str:
     """Return the bucket expression appropriate for trade or quote rows."""
 
-    if template_name in {
-        "liquidity.q",
-        "liquidity_ticks.q",
-        "realized_volatility.q",
-    }:
+    if template_name == "liquidity":
         duration = _bucket_duration(bucket)
         return f"{calculation_namespace}.timeBucketContinuous[time; {duration}]"
     return _bucket_expr(bucket, calculation_namespace)

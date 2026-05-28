@@ -60,8 +60,8 @@ def test_mock_kdb_demo_executes_q_templates_and_builds_report() -> None:
     assert len(detail_page.time_series_charts) == 3
     assert detail_page.time_series_charts[0].x_axis_label == "Intraday time bucket"
     assert detail_page.heatmaps == []
-    assert result.current_series[0].metadata["template"] == "liquidity.q"
-    assert result.current_series[1].metadata["template"] == "activity.q"
+    assert result.current_series[0].metadata["template"] == "liquidity"
+    assert result.current_series[1].metadata["template"] == "activity"
     assert result.current_series[0].metadata["role"] == "current"
     assert "mock_quote" in result.current_series[0].metadata["query"]
 

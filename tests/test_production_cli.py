@@ -187,7 +187,7 @@ def test_summarize_production_report_plan_queries_calendar_not_metrics(
     assert summary.symbol_chunk_count == 1
     assert summary.target_step_count == 1
     assert summary.reference_step_count == 2
-    assert summary.metric_contracts[0].template_name == "activity.q"
+    assert summary.metric_contracts[0].template_name == "activity"
     assert len(FakeProductionKdbClient.queries) == 3
     assert "callTradingCalendar" in FakeProductionKdbClient.queries[0]
     assert all("getTradingCalendar" in query for query in FakeProductionKdbClient.queries[1:])
@@ -238,7 +238,7 @@ def test_preflight_production_report_executes_one_bounded_metric_step(
     assert result.trading_days == (date(2026, 5, 1),)
     assert result.preflight_step.metric_name == "volume"
     assert result.preflight_step.symbols == ("7203", "6758", "9984")
-    assert result.rendered_query.template_name == "activity.q"
+    assert result.rendered_query.template_name == "activity"
     assert "topixCapGrp" in result.rendered_query.required_output_columns
     assert result.result_row_count == 1
     assert len(FakeProductionKdbClient.queries) == 3
@@ -266,7 +266,7 @@ def test_preflight_production_report_can_select_metric(
 
     assert result.ok
     assert result.preflight_step.metric_name == "quoted_spread_bps"
-    assert result.rendered_query.template_name == "liquidity.q"
+    assert result.rendered_query.template_name == "liquidity"
     assert "quoted_spread_bps" in result.rendered_query.required_output_columns
     assert ".sb.mmsr.getQuote" in FakeProductionKdbClient.queries[2]
     assert "quoted_spread_bps" in FakeProductionKdbClient.queries[2]

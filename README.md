@@ -67,7 +67,7 @@ For each day/chunk batch, the rendered q query builds `refs` from the raw
 reference universe, calls each configured raw source function at most once for
 the source roles required by the configured metrics, and then passes the loaded
 raw tables into MMSR calculation functions such as
-`.desk.mmsr.calcFlow[rawTrades;refs]`. The top-level q expression returns a
+`.desk.mmsr.calcActivity[rawTrades;refs;params]` or `.desk.mmsr.calcLiquidity[rawQuotes;refs;params]`. The top-level q expression returns a
 dictionary keyed by metric name, where each value is the aggregated result table
 for that metric. PyKX returns that dictionary to Python through
 `KdbClient.execute`; `KdbMetricRunner` validates each metric output schema and
@@ -527,8 +527,8 @@ poetry run pytest
 poetry run pytest -m kdb_integration
 ```
 
-The starter live harnesses validate one bounded `activity.q` turnover query and
-one bounded `liquidity.q` quoted-spread query through `KdbMetricRunner` and the
+The starter live harnesses validate one bounded `activity` turnover query and
+one bounded `liquidity` quoted-spread query through `KdbMetricRunner` and the
 existing output schema contracts. Set `MMSR_KDB_TEST_SYMBOL` to add a symbol
 slice filter for the smoke runs.
 
@@ -613,7 +613,7 @@ calculations still use auction labels where trade rows expose `session` and
 `auction`.
 
 There is no separate q template directory. Metric identifiers such as
-`liquidity.q` and `activity.q` still work in Python APIs, but they are resolved
+`liquidity` and `activity` still work in Python APIs, but they are resolved
 from the single canonical q calculation library instead of per-metric q files.
 
 

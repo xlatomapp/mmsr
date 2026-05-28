@@ -54,20 +54,17 @@ belong in this report: activity, displayed liquidity, and cross-venue
 primary-quote reversion. The minimal config does not enable transaction-cost
 metrics such as effective spread or price impact. Optional market-microstructure
 add-ons, such as tick-normalized spread, quote-mid realized volatility, and
-feed-signed order-flow imbalance, remain covered by offline q-template planning
+legacy optional add-ons are intentionally excluded from the active q-template planning path
 and schema-contract tests when a future report design explicitly needs them.
 
 ## Default mock-kdb boundary
 
 The deterministic mock-kdb demo:
 
-- renders the default market-monitoring `activity.q`, `liquidity.q`, and
-  `toxicity_reversion.q` templates used by the minimal production config;
-- keeps optional market-microstructure add-ons such as `liquidity_ticks.q`,
-  `realized_volatility.q`, and `flow.q` covered by the same offline q-template
-  planning and schema contract tests used by production execution;
-- keeps transaction-cost templates outside the default market report even though
-  their schema contracts remain tested for compatibility with existing code;
+- renders the default market-monitoring `activity`, `liquidity`, and
+  `toxicity_reversion` templates used by the minimal production config;
+- keeps active planning and schema-contract tests focused on the production default metric families;
+- keeps removed legacy templates outside active planning, contracts, and default report configuration;
 - executes mock-demo templates through `KdbMetricRunner`;
 - validates starter output schema contracts before normalization;
 - normalizes rows into `MetricTimeSeries`;
@@ -123,14 +120,14 @@ They are intentionally not required by the default test suite.
 | `MMSR_KDB_PORT` | Yes | kdb+ IPC port. |
 | `MMSR_KDB_USERNAME` | No | kdb+ username when authentication is enabled. |
 | `MMSR_KDB_PASSWORD` | No | kdb+ password when authentication is enabled. |
-| `MMSR_KDB_TRADE_FUNCTION` | Yes | User source function for `activity.q` starter metrics. |
-| `MMSR_KDB_QUOTE_FUNCTION` | Yes | User source function for `liquidity.q` starter metrics. |
+| `MMSR_KDB_TRADE_FUNCTION` | Yes | User source function for `activity` starter metrics. |
+| `MMSR_KDB_QUOTE_FUNCTION` | Yes | User source function for `liquidity` starter metrics. |
 | `MMSR_KDB_REF_FUNCTION` | No | User reference-data function; defaults to `.sb.mmsr.getRef`. |
 | `MMSR_KDB_CALENDAR_FUNCTION` | Yes | User trading-calendar function for production date selection. |
 | `MMSR_KDB_SYMBOL_FUNCTION` | Production runs | User reference-data universe function for selecting analysis symbols by trading date. |
-| `MMSR_KDB_PTS_TRADE_FUNCTION` | Reversion only | PTS trade source function for `toxicity_reversion.q`. |
-| `MMSR_KDB_PTS_QUOTE_FUNCTION` | Reversion only | PTS quote source function for `toxicity_reversion.q` aggressor-side inference. |
-| `MMSR_KDB_PRIMARY_QUOTE_FUNCTION` | Reversion only | Primary/TSE quote source function for `toxicity_reversion.q` reversion mids. |
+| `MMSR_KDB_PTS_TRADE_FUNCTION` | Reversion only | PTS trade source function for `toxicity_reversion`. |
+| `MMSR_KDB_PTS_QUOTE_FUNCTION` | Reversion only | PTS quote source function for `toxicity_reversion` aggressor-side inference. |
+| `MMSR_KDB_PRIMARY_QUOTE_FUNCTION` | Reversion only | Primary/TSE quote source function for `toxicity_reversion` reversion mids. |
 | `MMSR_KDB_TEST_DATE` | Yes | A single known-good trading date for bounded smoke checks. |
 | `MMSR_KDB_TEST_SYMBOL` | Optional | A liquid symbol used to limit live smoke-query size. |
 
@@ -144,7 +141,7 @@ with a configured symbol column. The reference function must accept `date; syms`
 
 ## Starter source-function and schema assumptions
 
-Live tests for `activity.q` assume the configured trade function accepts
+Live tests for `activity` assume the configured trade function accepts
 `date; syms` and returns at least:
 
 - `date`
@@ -155,7 +152,7 @@ Live tests for `activity.q` assume the configured trade function accepts
 - `tradePrice`
 - `tradeSize`
 
-Live tests for `liquidity.q` assume the configured quote function accepts
+Live tests for `liquidity` assume the configured quote function accepts
 `date; syms` and returns at least:
 
 - `date`
@@ -220,20 +217,6 @@ Configured quote functions accept `date;ref` and should return at least:
 - `bidSize`
 - `askSize`
 
-`quoted_spread_ticks` uses `liquidity_ticks.q` and additionally requires
-`tick_size`. `realized_volatility` uses `realized_volatility.q` and requires
-`sym` on the canonical quote source so log returns are calculated by `date ×
-sym` before bucket/group aggregation.
-
-For Cross-Venue Toxicity/Reversion, MMSR infers `aggressorSide` inside its
-calculation namespace by joining each trade to the prevailing same-venue,
-same-symbol quote and comparing trade price to that venue midpoint. The source
-trade function does not need to provide `aggressorSide` for the default live
-report. The reversion target remains the TSE/primary quote: future and at-trade
-primary mids are joined separately to calculate the reversion value. Quote rows
-should satisfy `askPrice > bidPrice`. Production calendar data must come from
-`getTradingCalendar`; weekday-only assumptions are not valid for
-production report generation.
 
 ## Production preflight path
 

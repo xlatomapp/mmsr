@@ -162,6 +162,22 @@ def test_q_metric_functions_return_unkeyed_tables_for_python_schema_validation()
 
     assert "if[0=count facts; :0!facts];" in template
     assert "0!raze mmsrRollups" in template
-    assert template.count("0!result") >= 8
+    assert template.count("0!result") >= 3
     assert "    result\n    };" not in template
 
+
+
+def test_q_library_excludes_removed_legacy_metric_functions() -> None:
+    template = load_q_library_template("mmsr_calculations.q.j2")
+
+    legacy_terms = (
+        "calc" + "LiquidityTicks",
+        "calc" + "RealizedVolatility",
+        "calc" + "Flow",
+        "quoted_spread" + "_ticks",
+        "realized" + "_volatility",
+        "signed" + "_turnover",
+        "trade" + "_imbalance",
+    )
+    for term in legacy_terms:
+        assert term not in template

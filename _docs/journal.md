@@ -159,7 +159,7 @@ This file must be updated after every implementation step.
 - `_docs/ROADMAP.md`
 - `README.md`
 - `config/report.example.yaml`
-- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/kdb/q_templates/toxicity_reversion`
 - `mmsr/metrics/starter_definitions.py`
 - `mmsr/visuals/toxicity.py`
 - `tests/test_toxicity_reversion.py`
@@ -185,7 +185,7 @@ Milestone 3: Metric registry and starter metric definitions, plus new Milestone 
 
 ### Remaining work
 
-- Implement concrete q logic for `toxicity_reversion.q` after production schemas are confirmed.
+- Implement concrete q logic for `toxicity_reversion` after production schemas are confirmed.
 - Add normalized result models for venue/horizon reversion series.
 - Add production chart renderer for the venue reversion curve.
 - Add reference comparison and template commentary for reversion results.
@@ -558,10 +558,10 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 ### Files changed
 
 - `mmsr/kdb/query_loader.py`
-- `mmsr/kdb/q_templates/activity.q`
-- `mmsr/kdb/q_templates/liquidity.q`
+- `mmsr/kdb/q_templates/activity`
+- `mmsr/kdb/q_templates/liquidity`
 - `mmsr/kdb/q_templates/trading_calendar.q`
-- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/kdb/q_templates/toxicity_reversion`
 - `tests/test_kdb_query_loader.py`
 - `_docs/MILESTONE_STATUS.md`
 - `_docs/journal.md`
@@ -615,7 +615,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - Replaced the `KdbMetricRunner.run()` placeholder with deterministic request-to-template execution for initial activity and liquidity metrics.
 - Added `template_for_metric()` mapping for `turnover`, `volume`, `trade_count`, `quoted_spread_bps`, and `top_of_book_depth`.
 - Added strict query rendering through packaged q templates, including date filters, session time filters, intraday bucket expressions, and requested group-by suffixes.
-- Updated `activity.q` and `liquidity.q` to emit time-series rows grouped by `date`, `time_bucket`, and requested group columns.
+- Updated `activity` and `liquidity` to emit time-series rows grouped by `date`, `time_bucket`, and requested group columns.
 - Added `normalize_metric_result()` to convert dict/list-like kdb results, including PyKX-like objects with `.py()`, into `MetricTimeSeries`.
 - Added runner errors for unsupported metrics, missing table mappings, invalid group columns, missing value/date/group fields, non-numeric metric values, and mismatched column lengths.
 - Added a registered `kdb_integration` pytest marker and a skipped live-kdb placeholder test so integration tests can remain outside the offline suite.
@@ -625,8 +625,8 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 - `mmsr/kdb/runner.py`
 - `mmsr/kdb/__init__.py`
-- `mmsr/kdb/q_templates/activity.q`
-- `mmsr/kdb/q_templates/liquidity.q`
+- `mmsr/kdb/q_templates/activity`
+- `mmsr/kdb/q_templates/liquidity`
 - `tests/test_kdb_metric_runner.py`
 - `tests/test_kdb_query_loader.py`
 - `tests/test_import.py`
@@ -667,7 +667,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 ### Best next deterministic step
 
-- Start Milestone 5A runner integration by mapping the `primary_quote_reversion_*_bps` metric family to `toxicity_reversion.q`, rendering horizon/venue/primary-venue parameters, and normalizing venue/horizon result rows into `MetricTimeSeries`.
+- Start Milestone 5A runner integration by mapping the `primary_quote_reversion_*_bps` metric family to `toxicity_reversion`, rendering horizon/venue/primary-venue parameters, and normalizing venue/horizon result rows into `MetricTimeSeries`.
 
 ### Package phase and iteration
 
@@ -689,17 +689,17 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 ### Implemented
 
 - Continued Milestone 5A by wiring the cross-venue primary-quote reversion metric family into `KdbMetricRunner`.
-- Added deterministic mapping from all `primary_quote_reversion_*_bps` metrics to `toxicity_reversion.q`.
+- Added deterministic mapping from all `primary_quote_reversion_*_bps` metrics to `toxicity_reversion`.
 - Extended `MetricRunRequest` with optional metric-family parameters for `primary_venue`, `venues`, and `max_primary_quote_age`.
 - Rendered reversion-specific q parameters for metric value column, primary venue, venue filter, parsed horizon duration, horizon label, and stale-primary-quote age.
 - Normalized reversion result rows with `venue` and `horizon` as required group dimensions, preserving requested group columns such as `sym`.
-- Replaced the previous pseudo-q outline with a strict renderable `toxicity_reversion.q` template that uses placeholders validated by the q template renderer.
+- Replaced the previous pseudo-q outline with a strict renderable `toxicity_reversion` template that uses placeholders validated by the q template renderer.
 - Updated milestone audit status to reflect that runner integration is complete while typed toxicity configuration and live q validation remain open.
 
 ### Files changed
 
 - `mmsr/kdb/runner.py`
-- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/kdb/q_templates/toxicity_reversion`
 - `tests/test_kdb_metric_runner.py`
 - `tests/test_kdb_query_loader.py`
 - `_docs/MILESTONE_STATUS.md`
@@ -710,7 +710,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - Updated metric-to-template tests to include reversion metrics.
 - Added a fake-kdb runner test that renders a reversion query, checks venue/primary-venue/horizon parameters, and verifies normalized `venue`/`horizon`/`sym` grouping.
 - Added a test that reversion metrics require venue parameters before query execution.
-- Added a q-template parameter test for `toxicity_reversion.q`.
+- Added a q-template parameter test for `toxicity_reversion`.
 
 ### Validation performed
 
@@ -731,7 +731,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 - Add first-class typed `ToxicityConfig` models and tests.
 - Add a deterministic request-builder path from report configuration to `MetricRunRequest.parameters`.
-- Validate `toxicity_reversion.q` against confirmed production kdb schemas.
+- Validate `toxicity_reversion` against confirmed production kdb schemas.
 - Add result-to-visual conversion helpers for venue reversion curves if the report layer should consume `MetricTimeSeries` directly.
 - Add reference comparison and template commentary for reversion results.
 
@@ -783,7 +783,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - Added tests for default toxicity configuration values.
 - Added validation tests for invalid horizons, side sources, primary venue membership, stale quote age, clustering windows, and confidence thresholds.
 - Added a test that converts toxicity settings into `MetricRunRequest.parameters`.
-- Updated the reversion runner test to render `toxicity_reversion.q` using config-generated parameters.
+- Updated the reversion runner test to render `toxicity_reversion` using config-generated parameters.
 - Added a public config API import test.
 
 ### Validation performed
@@ -804,7 +804,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 ### Remaining work before milestone completion
 
-- Validate `toxicity_reversion.q` against confirmed production kdb schemas.
+- Validate `toxicity_reversion` against confirmed production kdb schemas.
 - Add deterministic result-to-visual conversion from `MetricTimeSeries` rows to ordered venue reversion curve points.
 - Add reference comparison and template commentary for reversion results.
 - Decide whether the q template should emit numeric horizon sort order in addition to the horizon label.
@@ -874,7 +874,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 ### Remaining work before milestone completion
 
-- Validate `toxicity_reversion.q` against confirmed production kdb schemas.
+- Validate `toxicity_reversion` against confirmed production kdb schemas.
 - Add deterministic sample-size confidence flagging for reversion curve points using configured trade-count and notional thresholds.
 - Add reference comparison and template commentary for reversion results.
 - Decide whether the q template should emit both `horizon` label and numeric horizon sort order for downstream rendering, or whether Python-side duration sorting is sufficient.
@@ -946,7 +946,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 ### Remaining work before milestone completion
 
-- Validate `toxicity_reversion.q` against confirmed production kdb schemas.
+- Validate `toxicity_reversion` against confirmed production kdb schemas.
 - Add deterministic template commentary for reversion curve headlines and low-confidence warnings.
 - Add reference comparison support for reversion results when the comparison engine is connected to report sections.
 
@@ -1016,7 +1016,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 ### Remaining work before milestone completion
 
-- Validate `toxicity_reversion.q` against confirmed production kdb schemas.
+- Validate `toxicity_reversion` against confirmed production kdb schemas.
 - Add deterministic reference-comparison wiring for reversion results using the existing time-series comparison engine.
 - Decide whether the q template should emit both `horizon` label and numeric horizon sort order, or whether Python-side natural-duration sorting is sufficient.
 
@@ -1084,13 +1084,13 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 ### Remaining work before milestone completion
 
-- Validate `toxicity_reversion.q` against confirmed production kdb schemas.
-- Add an explicit offline output-schema contract for `toxicity_reversion.q` so the live production validation target is deterministic.
+- Validate `toxicity_reversion` against confirmed production kdb schemas.
+- Add an explicit offline output-schema contract for `toxicity_reversion` so the live production validation target is deterministic.
 - Decide whether the q template should emit both `horizon` label and numeric horizon sort order, or whether Python-side natural-duration sorting is sufficient.
 
 ### Best next deterministic step
 
-- Add an explicit offline schema contract and live-kdb validation placeholder for `toxicity_reversion.q`, including required output columns such as `date`, `time_bucket`, `venue`, `horizon`, the metric value, `trade_count`, `notional`, `positive_reversion_ratio`, and `valid_primary_quote_ratio`.
+- Add an explicit offline schema contract and live-kdb validation placeholder for `toxicity_reversion`, including required output columns such as `date`, `time_bucket`, `venue`, `horizon`, the metric value, `trade_count`, `notional`, `positive_reversion_ratio`, and `valid_primary_quote_ratio`.
 
 ### Package phase and iteration
 
@@ -1111,11 +1111,11 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 ### Implemented
 
-- Continued Milestone 5A by adding an explicit offline output-schema contract for `toxicity_reversion.q`.
+- Continued Milestone 5A by adding an explicit offline output-schema contract for `toxicity_reversion`.
 - Added `mmsr.kdb.schema_contracts` with `QTemplateOutputSchemaContract`, `OutputSchemaContractError`, and validation helpers for extracting and checking result columns from dict/list/PyKX-like objects.
 - Defined required reversion report-boundary output columns: `date`, `time_bucket`, `venue`, `horizon`, the dynamic metric value column, `trade_count`, `notional`, `positive_reversion_ratio`, and `valid_primary_quote_ratio`, plus requested report group columns.
 - Wired `KdbMetricRunner.run()` to validate reversion result schemas before normalizing them into `MetricTimeSeries`.
-- Added a skipped live-kdb validation placeholder for checking `toxicity_reversion.q` against confirmed production schemas.
+- Added a skipped live-kdb validation placeholder for checking `toxicity_reversion` against confirmed production schemas.
 - Updated the q-template comments and milestone audit to point to the schema contract.
 
 ### Files changed
@@ -1123,7 +1123,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - `mmsr/kdb/schema_contracts.py`
 - `mmsr/kdb/__init__.py`
 - `mmsr/kdb/runner.py`
-- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/kdb/q_templates/toxicity_reversion`
 - `tests/test_kdb_schema_contracts.py`
 - `tests/test_kdb_metric_runner.py`
 - `tests/test_import.py`
@@ -1162,7 +1162,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 ### Best next deterministic step
 
-- Execute the live-kdb `toxicity_reversion.q` schema validation once production table names, side conventions, and access to a representative kdb environment are confirmed.
+- Execute the live-kdb `toxicity_reversion` schema validation once production table names, side conventions, and access to a representative kdb environment are confirmed.
 
 ### Package phase and iteration
 
@@ -1184,15 +1184,15 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 - Continued Milestone 5A by making the reversion horizon progression explicit at the q-template output boundary.
 - Added deterministic `horizon_sort_order` rendering for the six supported primary-quote reversion horizons: `10ms`, `100ms`, `500ms`, `1s`, `5s`, and `10s`.
-- Updated `toxicity_reversion.q` to emit `horizon_sort_order` alongside the rendered horizon label so downstream visuals can preserve horizon progression without relying only on text parsing.
-- Extended the offline `toxicity_reversion.q` output-schema contract to require `horizon_sort_order`.
+- Updated `toxicity_reversion` to emit `horizon_sort_order` alongside the rendered horizon label so downstream visuals can preserve horizon progression without relying only on text parsing.
+- Extended the offline `toxicity_reversion` output-schema contract to require `horizon_sort_order`.
 - Preserved `horizon_sort_order` in normalized observation metadata and in `ReversionCurvePoint` objects.
 - Updated visual sorting to use caller-provided `horizon_order` first, then q-provided `horizon_sort_order`, then natural duration parsing as a deterministic fallback.
 - Updated the milestone audit to reflect the explicit horizon sort-order contract.
 
 ### Files changed
 
-- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/kdb/q_templates/toxicity_reversion`
 - `mmsr/kdb/runner.py`
 - `mmsr/kdb/schema_contracts.py`
 - `mmsr/visuals/toxicity.py`
@@ -1235,7 +1235,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 ### Best next deterministic step
 
-- Execute the live-kdb `toxicity_reversion.q` schema validation once production table names, side conventions, and access to a representative kdb environment are confirmed.
+- Execute the live-kdb `toxicity_reversion` schema validation once production table names, side conventions, and access to a representative kdb environment are confirmed.
 
 ### Package phase and iteration
 
@@ -1255,7 +1255,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 ### Implemented
 
-- Continued Milestone 5A with an offline production input-schema contract for `toxicity_reversion.q`.
+- Continued Milestone 5A with an offline production input-schema contract for `toxicity_reversion`.
 - Added `QTemplateInputTableSchemaContract` to make required source-table columns explicit for the venue-trade and primary-quote table roles.
 - Added `toxicity_reversion_input_schema_contracts()` and `validate_toxicity_reversion_input_schemas()` so live-kdb validation can check source-table schemas before running the q template.
 - Documented feed assumptions for `aggressorSide` and primary quote price conventions in the contract.
@@ -1265,7 +1265,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 - `mmsr/kdb/schema_contracts.py`
 - `mmsr/kdb/__init__.py`
-- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/kdb/q_templates/toxicity_reversion`
 - `tests/test_kdb_schema_contracts.py`
 - `tests/test_import.py`
 - `_docs/MILESTONE_STATUS.md`
@@ -1305,7 +1305,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 ### Best next deterministic step
 
-- Execute live-kdb source-schema and output-schema validation for `toxicity_reversion.q` once production table names, side conventions, and access to a representative kdb environment are confirmed.
+- Execute live-kdb source-schema and output-schema validation for `toxicity_reversion` once production table names, side conventions, and access to a representative kdb environment are confirmed.
 
 ### Package phase and iteration
 
@@ -2632,7 +2632,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - Continued from `mmsr_phase9_iteration28.zip`.
 - Began Milestone 10 by adding a deterministic mock-kdb integration demo that executes rendered q templates through the existing `KdbMetricRunner` path.
 - Added `DeterministicMockKdbClient`, `MockKdbIntegrationDemoOptions`, `MockKdbIntegrationDemoResult`, `build_mock_kdb_integration_demo_result()`, and `build_mock_kdb_integration_demo_report()`.
-- The mock-kdb path executes starter `activity.q` and `liquidity.q` template queries for current and reference periods, normalizes table-shaped mock results into `MetricTimeSeries`, computes reference comparisons, and delegates into the canonical `build_market_monitor_report()` report path.
+- The mock-kdb path executes starter `activity` and `liquidity` template queries for current and reference periods, normalizes table-shaped mock results into `MetricTimeSeries`, computes reference comparisons, and delegates into the canonical `build_market_monitor_report()` report path.
 - Added the `mmsr mock-kdb-demo --output <path>` CLI command and programmatic `render_mock_kdb_demo_report_file()` helper.
 - Documented the mock-kdb quickstart in README and updated roadmap/status docs to mark Milestone 10 as in progress.
 
@@ -2676,14 +2676,14 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 ### Remaining work before milestone completion
 
-- Add explicit output schema contracts for `activity.q` and `liquidity.q`.
+- Add explicit output schema contracts for `activity` and `liquidity`.
 - Validate starter-template output contracts inside `KdbMetricRunner` before normalization.
 - Document how deterministic mock-kdb tests differ from live kdb integration tests.
 - Keep live-kdb tests skipped unless a real kdb process and production-like schemas are explicitly available.
 
 ### Best next deterministic step
 
-- Add explicit output schema contracts for `activity.q` and `liquidity.q`, validate those contracts in `KdbMetricRunner`, and cover missing-column failures with unit tests.
+- Add explicit output schema contracts for `activity` and `liquidity`, validate those contracts in `KdbMetricRunner`, and cover missing-column failures with unit tests.
 
 ### Package phase and iteration
 
@@ -2705,14 +2705,14 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 ### Implemented
 
 - Continued from `mmsr_phase10_iteration29.zip`.
-- Added explicit output schema contracts for `activity.q` and `liquidity.q`.
+- Added explicit output schema contracts for `activity` and `liquidity`.
 - The starter contracts require `date`, `time_bucket`, caller-requested group
   columns, the requested metric value column, and sibling aggregate columns that
   each q template always emits.
 - Routed `KdbMetricRunner` through template-specific output-schema validation
   before normalizing q results into `MetricTimeSeries`.
-- Documented the new schema-contract boundary in the `activity.q` and
-  `liquidity.q` template headers.
+- Documented the new schema-contract boundary in the `activity` and
+  `liquidity` template headers.
 - Updated milestone status and roadmap text to reflect offline starter-template
   schema validation progress.
 
@@ -2721,8 +2721,8 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - `_docs/MILESTONE_STATUS.md`
 - `_docs/ROADMAP.md`
 - `_docs/journal.md`
-- `mmsr/kdb/q_templates/activity.q`
-- `mmsr/kdb/q_templates/liquidity.q`
+- `mmsr/kdb/q_templates/activity`
+- `mmsr/kdb/q_templates/liquidity`
 - `mmsr/kdb/runner.py`
 - `mmsr/kdb/schema_contracts.py`
 - `tests/test_kdb_metric_runner.py`
@@ -2783,7 +2783,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - Existing ppw extras and Typer CLI timing questions remain tracked from
   iteration 26.
 - Resolved the iteration 29 starter-template schema ambiguity by requiring every
-  aggregate column that `activity.q` and `liquidity.q` currently emit, not only
+  aggregate column that `activity` and `liquidity` currently emit, not only
   the requested value column. This keeps sibling aggregates available as
   deterministic observation metadata and matches the q templates' explicit
   select lists.
@@ -2800,8 +2800,8 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
   `MMSR_KDB_HOST`, `MMSR_KDB_PORT`, starter trades/quotes table variables,
   calendar table variable, reversion table variables, and bounded smoke-test
   date/symbol variables.
-- Documented starter table/schema assumptions for `activity.q`, `liquidity.q`,
-  and `toxicity_reversion.q`.
+- Documented starter table/schema assumptions for `activity`, `liquidity`,
+  and `toxicity_reversion`.
 - Documented why `@pytest.mark.kdb_integration` tests remain skipped by default
   and how a future live harness should opt in safely.
 - Linked the integration-testing guide from README and the MkDocs navigation.
@@ -2857,7 +2857,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 - Add a small environment-gated live-kdb smoke-test harness that reads the
   documented `MMSR_KDB_*` variables, skips safely when they are absent, and
-  validates one bounded `activity.q` or `liquidity.q` result through the existing
+  validates one bounded `activity` or `liquidity` result through the existing
   schema-contract boundary.
 
 ### Package phase and iteration
@@ -2886,11 +2886,11 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
   live-kdb smoke environment variables, including host, port, trades table,
   calendar table, bounded test date, optional credentials, and optional test
   symbol.
-- Added `run_live_activity_smoke()` to execute one bounded `activity.q` turnover
+- Added `run_live_activity_smoke()` to execute one bounded `activity` turnover
   request through `KdbMetricRunner`, so live smoke validation reuses the same
   output schema-contract boundary as deterministic mock-kdb tests.
-- Added an optional starter-template `symbol_filter` parameter for `activity.q`
-  and `liquidity.q`, allowing live smoke runs to restrict the query to
+- Added an optional starter-template `symbol_filter` parameter for `activity`
+  and `liquidity`, allowing live smoke runs to restrict the query to
   `MMSR_KDB_TEST_SYMBOL` without broadening the report-boundary model.
 - Replaced the unconditional live metric-runner placeholder with an
   environment-gated pytest that skips safely when required `MMSR_KDB_*`
@@ -2908,8 +2908,8 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - `docs/kdb_integration_testing.md`
 - `mmsr/kdb/__init__.py`
 - `mmsr/kdb/live_smoke.py`
-- `mmsr/kdb/q_templates/activity.q`
-- `mmsr/kdb/q_templates/liquidity.q`
+- `mmsr/kdb/q_templates/activity`
+- `mmsr/kdb/q_templates/liquidity`
 - `mmsr/kdb/runner.py`
 - `tests/test_docs_governance.py`
 - `tests/test_kdb_metric_runner.py`
@@ -2952,7 +2952,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - Execute the environment-gated live activity smoke test against a real kdb+
   process with confirmed production-like schemas.
 - Record exact source table/schema findings from live execution.
-- Decide whether to add a matching `liquidity.q` live smoke slice after the
+- Decide whether to add a matching `liquidity` live smoke slice after the
   activity smoke has been validated against a real environment.
 - Keep reversion live validation skipped until venue-trade and primary-quote
   production schemas are confirmed.
@@ -2976,8 +2976,8 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - Exact production kdb table names, authentication conventions, and schema
   variants remain to be confirmed before live execution can be treated as
   validated.
-- The first implemented live smoke covers `activity.q`; a separate deterministic
-  step should decide whether `liquidity.q` needs its own live smoke slice before
+- The first implemented live smoke covers `activity`; a separate deterministic
+  step should decide whether `liquidity` needs its own live smoke slice before
   closing Milestone 10.
 
 
@@ -2989,7 +2989,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 - Continued from `mmsr_phase10_iteration32.zip`.
 - Added `mmsr.kdb.live_smoke.LiveKdbLiquiditySmokeConfig` to mirror the existing
-  activity smoke harness for `liquidity.q`.
+  activity smoke harness for `liquidity`.
 - Added `REQUIRED_LIVE_LIQUIDITY_SMOKE_ENV_VARS` and `run_live_liquidity_smoke()`
   so a bounded `quoted_spread_bps` request can be executed through
   `KdbMetricRunner` against a real kdb+ process once the documented
@@ -4215,8 +4215,8 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
   market-cap bucket thresholds, symbol identifier conventions, effective-dated
   metadata joins, unknown/suspended instrument handling, and normalized
   group-key mapping.
-- Documented required kdb+ source fields for the trading calendar, `activity.q`
-  trades table, `liquidity.q` quotes table, `toxicity_reversion.q` venue-trade
+- Documented required kdb+ source fields for the trading calendar, `activity`
+  trades table, `liquidity` quotes table, `toxicity_reversion` venue-trade
   and primary-quote tables, and symbol metadata/taxonomy joins.
 - Added the checklist to MkDocs navigation and linked it from the MkDocs
   quickstart and README.
@@ -4798,9 +4798,9 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - `mmsr/kdb/query_plan.py`
 - `mmsr/kdb/runner.py`
 - `mmsr/kdb/schema_contracts.py`
-- `mmsr/kdb/q_templates/activity.q`
-- `mmsr/kdb/q_templates/liquidity.q`
-- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/kdb/q_templates/activity`
+- `mmsr/kdb/q_templates/liquidity`
+- `mmsr/kdb/q_templates/toxicity_reversion`
 - `tests/test_kdb_query_plan.py`
 - `tests/test_kdb_metric_runner.py`
 - `tests/test_kdb_schema_contracts.py`
@@ -5165,7 +5165,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - Rendered raw source-function calls with a canonical request dictionary
   containing start/end dates, session start/end times, bucket size, symbol
   filters, and venue filters.
-- Wrapped `activity.q`, `liquidity.q`, and `toxicity_reversion.q` calculations
+- Wrapped `activity`, `liquidity`, and `toxicity_reversion` calculations
   in a configured q namespace such as `.desk.mmsr`, avoiding intermediate
   calculations in the global namespace.
 - Added planner metadata for rendered source functions and calculation namespace
@@ -5187,9 +5187,9 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - `mmsr/kdb/query_plan.py`
 - `mmsr/kdb/runner.py`
 - `mmsr/kdb/schema_contracts.py`
-- `mmsr/kdb/q_templates/activity.q`
-- `mmsr/kdb/q_templates/liquidity.q`
-- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/kdb/q_templates/activity`
+- `mmsr/kdb/q_templates/liquidity`
+- `mmsr/kdb/q_templates/toxicity_reversion`
 - `tests/test_config_models.py`
 - `tests/test_docs_governance.py`
 - `tests/test_kdb_metric_runner.py`
@@ -5729,8 +5729,8 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, and `_docs/journal.md` before changing the roadmap and metric execution layer.
 - Incorporated user feedback to freeze additional report-local validation expansion. Roadmap and production docs now keep `mmsr plan` and `mmsr preflight` as optional operator helpers, while deferring any broader reusable validation framework until multiple reports exist.
 - Added `config/report.production_minimal.yaml` for first live-kdb runs. It includes only metrics that are currently backed by checked-in q templates and explicitly notes the `tick_size` requirement for `quoted_spread_ticks`.
-- Implemented production q-template support for `quoted_spread_ticks` through a dedicated `liquidity_ticks.q` template.
-- Added source and output schema contracts for `liquidity_ticks.q`, including the `tick_size` quote-source requirement.
+- Implemented production q-template support for `quoted_spread_ticks` through a dedicated `liquidity_ticks` template.
+- Added source and output schema contracts for `liquidity_ticks`, including the `tick_size` quote-source requirement.
 - Wired `quoted_spread_ticks` into `KdbMetricQueryPlanner`, `template_for_metric()`, source-function rendering, symbol filtering, and output-schema dispatch.
 
 ### Files changed
@@ -5742,7 +5742,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - `config/report.production_minimal.yaml`
 - `docs/kdb_integration_testing.md`
 - `docs/production_readiness.md`
-- `mmsr/kdb/q_templates/liquidity_ticks.q`
+- `mmsr/kdb/q_templates/liquidity_ticks`
 - `mmsr/kdb/query_plan.py`
 - `mmsr/kdb/schema_contracts.py`
 - `tests/test_config_files.py`
@@ -5752,8 +5752,8 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 ### Tests added or updated
 
 - Added config-file coverage proving `config/report.production_minimal.yaml` loads and contains only metrics supported by checked-in kdb templates.
-- Added query-planner coverage for `quoted_spread_ticks`, including `liquidity_ticks.q`, `tick_size` source-contract requirements, symbol filtering, and user-defined quote source-function rendering.
-- Added schema-contract coverage for `liquidity_ticks.q` input and output contracts plus dispatch through `output_schema_contract_for_template()`.
+- Added query-planner coverage for `quoted_spread_ticks`, including `liquidity_ticks`, `tick_size` source-contract requirements, symbol filtering, and user-defined quote source-function rendering.
+- Added schema-contract coverage for `liquidity_ticks` input and output contracts plus dispatch through `output_schema_contract_for_template()`.
 - Updated docs/governance expectations implicitly through existing governance tests.
 
 ### Validation performed
@@ -5803,7 +5803,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 ### Implemented
 
 - Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, and `_docs/journal.md` before changing the report metric execution layer.
-- Implemented a focused `flow.q` production template for `signed_turnover` and `trade_imbalance`.
+- Implemented a focused `flow` production template for `signed_turnover` and `trade_imbalance`.
 - Kept the first flow slice deterministic by using feed-provided `aggressorSide` with buy=1 and sell=-1; quote-based trade signing remains a later explicit enhancement.
 - Added flow input and output schema contracts, including required trade-source columns and normalized output metadata (`signed_volume`, `volume`, and `trade_count`).
 - Wired flow metrics into `KdbMetricQueryPlanner`, `template_for_metric()`, source-function rendering, symbol filtering, and output-schema dispatch.
@@ -5820,7 +5820,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - `config/report.production_minimal.yaml`
 - `docs/kdb_integration_testing.md`
 - `docs/production_readiness.md`
-- `mmsr/kdb/q_templates/flow.q`
+- `mmsr/kdb/q_templates/flow`
 - `mmsr/kdb/query_plan.py`
 - `mmsr/kdb/schema_contracts.py`
 - `mmsr/metrics/starter_definitions.py`
@@ -5830,7 +5830,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 ### Tests added or updated
 
-- Added schema-contract tests for `flow.q` input requirements, output requirements, result validation, dispatch, and non-flow metric rejection.
+- Added schema-contract tests for `flow` input requirements, output requirements, result validation, dispatch, and non-flow metric rejection.
 - Added query-planner tests for `signed_turnover` and `trade_imbalance`, including user-defined trade source-function rendering and `aggressorSide` requirements.
 - Updated production minimal config coverage to include the new flow q-template metrics.
 
@@ -5879,7 +5879,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 ### Implemented
 
 - Re-read `_docs/AGENTS.md`, `_docs/ROADMAP.md`, and `_docs/journal.md` before changing the runnable report-metric layer.
-- Implemented a focused `realized_volatility.q` production template for quote-mid realized volatility.
+- Implemented a focused `realized_volatility` production template for quote-mid realized volatility.
 - Kept the calculation quote-only and deterministic: valid quote mids are sorted by `date`, `sym`, and `time`, adjacent log-mid returns are calculated by `date × sym`, and bucket/group volatility is emitted in basis points.
 - Added realized-volatility input and output schema contracts, including the required `sym` quote-source column and normalized output metadata (`return_count`, `first_mid`, and `last_mid`).
 - Wired `realized_volatility` into `KdbMetricQueryPlanner`, `template_for_metric()`, source-function rendering, symbol filtering, output-schema dispatch, and runner support.
@@ -5896,7 +5896,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - `config/report.production_minimal.yaml`
 - `docs/kdb_integration_testing.md`
 - `docs/production_readiness.md`
-- `mmsr/kdb/q_templates/realized_volatility.q`
+- `mmsr/kdb/q_templates/realized_volatility`
 - `mmsr/kdb/query_plan.py`
 - `mmsr/kdb/schema_contracts.py`
 - `tests/test_config_files.py`
@@ -5906,7 +5906,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 ### Tests added or updated
 
-- Added schema-contract tests for `realized_volatility.q` input requirements, output metadata, result validation, dispatch, and non-volatility metric rejection.
+- Added schema-contract tests for `realized_volatility` input requirements, output metadata, result validation, dispatch, and non-volatility metric rejection.
 - Added query-planner coverage for `realized_volatility`, including the quote source contract, selected-symbol rendering, q-template dispatch, and required output columns.
 - Updated the unsupported-runner test to use `effective_spread_bps`, which remains a registered metric without production q-template support.
 - Updated production minimal config coverage to include the new volatility q-template metric.
@@ -6177,7 +6177,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 - Updated the primary-quote reversion convention per user direction to:
   `aggressorSide * (future_mid - mid_at_trade) / future_mid * 10000`.
-- Changed `toxicity_reversion.q` to divide by `post_mid` and require `post_mid > 0` for valid scored rows.
+- Changed `toxicity_reversion` to divide by `post_mid` and require `post_mid > 0` for valid scored rows.
 - Updated metric-definition formula text, Cross-Venue Toxicity help text, deterministic commentary docs, roadmap wording, production readiness notes, and kdb integration docs to use the future-mid denominator consistently.
 - Added regression coverage so the packaged q template cannot drift back to the old `primary_mid` denominator.
 
@@ -6189,7 +6189,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - `_docs/journal.md`
 - `docs/kdb_integration_testing.md`
 - `docs/production_readiness.md`
-- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/kdb/q_templates/toxicity_reversion`
 - `mmsr/metrics/starter_definitions.py`
 - `mmsr/report/toxicity.py`
 - `mmsr/visuals/toxicity.py`
@@ -6640,10 +6640,10 @@ Implemented MMSR-owned q aggregation helpers under the configured calculation na
 - `README.md`
 - `mmsr/kdb/query_loader.py`
 - `mmsr/kdb/runner.py`
-- `mmsr/kdb/q_templates/activity.q`
+- `mmsr/kdb/q_templates/activity`
 - `mmsr/kdb/q_templates/calculation_functions.q`
-- `mmsr/kdb/q_templates/liquidity.q`
-- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/kdb/q_templates/liquidity`
+- `mmsr/kdb/q_templates/toxicity_reversion`
 - `tests/test_kdb_metric_runner.py`
 - `tests/test_kdb_query_loader.py`
 - `tests/test_kdb_query_plan.py`
@@ -6718,10 +6718,10 @@ packaged live-kdb example config is included in the package.
 - `mmsr/examples/config/live_kdb_report.yaml`
 - `mmsr/examples/mock_kdb_demo.py`
 - `mmsr/kdb/live_smoke.py`
-- `mmsr/kdb/q_templates/activity.q`
+- `mmsr/kdb/q_templates/activity`
 - `mmsr/kdb/q_templates/calculation_functions.q`
-- `mmsr/kdb/q_templates/liquidity.q`
-- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/kdb/q_templates/liquidity`
+- `mmsr/kdb/q_templates/toxicity_reversion`
 - `mmsr/kdb/query_plan.py`
 - `mmsr/kdb/schema_contracts.py`
 - `mmsr/periods/models.py`
@@ -6912,14 +6912,14 @@ calculations instead of requiring it from the trade source.
 - `mmsr/kdb/calculation_functions.q`
 - `mmsr/kdb/production.py`
 - `mmsr/kdb/query_plan.py`
-- `mmsr/kdb/q_templates/activity.q`
+- `mmsr/kdb/q_templates/activity`
 - `mmsr/kdb/q_templates/effective_spread.q`
-- `mmsr/kdb/q_templates/flow.q`
-- `mmsr/kdb/q_templates/liquidity.q`
-- `mmsr/kdb/q_templates/liquidity_ticks.q`
+- `mmsr/kdb/q_templates/flow`
+- `mmsr/kdb/q_templates/liquidity`
+- `mmsr/kdb/q_templates/liquidity_ticks`
 - `mmsr/kdb/q_templates/price_impact.q`
-- `mmsr/kdb/q_templates/realized_volatility.q`
-- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/kdb/q_templates/realized_volatility`
+- `mmsr/kdb/q_templates/toxicity_reversion`
 - `mmsr/kdb/schema_contracts.py`
 - `mmsr/periods/symbols.py`
 - `tests/test_config_files.py`
@@ -7014,7 +7014,7 @@ Removed files:
 - Changed `ToxicityConfig.venues` to an optional venue filter. When omitted, the
   reversion q template discovers venues present in the trade and quote rows; when
   supplied, it remains a narrow explicit filter for controlled diagnostics.
-- Updated `toxicity_reversion.q` so each trade is matched to the prevailing quote
+- Updated `toxicity_reversion` so each trade is matched to the prevailing quote
   by `date`, `sym`, `venue`, and `time`, infers `aggressorSide` from that
   same-venue/same-symbol midpoint, then separately uses the TSE/primary quote
   path for at-trade and future mids in the reversion formula.
@@ -7040,7 +7040,7 @@ Removed files:
 - `mmsr/config/models.py`
 - `mmsr/examples/config/live_kdb_report.yaml`
 - `mmsr/kdb/production.py`
-- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/kdb/q_templates/toxicity_reversion`
 - `mmsr/kdb/query_plan.py`
 - `mmsr/kdb/schema_contracts.py`
 - `mmsr/metrics/starter_definitions.py`
@@ -7143,7 +7143,7 @@ Removed files:
 - `mmsr/config/models.py`
 - `mmsr/examples/config/live_kdb_report.yaml`
 - `mmsr/kdb/production.py`
-- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/kdb/q_templates/toxicity_reversion`
 - `mmsr/kdb/query_plan.py`
 - `mmsr/kdb/schema_contracts.py`
 - `mmsr/metrics/starter_definitions.py`
@@ -7221,7 +7221,7 @@ Removed files:
   toxicity/reversion so PTS trade side inference no longer defaults to the main
   TSE/displayed-liquidity quote source in production configs.
 - Renamed the reversion q source role from `venue_quotes` to `pts_quotes` and
-  updated `toxicity_reversion.q` to load `rawPtsQuotes`, as-of join PTS trades to
+  updated `toxicity_reversion` to load `rawPtsQuotes`, as-of join PTS trades to
   PTS quotes by `date`, `sym`, `venue`, and `time`, and infer `aggressorSide`
   from `ptsMid`.
 - Kept backward-compatible parsing for the older `venue_quote` config key and
@@ -7245,7 +7245,7 @@ Removed files:
 - `mmsr/config/loading.py`
 - `mmsr/config/models.py`
 - `mmsr/examples/config/live_kdb_report.yaml`
-- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/kdb/q_templates/toxicity_reversion`
 - `mmsr/kdb/query_plan.py`
 - `mmsr/kdb/schema_contracts.py`
 - `mmsr/metrics/starter_definitions.py`
@@ -7339,14 +7339,14 @@ Removed files:
 
 - `README.md`
 - `_docs/journal.md`
-- `mmsr/kdb/q_templates/activity.q`
+- `mmsr/kdb/q_templates/activity`
 - `mmsr/kdb/q_templates/effective_spread.q`
-- `mmsr/kdb/q_templates/flow.q`
-- `mmsr/kdb/q_templates/liquidity.q`
-- `mmsr/kdb/q_templates/liquidity_ticks.q`
+- `mmsr/kdb/q_templates/flow`
+- `mmsr/kdb/q_templates/liquidity`
+- `mmsr/kdb/q_templates/liquidity_ticks`
 - `mmsr/kdb/q_templates/price_impact.q`
-- `mmsr/kdb/q_templates/realized_volatility.q`
-- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/kdb/q_templates/realized_volatility`
+- `mmsr/kdb/q_templates/toxicity_reversion`
 - `tests/test_kdb_metric_runner.py`
 - `tests/test_kdb_production_execution.py`
 - `tests/test_kdb_query_plan.py`
@@ -7418,14 +7418,14 @@ Removed files:
 
 ### Files changed
 
-- `mmsr/kdb/q_templates/activity.q`
-- `mmsr/kdb/q_templates/flow.q`
-- `mmsr/kdb/q_templates/liquidity.q`
-- `mmsr/kdb/q_templates/liquidity_ticks.q`
-- `mmsr/kdb/q_templates/realized_volatility.q`
+- `mmsr/kdb/q_templates/activity`
+- `mmsr/kdb/q_templates/flow`
+- `mmsr/kdb/q_templates/liquidity`
+- `mmsr/kdb/q_templates/liquidity_ticks`
+- `mmsr/kdb/q_templates/realized_volatility`
 - `mmsr/kdb/q_templates/effective_spread.q`
 - `mmsr/kdb/q_templates/price_impact.q`
-- `mmsr/kdb/q_templates/toxicity_reversion.q`
+- `mmsr/kdb/q_templates/toxicity_reversion`
 - `mmsr/kdb/query_plan.py`
 - `mmsr/kdb/runner.py`
 - `mmsr/kdb/production.py`
@@ -7555,9 +7555,9 @@ Removed files:
 ### Files changed
 
 - `mmsr/kdb/query_templates/calculation_functions.q.j2`
-- `mmsr/kdb/query_templates/activity.q.j2`
-- `mmsr/kdb/query_templates/liquidity.q.j2`
-- `mmsr/kdb/query_templates/toxicity_reversion.q.j2`
+- `mmsr/kdb/query_templates/activity.j2`
+- `mmsr/kdb/query_templates/liquidity.j2`
+- `mmsr/kdb/query_templates/toxicity_reversion.j2`
 - `mmsr/kdb/query_plan.py`
 - `tests/test_kdb_metric_runner.py`
 - `README.md`
@@ -7818,7 +7818,7 @@ Removed files:
 
 - Moved every MMSR-owned metric calculation function body out of per-metric query template files and into the single canonical q library file `mmsr/kdb/q_lib/mmsr_calculations.q.j2`.
 - Kept per-metric `query_templates/*.q.j2` files only as compatibility/documentation shims; query planning now loads metric function blocks from the q library.
-- Added `load_metric_q_template` so legacy template names such as `liquidity.q` still resolve to the q library block.
+- Added `load_metric_q_template` so legacy template names such as `liquidity` still resolve to the q library block.
 - Changed calculation bootstrap rendering to install only shared reusable helpers from the q library, not request-specific metric functions.
 - Rewrote `rollupMetricResult` to avoid `$[...]` conditional branching and to parenthesize aggregation-level membership predicates explicitly.
 - Preserved existing metric query behavior and schema contracts while making the physical q function source single-file.
@@ -7828,14 +7828,14 @@ Removed files:
 - `mmsr/kdb/q_lib/mmsr_calculations.q.j2`
 - `mmsr/kdb/query_loader.py`
 - `mmsr/kdb/query_plan.py`
-- `mmsr/kdb/query_templates/activity.q.j2`
+- `mmsr/kdb/query_templates/activity.j2`
 - `mmsr/kdb/query_templates/effective_spread.q.j2`
-- `mmsr/kdb/query_templates/flow.q.j2`
-- `mmsr/kdb/query_templates/liquidity.q.j2`
-- `mmsr/kdb/query_templates/liquidity_ticks.q.j2`
+- `mmsr/kdb/query_templates/flow.j2`
+- `mmsr/kdb/query_templates/liquidity.j2`
+- `mmsr/kdb/query_templates/liquidity_ticks.j2`
 - `mmsr/kdb/query_templates/price_impact.q.j2`
-- `mmsr/kdb/query_templates/realized_volatility.q.j2`
-- `mmsr/kdb/query_templates/toxicity_reversion.q.j2`
+- `mmsr/kdb/query_templates/realized_volatility.j2`
+- `mmsr/kdb/query_templates/toxicity_reversion.j2`
 - `_docs/journal.md`
 
 ### Tests added or updated
@@ -7885,14 +7885,14 @@ Removed files:
 - `README.md`
 - `mmsr/kdb/query_loader.py`
 - `tests/test_kdb_query_loader.py`
-- Removed `mmsr/kdb/query_templates/activity.q.j2`
+- Removed `mmsr/kdb/query_templates/activity.j2`
 - Removed `mmsr/kdb/query_templates/effective_spread.q.j2`
-- Removed `mmsr/kdb/query_templates/flow.q.j2`
-- Removed `mmsr/kdb/query_templates/liquidity.q.j2`
-- Removed `mmsr/kdb/query_templates/liquidity_ticks.q.j2`
+- Removed `mmsr/kdb/query_templates/flow.j2`
+- Removed `mmsr/kdb/query_templates/liquidity.j2`
+- Removed `mmsr/kdb/query_templates/liquidity_ticks.j2`
 - Removed `mmsr/kdb/query_templates/price_impact.q.j2`
-- Removed `mmsr/kdb/query_templates/realized_volatility.q.j2`
-- Removed `mmsr/kdb/query_templates/toxicity_reversion.q.j2`
+- Removed `mmsr/kdb/query_templates/realized_volatility.j2`
+- Removed `mmsr/kdb/query_templates/toxicity_reversion.j2`
 - `_docs/journal.md`
 
 ### Tests added or updated
@@ -8578,3 +8578,403 @@ Removed files:
 
 - None.
 
+
+## 2026-05-28 — Add pluggable day-metric cache hooks
+
+### Implemented
+
+- Added a small kdb cache API with `MetricDayCacheKey`, `MetricDayCacheHooks`, and load/persist protocols for user-provided day/metric storage.
+- Extended `KdbMetricRunner.run_day()` to consult user cache loaders before executing kdb, skip fully cached metrics, execute only cache misses, and call user persisters after successful schema validation and normalization.
+- Added defensive validation for cached series so a user loader cannot accidentally return the wrong metric or a different trading day.
+- Added cache hit/miss metadata to returned `MetricTimeSeries` objects while keeping the no-cache default path unchanged.
+- Exported the cache hook/key types from `mmsr.kdb`.
+
+### Files changed
+
+- `mmsr/kdb/cache.py`
+- `mmsr/kdb/runner.py`
+- `mmsr/kdb/__init__.py`
+- `tests/test_kdb_metric_runner.py`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Added day-runner coverage for a full cache hit that avoids kdb execution.
+- Added day-runner coverage for cache misses that execute kdb and persist normalized results.
+- Added mixed hit/miss coverage confirming only uncached metrics are requested from kdb and original request order is preserved.
+- Added validation coverage for stale/wrong cached series.
+
+### Validation
+
+- `PYTHONPATH=. pytest -q tests/test_kdb_metric_runner.py` passed.
+- `PYTHONPATH=. pytest -q` passed.
+- `python -m black ...` could not be run because `black` is not installed in this environment.
+- `python -m flake8 ...` could not be run because `flake8` is not installed in this environment.
+- The environment still prints the unrelated spreadsheet runtime warmup warning during Python startup, but the pytest commands completed successfully.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening.
+
+### Estimated milestone completion
+
+- 99%.
+
+### Remaining work before milestone completion
+
+- Run `mmsr preflight --verbose --metric quoted_spread_bps` against live kdb and confirm the day-runner output shape with and without cache hooks.
+- Decide whether to add a built-in file-backed cache implementation, or keep MMSR cache storage entirely user-owned for production.
+
+### Best next deterministic step
+
+- Validate `KdbMetricRunner.run_day()` with production user load/persist functions against live kdb for one `quoted_spread_bps` trading day.
+
+### Open questions
+
+- Should MMSR provide a reference local filesystem cache implementation, or should production cache storage remain entirely user-pluggable?
+
+---
+
+---
+
+## 2026-05-28 — Reversion day-run performance inspection and common-prejoin batching
+
+### Implemented
+
+- Inspected the Python day-run path and q reversion calculation path after production feedback that one day of reversion data can run for about 1.5 hours.
+- Identified the main deterministic performance issue: each requested `primary_quote_reversion_*_bps` horizon was executed as a separate metric, causing the same large PTS trade, PTS quote, and primary quote inputs to be filtered, sorted, and as-of joined once per horizon.
+- Split reversion q calculation into:
+  - `prepareToxicityReversion`, which filters and performs common PTS/primary pre-joins once for a chunk.
+  - `calcToxicityReversionPrepared`, which applies one horizon to already-prepared rows.
+  - `calcToxicityReversionFamily`, which computes all requested reversion horizons from the shared prepared rows in one day-run family block.
+- Updated `runReportDay` so reversion metrics are batched as a family per chunk while non-reversion metrics continue through the normal `runMetric` path.
+- Added a q predicate `isToxicityReversionMetric` to keep family detection centralized.
+- Documented in the q template that production day source functions should already return one `runDate`; date filters remain only as defensive guards for direct/multi-day calls.
+
+### Files changed
+
+- `mmsr/kdb/q_lib/mmsr_calculations.q.j2`
+- `tests/test_kdb_metric_runner.py`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Added bootstrap tests proving the day runner batches reversion horizons through `calcToxicityReversionFamily`.
+- Added bootstrap tests proving the shared reversion preparation block is called once by the family calculation before horizon-specific scoring.
+
+### Validation
+
+- `PYTHONPATH=. pytest -q tests/test_kdb_metric_runner.py tests/test_kdb_query_plan.py` passed.
+- `PYTHONPATH=. pytest -q` passed.
+- `python -m black --check mmsr tests` could not run because `black` is not installed in this environment.
+- `python -m flake8 mmsr tests` could not run because `flake8` is not installed in this environment.
+- Live kdb performance validation was not possible in this environment.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening
+
+### Estimated milestone completion
+
+- 99%
+
+### Remaining work before milestone completion
+
+- Run one live production day for all six reversion horizons and compare wall-clock time before/after this common-prejoin batching.
+- If runtime is still above target, profile whether the remaining cost is dominated by primary post-horizon as-of joins, source loader scans, or symbol chunk sizing.
+
+### Best next deterministic step
+
+- Add optional q-side timing instrumentation around source load, common reversion preparation, per-horizon post joins, and rollup so production can identify the remaining bottleneck precisely.
+
+### Open questions
+
+- Are production `pts_trades`, `pts_quotes`, and `primary_quotes` source functions guaranteed to return only the supplied `runDate`, or should MMSR assert that invariant inside the day runner?
+- Are the production PTS and primary quote sources already sorted/parted by `date`, `sym`, `venue`, and `time`, or does MMSR need to add explicit source-contract guidance for parted attributes?
+
+
+
+---
+
+## 2026-05-28 — Partition reversion aj inputs by symbol
+
+### Implemented
+
+- Added a q-side `partedSym` helper that applies the `p#` attribute to `sym` on sorted tables.
+- Updated the Cross-Venue Toxicity/Reversion q path so every reversion `aj` consumes a materialized, sorted table with `sym` partitioned before the join.
+- Kept the optimization scoped to reversion joins, where production execution is day-scoped and `sym` is contiguous after the join-key sort.
+- Avoided changing the Python execution API or cache hooks.
+
+### Files changed
+
+- `mmsr/kdb/q_lib/mmsr_calculations.q.j2`
+- `tests/test_kdb_metric_runner.py`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Added a bootstrap rendering test that verifies reversion aj inputs are sorted and passed through `partedSym` before the aj calls.
+- Updated tests indirectly covering q bootstrap rendering.
+
+### Validation
+
+- `PYTHONPATH=. pytest -q tests/test_kdb_metric_runner.py tests/test_kdb_query_plan.py` passed.
+- `PYTHONPATH=. pytest -q` passed.
+- `black` and `flake8` are not installed in this environment, so those checks could not run.
+- Live kdb timing was not available in this environment.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening
+
+### Estimated milestone completion
+
+- 99%
+
+### Remaining work before milestone completion
+
+- Validate the reversion query with live kdb data to confirm `p#sym` materially reduces runtime and does not expose any multi-day/direct-template attr assumptions.
+- Profile the remaining horizon aj and aggregation costs if single-day runtime is still above a few minutes.
+
+### Best next deterministic step
+
+- Run one live kdb timing comparison for a single trading day and confirm whether the optimized reversion family path now completes within the expected runtime window.
+
+### Open questions
+
+- Should direct multi-day q-template calls be explicitly unsupported for reversion, since production source loaders are expected to return a single `runDate`?
+---
+
+## 2026-05-28 — Remove legacy transaction-cost q paths and template filename references
+
+### Implemented
+
+- Removed the out-of-scope `calcEffectiveSpread` and `calcPriceImpact` q calculation functions from the reusable MMSR q library.
+- Removed production runner/query-planner support for `effective_spread_bps` and `price_impact_30s_bps`.
+- Removed transaction-cost input/output schema contracts and validation dispatch from `mmsr.kdb.schema_contracts`.
+- Removed transaction-cost starter metric definitions so the default registry now contains market activity, displayed liquidity, optional market-state add-ons, flow, and reversion metrics only.
+- Replaced legacy logical template filename identifiers such as `activity.q`, `liquidity.q`, and `toxicity_reversion.q` with metric-family identifiers such as `activity`, `liquidity`, and `toxicity_reversion` across active code, tests, and production docs.
+- Updated tests to assert the active metric-family contract names and the smaller q library surface.
+
+### Files changed
+
+- `_docs/AGENTS.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `docs/kdb_integration_testing.md`
+- `docs/production_readiness.md`
+- `mmsr/analysis/anomaly.py`
+- `mmsr/kdb/q_lib/mmsr_calculations.q.j2`
+- `mmsr/kdb/query_plan.py`
+- `mmsr/kdb/schema_contracts.py`
+- `mmsr/metrics/starter_definitions.py`
+- `tests/test_config_files.py`
+- `tests/test_kdb_metric_runner.py`
+- `tests/test_kdb_production_execution.py`
+- `tests/test_kdb_query_loader.py`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_kdb_schema_contracts.py`
+
+### Tests added or updated
+
+- Updated kdb runner, query planner, schema contract, production execution, config, and q-library tests to remove transaction-cost expectations.
+- Updated active template-name expectations from legacy `.q` filenames to metric-family identifiers.
+
+### Validation
+
+- Ran `PYTHONPATH=. pytest -q` successfully.
+- Confirmed active code/tests/docs no longer contain `calcEffectiveSpread`, `calcPriceImpact`, `effective_spread`, `price_impact`, `activity.q`, `liquidity.q`, or `toxicity_reversion.q` references outside historical journal content.
+- `black --check .` could not be run because `black` is not installed in this environment.
+- `flake8 .` could not be run because `flake8` is not installed in this environment.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening
+
+### Estimated milestone completion
+
+- 99%
+
+### Remaining work before milestone completion
+
+- Run a live single-day kdb timing comparison for the optimized reversion family path.
+- Confirm production source loaders return day-scoped rows for the supplied run date.
+
+### Best next deterministic step
+
+- Run one live kdb preflight/timing pass for a configured reversion metric family over one trading day and record the elapsed time per chunk and horizon family.
+
+### Open questions
+
+- None.
+
+
+
+## 2026-05-28 — Remove remaining legacy optional q-template families
+
+### Implemented
+
+- Removed the remaining legacy optional metric families from the active registry, q library, query planner, and schema contracts.
+- Removed active support for tick-normalized spread, quote-mid volatility, and feed-signed flow metrics so the production surface only exposes activity, displayed liquidity, and Cross-Venue Toxicity/Reversion.
+- Removed q runner dispatch branches for the legacy optional metric families.
+- Updated active documentation to stop describing removed legacy optional q-template families as supported.
+- Added a q-library regression test that guards against reintroducing the removed legacy metric functions.
+
+### Files changed
+
+- `mmsr/metrics/starter_definitions.py`
+- `mmsr/kdb/query_plan.py`
+- `mmsr/kdb/schema_contracts.py`
+- `mmsr/kdb/q_lib/mmsr_calculations.q.j2`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_kdb_schema_contracts.py`
+- `tests/test_kdb_query_loader.py`
+- `README.md`
+- `docs/kdb_integration_testing.md`
+- `docs/production_readiness.md`
+- `_docs/MILESTONE_STATUS.md`
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Removed query-plan and schema-contract tests for removed legacy optional metric families.
+- Updated the q-library unkeyed-table assertion for the smaller active q surface.
+- Added `test_q_library_excludes_removed_legacy_metric_functions`.
+
+### Validation
+
+- `python -m pytest -q` passed.
+- Verified active source, tests, configs, README, and docs outside the historical journal no longer contain legacy identifiers for removed q-template families.
+- `black` and `flake8` are not installed in this environment, so formatter/linter validation could not be run.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening
+
+### Estimated milestone completion
+
+- 99%
+
+### Remaining work before milestone completion
+
+- Run one live kdb timing/preflight pass for the optimized reversion family over one production trading day.
+- Confirm the reduced production q surface with a live configuration using only default activity, displayed liquidity, and reversion metrics.
+
+### Best next deterministic step
+
+- Run a live one-day reversion family timing pass and record elapsed time per source load, preparation step, and horizon family.
+
+### Open questions
+
+- None.
+
+---
+
+## 2026-05-28 — Add canonical stockMetrics cache row helpers
+
+### Implemented
+
+- Added a canonical wide cache-row contract for user-owned `stockMetrics` persistence.
+- Defined persisted dimensions as `date`, `timeBucket`, `bucketSize`, `sym`, `groupType`, and `groupValue`.
+- Kept `timeBucket` as the actual segment label such as `AMO` or `09:00-09:05`.
+- Kept `bucketSize` as the configured continuous-session interval such as `5m`.
+- Avoided persisting time-segment type or sort columns because those are inferable by MMSR from the bucket label and configured bucket size.
+- Added helpers to convert normalized `MetricTimeSeries` objects into stockMetrics rows, hydrate a metric series from stockMetrics rows, and merge metric-specific rows into a wide stockMetrics shape.
+- Kept the existing per-metric cache hook signature for compatibility while documenting stockMetrics as the recommended storage shape.
+
+### Files changed
+
+- `mmsr/kdb/cache.py`
+- `mmsr/kdb/__init__.py`
+- `tests/test_kdb_metric_runner.py`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Added coverage that stockMetrics rows persist only `timeBucket` and `bucketSize` for the time dimension.
+- Added coverage for stockMetrics-to-`MetricTimeSeries` hydration.
+- Added coverage for merging metric-specific stockMetrics rows into a wide table keyed by canonical dimensions.
+
+### Validation
+
+- Ran `python -m pytest -q` successfully.
+- Python startup emitted a non-fatal spreadsheet runtime warmup warning from the environment, but pytest completed successfully.
+- `black` and `flake8` are not installed in this environment, so formatter/linter validation could not be run.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening
+
+### Estimated milestone completion
+
+- 99%
+
+### Remaining work before milestone completion
+
+- Wire a batch-level stockMetrics loader/persister around `run_day()` so one user table read can satisfy multiple requested metric columns before falling back to q misses.
+- Run one live kdb timing/preflight pass for the optimized reversion family over one production trading day.
+
+### Best next deterministic step
+
+- Replace per-metric cache hook calls with a batch stockMetrics-oriented load path that reads one day table once and computes only missing metric columns.
+
+### Open questions
+
+- None.
+
+
+---
+
+## 2026-05-28 — Batch stockMetrics cache load and persist hooks
+
+### Implemented
+
+- Added preferred wide `stockMetrics` cache hooks to `MetricDayCacheHooks`:
+  - `load_stock_metrics`
+  - `persist_stock_metrics`
+- Updated `KdbMetricRunner.run_day()` to call the wide day-level loader once for all requested metric columns before any per-metric compatibility loader.
+- Hydrated cached metric hits from canonical `stockMetrics` rows and computed only missing metrics through q.
+- Updated day-result persistence so computed misses are written once through `persist_stock_metrics` as merged wide rows when that hook is configured.
+- Kept existing per-metric `load` and `persist` hooks as compatibility fallbacks.
+- Added regression tests covering partial wide-cache hits, q execution for misses only, and one-call wide persistence.
+
+### Files changed
+
+- `mmsr/kdb/cache.py`
+- `mmsr/kdb/runner.py`
+- `tests/test_kdb_metric_runner.py`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Added `test_day_runner_loads_stock_metrics_once_and_computes_only_missing_metrics`.
+- Added `test_day_runner_persists_computed_misses_as_one_stock_metrics_batch`.
+
+### Validation
+
+- Ran `python -m pytest -q` successfully.
+- Test startup printed an unrelated `artifact_tool` spreadsheet warmup warning before pytest execution, but pytest completed successfully.
+- `black` and `flake8` are not installed in this environment, so formatting/lint checks could not be run.
+
+### Current milestone
+
+- Milestone 5: kdb metric runner interface / production q-template hardening.
+
+### Estimated milestone completion
+
+- 99%
+
+### Remaining work before milestone completion
+
+- Run a live kdb one-day reversion family timing pass using the new wide `stockMetrics` cache hooks.
+- Confirm the production user loader/persister contract against an actual day-level `stockMetrics` table.
+
+### Best next deterministic step
+
+- Add a small user-facing example showing `load_stock_metrics` and `persist_stock_metrics` implementations against a q/kdb `stockMetrics` table.
+
+### Open questions
+
+- Should `persist_stock_metrics` merge with existing user-owned cached rows in kdb, or should the user hook own upsert semantics entirely?

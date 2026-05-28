@@ -8,6 +8,13 @@ from datetime import date, datetime, time
 from numbers import Real
 from typing import Any
 
+from mmsr.kdb.cache import (
+    MetricDayCacheHooks,
+    MetricDayCacheKey,
+    merge_stock_metrics_rows,
+    metric_series_from_stock_metrics_rows,
+    stock_metrics_rows_from_series,
+)
 from mmsr.kdb.client import KdbClient
 from mmsr.kdb.query_loader import render_calculation_function_bootstrap
 from mmsr.kdb.query_plan import (
@@ -37,10 +44,14 @@ class KdbMetricRunner:
         client: KdbClient,
         *,
         query_planner: KdbMetricQueryPlanner | None = None,
+        cache_hooks: MetricDayCacheHooks | None = None,
     ) -> None:
         self.client = client
         self.query_planner = (
             KdbMetricQueryPlanner() if query_planner is None else query_planner
+        )
+        self.cache_hooks = (
+            MetricDayCacheHooks() if cache_hooks is None else cache_hooks
         )
         self._installed_calculation_namespaces: set[str] = set()
 
@@ -108,9 +119,21 @@ class KdbMetricRunner:
         self,
         requests: Sequence[MetricRunRequest],
     ) -> tuple[MetricTimeSeries, ...]:
-        """Run one full trading-day query with q-side chunking and rollups."""
+        """Run one full trading-day query with q-side chunking and rollups.
 
-        plan = self.plan_day(requests)
+        When ``cache_hooks`` are configured, this method first asks the preferred
+        wide ``stockMetrics`` loader for all requested metric columns, then falls
+        back to any per-metric loader. Fully cached requests do not execute kdb.
+        Cache misses are run through the normal q path and persisted after schema
+        validation and normalization.
+        """
+
+        clean_requests = tuple(requests)
+        cached_by_metric, missing_requests = self._load_cached_day_results(clean_requests)
+        if not missing_requests:
+            return tuple(cached_by_metric[request.metric.name] for request in clean_requests)
+
+        plan = self.plan_day(missing_requests)
         LOGGER.info(
             "Running kdb day query: metrics=%s chunk_size=%s universe=kdb-owned",
             ", ".join(plan.metric_names),
@@ -123,7 +146,8 @@ class KdbMetricRunner:
             raw_result,
             fallback_metric_name=plan.metric_names[0] if len(plan.metric_names) == 1 else None,
         )
-        series_by_metric: list[MetricTimeSeries] = []
+        computed_by_metric: dict[str, MetricTimeSeries] = {}
+        request_by_metric = {request.metric.name: request for request in missing_requests}
         for metric_query in plan.metric_queries:
             if metric_query.metric_name not in result_by_metric:
                 available = ", ".join(sorted(result_by_metric)) or "none"
@@ -134,27 +158,135 @@ class KdbMetricRunner:
             metric_result = result_by_metric[metric_query.metric_name]
             metric_query.validate_result_schema(metric_result)
             LOGGER.debug("Validated day result schema for metric=%s", metric_query.metric_name)
-            series_by_metric.append(
-                normalize_metric_result(
-                    metric_name=metric_query.metric_name,
-                    result=metric_result,
-                    group_by=metric_query.result_group_by,
-                    metadata={
-                        "metric_family": metric_family_for_metric(metric_query.metric_name),
-                        "query": plan.query,
-                        "requested_group_by": metric_query.requested_group_by,
-                        "group_by": metric_query.result_group_by,
-                        "required_output_columns": metric_query.required_output_columns,
-                        "optional_output_columns": metric_query.optional_output_columns,
-                        "source_functions": metric_query.source_functions,
-                        "calculation_namespace": metric_query.calculation_namespace,
-                        "day_metrics": plan.metric_names,
-                        "chunk_size": plan.chunk_size,
-                        "execution_shape": "day_q_chunk_rollup",
-                    },
-                )
+            series = normalize_metric_result(
+                metric_name=metric_query.metric_name,
+                result=metric_result,
+                group_by=metric_query.result_group_by,
+                metadata={
+                    "metric_family": metric_family_for_metric(metric_query.metric_name),
+                    "query": plan.query,
+                    "requested_group_by": metric_query.requested_group_by,
+                    "group_by": metric_query.result_group_by,
+                    "required_output_columns": metric_query.required_output_columns,
+                    "optional_output_columns": metric_query.optional_output_columns,
+                    "source_functions": metric_query.source_functions,
+                    "calculation_namespace": metric_query.calculation_namespace,
+                    "day_metrics": plan.metric_names,
+                    "chunk_size": plan.chunk_size,
+                    "execution_shape": "day_q_chunk_rollup",
+                    "cache_status": "miss",
+                },
             )
-        return tuple(series_by_metric)
+            computed_by_metric[metric_query.metric_name] = series
+
+        self._persist_day_results(
+            tuple(request_by_metric[name] for name in plan.metric_names),
+            tuple(computed_by_metric[name] for name in plan.metric_names),
+        )
+
+        combined = {**cached_by_metric, **computed_by_metric}
+        return tuple(combined[request.metric.name] for request in clean_requests)
+
+
+
+    def _load_cached_day_results(
+        self,
+        requests: Sequence[MetricRunRequest],
+    ) -> tuple[dict[str, MetricTimeSeries], tuple[MetricRunRequest, ...]]:
+        """Load cached day results and return misses in request order.
+
+        The preferred production path is ``load_stock_metrics`` because it lets a
+        user read one wide day-level ``stockMetrics`` table for all requested
+        metrics. Per-metric ``load`` remains as a compatibility fallback for
+        cache implementations that have not moved to the wide table shape.
+        """
+
+        if not (
+            self.cache_hooks.load_stock_metrics is not None
+            or self.cache_hooks.load is not None
+        ):
+            return {}, tuple(requests)
+
+        cached_by_metric: dict[str, MetricTimeSeries] = {}
+        keys_by_metric = {
+            request.metric.name: MetricDayCacheKey.from_request(request)
+            for request in requests
+        }
+
+        if self.cache_hooks.load_stock_metrics is not None and requests:
+            keys = tuple(keys_by_metric[request.metric.name] for request in requests)
+            rows = self.cache_hooks.load_stock_metrics(
+                keys[0].trading_day,
+                tuple(requests),
+                keys,
+                tuple(request.metric.name for request in requests),
+            )
+            if rows is not None:
+                stock_metric_rows = tuple(rows)
+                for request in requests:
+                    metric_name = request.metric.name
+                    series = metric_series_from_stock_metrics_rows(
+                        metric_name,
+                        stock_metric_rows,
+                        metadata={"storage": "stockMetrics"},
+                    )
+                    if series is None:
+                        continue
+                    key = keys_by_metric[metric_name]
+                    _validate_cached_day_series(key, series)
+                    cached_by_metric[metric_name] = _with_cache_status(series, "hit")
+
+        missing_requests = [
+            request
+            for request in requests
+            if request.metric.name not in cached_by_metric
+        ]
+
+        if self.cache_hooks.load is not None:
+            still_missing: list[MetricRunRequest] = []
+            for request in missing_requests:
+                key = keys_by_metric[request.metric.name]
+                series = self.cache_hooks.load(key, request)
+                if series is None:
+                    still_missing.append(request)
+                    continue
+                _validate_cached_day_series(key, series)
+                cached_by_metric[request.metric.name] = _with_cache_status(series, "hit")
+            missing_requests = still_missing
+
+        return cached_by_metric, tuple(missing_requests)
+
+    def _persist_day_results(
+        self,
+        requests: Sequence[MetricRunRequest],
+        series_items: Sequence[MetricTimeSeries],
+    ) -> None:
+        """Persist computed day results through the preferred configured hook."""
+
+        if not requests:
+            return
+
+        keys = tuple(MetricDayCacheKey.from_request(request) for request in requests)
+        if self.cache_hooks.persist_stock_metrics is not None:
+            rows = merge_stock_metrics_rows(
+                [
+                    stock_metrics_rows_from_series(key, series)
+                    for key, series in zip(keys, series_items, strict=True)
+                ]
+            )
+            self.cache_hooks.persist_stock_metrics(
+                keys[0].trading_day,
+                tuple(requests),
+                keys,
+                rows,
+            )
+            return
+
+        if self.cache_hooks.persist is None:
+            return
+
+        for key, request, series in zip(keys, requests, series_items, strict=True):
+            self.cache_hooks.persist(key, request, series)
 
     def run_batch(
         self,
@@ -236,6 +368,41 @@ class KdbMetricRunner:
             },
         )
 
+
+
+
+def _validate_cached_day_series(
+    key: MetricDayCacheKey,
+    series: MetricTimeSeries,
+) -> None:
+    """Validate a user-loaded cached series before returning it."""
+
+    if series.metric_name != key.metric_name:
+        raise KdbMetricRunnerError(
+            f"cached metric day result for {key.metric_name!r} returned "
+            f"series {series.metric_name!r}"
+        )
+    wrong_dates = sorted(
+        {observation.date for observation in series.observations}
+        - {key.trading_day}
+    )
+    if wrong_dates:
+        raise KdbMetricRunnerError(
+            f"cached metric day result for {key.metric_name!r} contains "
+            f"date(s) outside {key.trading_day}: {wrong_dates}"
+        )
+
+
+def _with_cache_status(series: MetricTimeSeries, status: str) -> MetricTimeSeries:
+    """Return ``series`` with cache metadata without mutating user objects."""
+
+    metadata = dict(series.metadata)
+    metadata["cache_status"] = status
+    return MetricTimeSeries(
+        metric_name=series.metric_name,
+        observations=series.observations,
+        metadata=metadata,
+    )
 
 def _coerce_batch_result(
     result: Any,

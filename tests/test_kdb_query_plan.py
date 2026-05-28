@@ -53,7 +53,7 @@ def test_query_planner_exposes_activity_input_and_output_contracts() -> None:
     )
 
     assert plan.metric_name == "turnover"
-    assert plan.template_name == "activity.q"
+    assert plan.template_name == "activity"
     assert plan.requested_group_by == ("market_segment",)
     assert plan.result_group_by == ("market_segment",)
     assert plan.table_names == (("trades", "trade_l1"),)
@@ -135,232 +135,6 @@ def test_query_planner_exposes_liquidity_quote_contracts() -> None:
     assert "calcLiquidity[rawQuotes;refs;" in plan.query
 
 
-
-
-def test_query_planner_exposes_tick_spread_quote_contracts() -> None:
-    registry = build_default_registry()
-    planner = KdbMetricQueryPlanner()
-
-    plan = planner.render(
-        MetricRunRequest(
-            metric=registry.get("quoted_spread_ticks"),
-            period=_period(),
-            group_by=["sector"],
-            table_names={"quotes": "quote_l1"},
-            parameters={"symbol": "7203"},
-        )
-    )
-
-    assert plan.template_name == "liquidity_ticks.q"
-    assert plan.required_output_columns == (
-        "date",
-        "time_bucket",
-        "sector",
-        "quoted_spread_ticks",
-    )
-    assert plan.input_contracts[0].table_role == "quotes"
-    assert plan.input_contracts[0].required_columns == (
-        "date",
-        "time",
-        "sym",
-        "bidPrice",
-        "askPrice",
-        "bidSize",
-        "askSize",
-        "tick_size",
-    )
-    assert plan.input_contracts[1].table_role == "reference_data"
-    assert "sector" in plan.input_contracts[1].required_columns
-    assert "calcLiquidityTicks" in plan.query
-    assert ".mmsr.calcLiquidityTicks[rawQuotes;refs;" in plan.query
-    assert 'sym = `$"7203"' in plan.query
-
-
-def test_query_planner_exposes_realized_volatility_quote_contracts() -> None:
-    registry = build_default_registry()
-    planner = KdbMetricQueryPlanner()
-
-    plan = planner.render(
-        MetricRunRequest(
-            metric=registry.get("realized_volatility"),
-            period=_period(),
-            group_by=["sector"],
-            table_names={"quotes": "quote_l1"},
-            parameters={"symbol": "7203"},
-        )
-    )
-
-    assert plan.template_name == "realized_volatility.q"
-    assert plan.required_output_columns == (
-        "date",
-        "time_bucket",
-        "sector",
-        "realized_volatility",
-        "return_count",
-        "first_mid",
-        "last_mid",
-    )
-    assert plan.input_contracts[0].table_role == "quotes"
-    assert plan.input_contracts[0].required_columns == (
-        "date",
-        "time",
-        "sym",
-        "bidPrice",
-        "askPrice",
-    )
-    assert plan.input_contracts[1].table_role == "reference_data"
-    assert "sector" in plan.input_contracts[1].required_columns
-    assert "calcRealizedVolatility" in plan.query
-    assert ".mmsr.calcRealizedVolatility[rawQuoteRows;refs;" in plan.query
-    assert 'sym = `$"7203"' in plan.query
-
-
-def test_query_planner_exposes_flow_trade_contracts() -> None:
-    registry = build_default_registry()
-    planner = KdbMetricQueryPlanner()
-
-    plan = planner.render(
-        MetricRunRequest(
-            metric=registry.get("signed_turnover"),
-            period=_period(),
-            group_by=["sector"],
-            table_names={"trades": "trade_l1"},
-            parameters={"symbol": "7203"},
-        )
-    )
-
-    assert plan.template_name == "flow.q"
-    assert plan.required_output_columns == (
-        "date",
-        "time_bucket",
-        "sector",
-        "signed_turnover",
-        "trade_imbalance",
-        "signed_volume",
-        "volume",
-        "trade_count",
-    )
-    assert plan.input_contracts[0].table_role == "trades"
-    assert plan.input_contracts[0].required_columns == (
-        "date",
-        "time",
-        "sym",
-        "session",
-        "auction",
-        "tradePrice",
-        "tradeSize",
-        "aggressorSide",
-    )
-    assert plan.input_contracts[1].table_role == "reference_data"
-    assert "sector" in plan.input_contracts[1].required_columns
-    assert "calcFlow" in plan.query
-    assert "calcFlow[rawTrades;refs;" in plan.query
-    assert 'sym = `$"7203"' in plan.query
-
-
-
-
-def test_query_planner_exposes_effective_spread_trade_quote_contracts() -> None:
-    registry = build_default_registry()
-    planner = KdbMetricQueryPlanner()
-
-    plan = planner.render(
-        MetricRunRequest(
-            metric=registry.get("effective_spread_bps"),
-            period=_period(),
-            group_by=["sector"],
-            table_names={"trades": "trade_l1", "quotes": "quote_l1"},
-            parameters={"symbol": "7203", "max_quote_age": "500ms"},
-        )
-    )
-
-    assert plan.template_name == "effective_spread.q"
-    assert plan.required_output_columns == (
-        "date",
-        "time_bucket",
-        "sector",
-        "effective_spread_bps",
-        "trade_count",
-        "notional",
-    )
-    assert plan.input_contracts[0].table_role == "trades"
-    assert plan.input_contracts[0].required_columns == (
-        "date",
-        "time",
-        "sym",
-        "session",
-        "auction",
-        "tradePrice",
-        "tradeSize",
-    )
-    assert plan.input_contracts[2].table_role == "reference_data"
-    assert "sector" in plan.input_contracts[2].required_columns
-    assert plan.input_contracts[1].table_role == "quotes"
-    assert plan.input_contracts[1].required_columns == (
-        "date",
-        "time",
-        "sym",
-        "bidPrice",
-        "askPrice",
-    )
-    assert "calcEffectiveSpread" in plan.query
-    assert "calcEffectiveSpread[rawTradeRows;rawQuoteRows;refs;" in plan.query
-    assert "0D00:00:00.500" in plan.query
-    assert 'sym = `$"7203"' in plan.query
-
-
-def test_query_planner_exposes_price_impact_trade_quote_contracts() -> None:
-    registry = build_default_registry()
-    planner = KdbMetricQueryPlanner()
-
-    plan = planner.render(
-        MetricRunRequest(
-            metric=registry.get("price_impact_30s_bps"),
-            period=_period(),
-            group_by=["sector"],
-            table_names={"trades": "trade_l1", "quotes": "quote_l1"},
-            parameters={
-                "symbol": "7203",
-                "max_quote_age": "500ms",
-                "max_horizon_quote_age": "2s",
-            },
-        )
-    )
-
-    assert plan.template_name == "price_impact.q"
-    assert plan.required_output_columns == (
-        "date",
-        "time_bucket",
-        "sector",
-        "price_impact_30s_bps",
-        "trade_count",
-        "notional",
-    )
-    assert plan.input_contracts[0].table_role == "trades"
-    assert plan.input_contracts[0].required_columns == (
-        "date",
-        "time",
-        "sym",
-        "session",
-        "auction",
-        "tradePrice",
-        "tradeSize",
-    )
-    assert plan.input_contracts[1].table_role == "quotes"
-    assert plan.input_contracts[1].required_columns == (
-        "date",
-        "time",
-        "sym",
-        "bidPrice",
-        "askPrice",
-    )
-    assert plan.input_contracts[2].table_role == "reference_data"
-    assert "sector" in plan.input_contracts[2].required_columns
-    assert "calcPriceImpact" in plan.query
-    assert "0D00:00:30.000" in plan.query
-    assert "0D00:00:00.500" in plan.query
-    assert "0D00:00:02.000" in plan.query
-    assert 'sym = `$"7203"' in plan.query
 
 
 def test_query_planner_exposes_reversion_optional_metadata_contract() -> None:
@@ -482,22 +256,6 @@ def test_runner_uses_query_plan_metadata_in_normalized_series() -> None:
     assert client.queries == [series.metadata["query"]]
 
 
-def test_template_for_metric_and_result_grouping_remain_public() -> None:
-    assert template_for_metric("turnover") == "activity.q"
-    assert template_for_metric("quoted_spread_ticks") == "liquidity_ticks.q"
-    assert template_for_metric("realized_volatility") == "realized_volatility.q"
-    assert template_for_metric("signed_turnover") == "flow.q"
-    assert template_for_metric("trade_imbalance") == "flow.q"
-    assert template_for_metric("effective_spread_bps") == "effective_spread.q"
-    assert template_for_metric("primary_quote_reversion_10s_bps") == (
-        "toxicity_reversion.q"
-    )
-    assert group_by_for_metric_result(
-        "primary_quote_reversion_100ms_bps",
-        ["venue", "horizon", "sym"],
-    ) == ["venue", "horizon", "sym"]
-
-
 
 def test_query_planner_can_call_user_defined_trade_source_function() -> None:
     registry = build_default_registry()
@@ -566,80 +324,6 @@ def test_query_planner_can_call_user_defined_quote_source_function() -> None:
 
 
 
-
-def test_query_planner_can_call_user_defined_quote_source_function_for_ticks() -> None:
-    registry = build_default_registry()
-    planner = KdbMetricQueryPlanner()
-
-    plan = planner.render(
-        MetricRunRequest(
-            metric=registry.get("quoted_spread_ticks"),
-            period=_period(),
-            group_by=[],
-            source_functions={"quotes": ".sb.mmsr.getQuote"},
-            calculation_namespace=".desk.mmsr",
-        )
-    )
-
-    assert plan.source_functions == (("quotes", ".sb.mmsr.getQuote"),)
-    assert plan.input_contracts[0].table_name == ".sb.mmsr.getQuote"
-    assert "tick_size" in plan.input_contracts[0].required_columns
-    assert ".desk.mmsr.calcLiquidityTicks[rawQuotes;refs;" in plan.query
-    assert "calcLiquidityTicks[rawQuotes;refs;" in plan.query
-    assert "rawQuotes: (.sb.mmsr.getQuote[2026.05.01;0!refs]);" in plan.query
-
-
-def test_query_planner_can_call_user_defined_trade_source_function_for_flow() -> None:
-    registry = build_default_registry()
-    planner = KdbMetricQueryPlanner()
-
-    plan = planner.render(
-        MetricRunRequest(
-            metric=registry.get("trade_imbalance"),
-            period=_period(),
-            group_by=[],
-            source_functions={"trades": ".sb.mmsr.getTrade"},
-            calculation_namespace=".desk.mmsr",
-        )
-    )
-
-    assert plan.source_functions == (("trades", ".sb.mmsr.getTrade"),)
-    assert plan.input_contracts[0].table_name == ".sb.mmsr.getTrade"
-    assert "aggressorSide" in plan.input_contracts[0].required_columns
-    assert ".desk.mmsr.calcFlow[rawTrades;refs;" in plan.query
-    assert "calcFlow[rawTrades;refs;" in plan.query
-    assert "rawTrades: (.sb.mmsr.getTrade[2026.05.01;0!refs]);" in plan.query
-    assert "calcFlow[rawTrades;refs;" in plan.query
-
-
-
-
-def test_query_planner_can_call_user_defined_trade_and_quote_functions_for_effective_spread() -> None:
-    registry = build_default_registry()
-    planner = KdbMetricQueryPlanner()
-
-    plan = planner.render(
-        MetricRunRequest(
-            metric=registry.get("effective_spread_bps"),
-            period=_period(),
-            group_by=[],
-            source_functions={
-                "trades": ".sb.mmsr.getTrade",
-                "quotes": ".sb.mmsr.getQuote",
-            },
-            calculation_namespace=".desk.mmsr",
-        )
-    )
-
-    assert plan.source_functions == (
-        ("quotes", ".sb.mmsr.getQuote"),
-        ("trades", ".sb.mmsr.getTrade"),
-    )
-    assert plan.input_contracts[0].table_name == ".sb.mmsr.getTrade"
-    assert plan.input_contracts[1].table_name == ".sb.mmsr.getQuote"
-    assert ".desk.mmsr.calcEffectiveSpread[rawTradeRows;rawQuoteRows;refs;" in plan.query
-    assert "rawTradeRows: (.sb.mmsr.getTrade[2026.05.01;0!refs]);" in plan.query
-    assert "rawQuoteRows: (.sb.mmsr.getQuote[2026.05.01;0!refs]);" in plan.query
 
 def test_reversion_planner_uses_user_defined_trade_and_quote_source_functions() -> None:
     registry = build_default_registry()
@@ -848,7 +532,7 @@ def test_render_day_uses_canonical_q_library_blocks_not_removed_template_files()
     assert ".calcLiquidity" not in plan.query
     assert "{[rawSources]" not in plan.query
     assert "query_templates" not in plan.query
-    assert "liquidity.q.j2" not in plan.query
+    assert "liquidity.j2" not in plan.query
 
 def test_render_day_singleton_metric_dictionaries_enlist_keys_before_bang() -> None:
     registry = build_default_registry()

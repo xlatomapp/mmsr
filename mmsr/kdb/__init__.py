@@ -1,5 +1,13 @@
 """kdb client, query loading, and metric runner APIs."""
 
+from mmsr.kdb.cache import (
+    MetricDayCacheHooks,
+    MetricDayCacheKey,
+    STOCK_METRICS_DIMENSION_COLUMNS,
+    merge_stock_metrics_rows,
+    metric_series_from_stock_metrics_rows,
+    stock_metrics_rows_from_series,
+)
 from mmsr.kdb.client import KdbClient, KdbConfig
 from mmsr.kdb.production import (
     KdbProductionExecutionError,
@@ -56,6 +64,12 @@ __all__ = [
     "KdbClient",
     "KdbConfig",
     "KdbMetricRunner",
+    "MetricDayCacheHooks",
+    "MetricDayCacheKey",
+    "STOCK_METRICS_DIMENSION_COLUMNS",
+    "merge_stock_metrics_rows",
+    "metric_series_from_stock_metrics_rows",
+    "stock_metrics_rows_from_series",
     "ProductionMetricRunStep",
     "KdbProductionRunPlan",
     "KdbProductionReferenceWindow",

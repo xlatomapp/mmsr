@@ -4,6 +4,13 @@ import re
 import pytest
 
 from mmsr.config.models import ReportConfig, ToxicityConfig, ToxicityFiltersConfig
+from mmsr.kdb.cache import (
+    MetricDayCacheHooks,
+    MetricDayCacheKey,
+    merge_stock_metrics_rows,
+    metric_series_from_stock_metrics_rows,
+    stock_metrics_rows_from_series,
+)
 from mmsr.kdb.query_loader import render_calculation_function_bootstrap
 from mmsr.kdb.runner import (
     KdbMetricRunner,
@@ -14,6 +21,7 @@ from mmsr.kdb.runner import (
 )
 from mmsr.metrics import build_default_registry
 from mmsr.metrics.base import MetricDefinition
+from mmsr.metrics.results import MetricObservation, MetricTimeSeries
 from mmsr.periods import IntradayBucketSpec, ReportPeriod, TradingSession
 
 
@@ -61,16 +69,44 @@ def test_calculation_function_bootstrap_avoids_reserved_cols_assignment() -> Non
     assert "mmsrColumnNames: cols facts;" in bootstrap
 
 
-def test_template_for_metric_maps_initial_activity_liquidity_and_reversion_metrics() -> None:
-    assert template_for_metric("turnover") == "activity.q"
-    assert template_for_metric("volume") == "activity.q"
-    assert template_for_metric("trade_count") == "activity.q"
-    assert template_for_metric("quoted_spread_bps") == "liquidity.q"
-    assert template_for_metric("top_of_book_depth") == "liquidity.q"
-    assert template_for_metric("effective_spread_bps") == "effective_spread.q"
-    assert template_for_metric("price_impact_30s_bps") == "price_impact.q"
-    assert template_for_metric("primary_quote_reversion_100ms_bps") == "toxicity_reversion.q"
-    assert template_for_metric("primary_quote_reversion_10s_bps") == "toxicity_reversion.q"
+
+def test_calculation_bootstrap_batches_reversion_horizons_inside_day_runner() -> None:
+    bootstrap = render_calculation_function_bootstrap(".desk.mmsr")
+    assert ".desk.mmsr.calcToxicityReversionFamily" in bootstrap
+    assert "reversionMetrics: metricNames where .desk.mmsr.isToxicityReversionMetric each metricNames;" in bootstrap
+    assert ".desk.mmsr.calcToxicityReversionFamily[" in bootstrap
+    assert "regularMetrics!({[rawSources;metricParams;metricName]" in bootstrap
+
+
+def test_calculation_bootstrap_prepares_reversion_common_joins_once() -> None:
+    bootstrap = render_calculation_function_bootstrap(".desk.mmsr")
+    prepare_start = bootstrap.index(".desk.mmsr.prepareToxicityReversion:{")
+    family_start = bootstrap.index(".desk.mmsr.calcToxicityReversionFamily:{")
+    family_body = bootstrap[family_start:bootstrap.index(".desk.mmsr.applyUniverseFilters:{")]
+    assert "prepared: .desk.mmsr.prepareToxicityReversion[" in family_body
+    assert family_body.count("prepareToxicityReversion[") == 1
+    assert "calcToxicityReversionPrepared[" in family_body
+    assert prepare_start < family_start
+
+
+def test_calculation_bootstrap_partitions_sym_before_reversion_aj_inputs() -> None:
+    bootstrap = render_calculation_function_bootstrap(".desk.mmsr")
+    assert ".desk.mmsr.partedSym:{[t]" in bootstrap
+    assert "sortedPtsTrades: .desk.mmsr.partedSym[`date`sym`venue`time xasc ptsTrades];" in bootstrap
+    assert "sortedPtsQuotes: .desk.mmsr.partedSym[`date`sym`venue`time xasc ptsQuotes];" in bootstrap
+    assert "sortedTradeWithPtsQuote: .desk.mmsr.partedSym[`date`sym`time xasc tradeWithPtsQuote];" in bootstrap
+    assert "sortedPrimaryQuotes: .desk.mmsr.partedSym[`date`sym`time xasc primaryQuotes];" in bootstrap
+    assert "sortedTradeForHorizon: .desk.mmsr.partedSym[`date`sym`horizonTime xasc tradeForHorizon];" in bootstrap
+    assert "sortedPostQuotes: .desk.mmsr.partedSym[`date`sym`horizonTime xasc postQuotes];" in bootstrap
+
+    reversion_start = bootstrap.index(".desk.mmsr.prepareToxicityReversion:{")
+    reversion_end = bootstrap.index(".desk.mmsr.applyUniverseFilters:{")
+    reversion_body = bootstrap[reversion_start:reversion_end]
+    assert ".desk.mmsr.partedSym[`date`sym`venue`time xasc ptsTrades]" in reversion_body
+    assert ".desk.mmsr.partedSym[`date`sym`venue`time xasc ptsQuotes]" in reversion_body
+    assert "aj[\n            `date`sym`venue`time;\n            `date`sym`venue`time xasc" not in reversion_body
+    assert "aj[`date`sym`horizonTime; `date`sym`horizonTime xasc" not in reversion_body
+
 
 
 def test_kdb_metric_runner_renders_activity_query_and_normalizes_column_result() -> None:
@@ -226,86 +262,6 @@ def test_kdb_metric_runner_batch_loads_sources_once_and_returns_metric_tables() 
     assert '(`$"turnover";`$"quoted_spread_bps")!(metricResult1;metricResult2)' in query
 
 
-def test_kdb_metric_runner_renders_effective_spread_query_and_preserves_metadata() -> None:
-    registry = build_default_registry()
-    client = FakeKdbClient(
-        {
-            "date": [date(2026, 5, 1)],
-            "time_bucket": ["09:00"],
-            "sector": ["Banks"],
-            "effective_spread_bps": [6.25],
-            "trade_count": [20],
-            "notional": [25_000_000.0],
-        }
-    )
-    runner = KdbMetricRunner(client)  # type: ignore[arg-type]
-
-    series = runner.run(
-        MetricRunRequest(
-            metric=registry.get("effective_spread_bps"),
-            period=_period(),
-            group_by=["sector"],
-            table_names={"trades": "trade", "quotes": "quote"},
-            parameters={"max_quote_age": "500ms"},
-        )
-    )
-
-    assert series.metric_name == "effective_spread_bps"
-    assert series.values == (6.25,)
-    assert series.observations[0].group == {"sector": "Banks"}
-    assert series.observations[0].metadata == {
-        "trade_count": 20,
-        "notional": 25_000_000.0,
-    }
-    assert series.metadata["template"] == "effective_spread.q"
-
-    query = client.queries[0]
-    assert "rawTradeRows: trade;" in query
-    assert "rawQuoteRows: quote;" in query
-    assert ".mmsr.calcEffectiveSpread[rawTradeRows;rawQuoteRows;refs;" in query
-    assert "(`bucket;`start_date;`end_date;`max_quote_age)!(0D00:05:00.000;2026.05.01;2026.05.02;0D00:00:00.500)" in query
-    assert ".mmsr.calcEffectiveSpread" in query
-
-
-def test_kdb_metric_runner_renders_price_impact_query_and_preserves_metadata() -> None:
-    registry = build_default_registry()
-    client = FakeKdbClient(
-        {
-            "date": [date(2026, 5, 1)],
-            "time_bucket": ["09:00"],
-            "sector": ["Banks"],
-            "price_impact_30s_bps": [4.75],
-            "trade_count": [20],
-            "notional": [25_000_000.0],
-        }
-    )
-    runner = KdbMetricRunner(client)  # type: ignore[arg-type]
-
-    series = runner.run(
-        MetricRunRequest(
-            metric=registry.get("price_impact_30s_bps"),
-            period=_period(),
-            group_by=["sector"],
-            table_names={"trades": "trade", "quotes": "quote"},
-            parameters={"max_quote_age": "500ms", "max_horizon_quote_age": "2s"},
-        )
-    )
-
-    assert series.metric_name == "price_impact_30s_bps"
-    assert series.values == (4.75,)
-    assert series.observations[0].group == {"sector": "Banks"}
-    assert series.observations[0].metadata == {
-        "trade_count": 20,
-        "notional": 25_000_000.0,
-    }
-    assert series.metadata["template"] == "price_impact.q"
-
-    query = client.queries[0]
-    assert "rawTradeRows: trade;" in query
-    assert "rawQuoteRows: quote;" in query
-    assert "`horizon;`max_quote_age;`max_horizon_quote_age" in query
-    assert "0D00:00:02.000" in query
-    assert ".mmsr.calcPriceImpact" in query
 
 
 def test_kdb_metric_runner_renders_reversion_query_and_normalizes_venue_horizon() -> None:
@@ -368,7 +324,7 @@ def test_kdb_metric_runner_renders_reversion_query_and_normalizes_venue_horizon(
         "valid_primary_quote_ratio": 0.99,
         "context_sort_order": 3,
     }
-    assert series.metadata["template"] == "toxicity_reversion.q"
+    assert series.metadata["template"] == "toxicity_reversion"
     assert series.metadata["group_by"] == ("venue", "horizon", "sym")
 
     query = client.queries[0]
@@ -581,11 +537,11 @@ def test_normalize_metric_result_accepts_list_of_row_dicts_and_preserves_metadat
             }
         ],
         group_by=["market_segment"],
-        metadata={"template": "liquidity.q"},
+        metadata={"template": "liquidity"},
     )
 
     assert series.metric_name == "quoted_spread_bps"
-    assert series.metadata == {"template": "liquidity.q"}
+    assert series.metadata == {"template": "liquidity"}
     assert series.dates == (date(2026, 5, 1),)
     assert series.observations[0].metadata == {"reference_rows": 20}
 
@@ -695,3 +651,575 @@ def test_day_runner_normalizes_keyed_table_mapping_metric_result() -> None:
         "topixCapGrp": "Large70",
     }
     assert series[0].observations[0].metadata["top_of_book_depth"] == 5000
+
+
+def _single_day_period() -> ReportPeriod:
+    return ReportPeriod(
+        start_date=date(2026, 5, 1),
+        end_date=date(2026, 5, 1),
+        sessions=_period().sessions,
+        bucket=_period().bucket,
+    )
+
+
+def test_day_runner_uses_cached_metric_day_result_without_kdb_execution() -> None:
+    registry = build_default_registry()
+    cached_series = MetricTimeSeries.from_observations(
+        [
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 1),
+                time_bucket="09:00",
+                group={"sym": "7203"},
+                value=12.5,
+                metadata={"top_of_book_depth": 5000},
+            )
+        ],
+        metadata={"storage": "user-cache"},
+    )
+    load_calls: list[MetricDayCacheKey] = []
+
+    def load_cached(
+        key: MetricDayCacheKey,
+        request: MetricRunRequest,
+    ) -> MetricTimeSeries | None:
+        load_calls.append(key)
+        assert request.metric.name == "quoted_spread_bps"
+        return cached_series
+
+    client = FakeKdbClient({})
+    runner = KdbMetricRunner(
+        client,  # type: ignore[arg-type]
+        cache_hooks=MetricDayCacheHooks(load=load_cached),
+    )
+
+    series = runner.run_day(
+        [
+            MetricRunRequest(
+                metric=registry.get("quoted_spread_bps"),
+                period=_single_day_period(),
+                group_by=["sym"],
+                table_names={
+                    "quotes": "quote",
+                    "reference_data": "ref",
+                },
+                source_functions={
+                    "reference_data": ".sb.mmsr.getRef",
+                    "quotes": ".sb.mmsr.getQuote",
+                },
+            )
+        ]
+    )
+
+    assert series == (cached_series.__class__(
+        metric_name="quoted_spread_bps",
+        observations=cached_series.observations,
+        metadata={"storage": "user-cache", "cache_status": "hit"},
+    ),)
+    assert client.queries == []
+    assert load_calls[0].trading_day == date(2026, 5, 1)
+    assert load_calls[0].metric_name == "quoted_spread_bps"
+    assert load_calls[0].group_by == ("sym",)
+    assert load_calls[0].bucket == "5m"
+
+
+def test_day_runner_persists_metric_day_cache_misses_after_execution() -> None:
+    registry = build_default_registry()
+    client = FakeKdbClient(
+        {
+            "quoted_spread_bps": {
+                "date": [date(2026, 5, 1)],
+                "time_bucket": ["09:00"],
+                "sym": ["7203"],
+                "quoted_spread_bps": [12.5],
+                "top_of_book_depth": [5000],
+            }
+        }
+    )
+    load_calls: list[MetricDayCacheKey] = []
+    persisted: list[tuple[MetricDayCacheKey, MetricTimeSeries]] = []
+
+    def load_cached(
+        key: MetricDayCacheKey,
+        request: MetricRunRequest,
+    ) -> MetricTimeSeries | None:
+        load_calls.append(key)
+        return None
+
+    def persist_cached(
+        key: MetricDayCacheKey,
+        request: MetricRunRequest,
+        series: MetricTimeSeries,
+    ) -> None:
+        persisted.append((key, series))
+
+    runner = KdbMetricRunner(
+        client,  # type: ignore[arg-type]
+        cache_hooks=MetricDayCacheHooks(load=load_cached, persist=persist_cached),
+    )
+
+    series = runner.run_day(
+        [
+            MetricRunRequest(
+                metric=registry.get("quoted_spread_bps"),
+                period=_single_day_period(),
+                group_by=["sym"],
+                table_names={
+                    "quotes": "quote",
+                    "reference_data": "ref",
+                },
+                source_functions={
+                    "reference_data": ".sb.mmsr.getRef",
+                    "quotes": ".sb.mmsr.getQuote",
+                },
+            )
+        ]
+    )
+
+    assert len(client.queries) == 1
+    assert len(load_calls) == 1
+    assert len(persisted) == 1
+    persisted_key, persisted_series = persisted[0]
+    assert persisted_key.metric_name == "quoted_spread_bps"
+    assert persisted_key.trading_day == date(2026, 5, 1)
+    assert persisted_series is series[0]
+    assert series[0].metadata["cache_status"] == "miss"
+    assert series[0].values == (12.5,)
+
+
+def test_day_runner_runs_only_uncached_metrics_and_preserves_request_order() -> None:
+    registry = build_default_registry()
+    cached_turnover = MetricTimeSeries.from_observations(
+        [
+            MetricObservation(
+                metric_name="turnover",
+                date=date(2026, 5, 1),
+                time_bucket="09:00",
+                group={"sym": "7203"},
+                value=1000.0,
+            )
+        ]
+    )
+    client = FakeKdbClient(
+        {
+            "quoted_spread_bps": {
+                "date": [date(2026, 5, 1)],
+                "time_bucket": ["09:00"],
+                "sym": ["7203"],
+                "quoted_spread_bps": [12.5],
+                "top_of_book_depth": [5000],
+            }
+        }
+    )
+    persisted: list[str] = []
+
+    def load_cached(
+        key: MetricDayCacheKey,
+        request: MetricRunRequest,
+    ) -> MetricTimeSeries | None:
+        if key.metric_name == "turnover":
+            return cached_turnover
+        return None
+
+    def persist_cached(
+        key: MetricDayCacheKey,
+        request: MetricRunRequest,
+        series: MetricTimeSeries,
+    ) -> None:
+        persisted.append(key.metric_name)
+
+    runner = KdbMetricRunner(
+        client,  # type: ignore[arg-type]
+        cache_hooks=MetricDayCacheHooks(load=load_cached, persist=persist_cached),
+    )
+    common = {
+        "period": _single_day_period(),
+        "group_by": ["sym"],
+        "table_names": {
+            "trades": "trade",
+            "quotes": "quote",
+            "reference_data": "ref",
+        },
+        "source_functions": {
+            "reference_data": ".sb.mmsr.getRef",
+            "trades": ".sb.mmsr.getTrade",
+            "quotes": ".sb.mmsr.getQuote",
+        },
+    }
+
+    series = runner.run_day(
+        [
+            MetricRunRequest(metric=registry.get("turnover"), **common),
+            MetricRunRequest(metric=registry.get("quoted_spread_bps"), **common),
+        ]
+    )
+
+    assert [item.metric_name for item in series] == [
+        "turnover",
+        "quoted_spread_bps",
+    ]
+    assert series[0].metadata["cache_status"] == "hit"
+    assert series[1].metadata["cache_status"] == "miss"
+    assert persisted == ["quoted_spread_bps"]
+    assert len(client.queries) == 1
+    assert "`$\"turnover\"" not in client.queries[0]
+    assert "`$\"quoted_spread_bps\"" in client.queries[0]
+
+
+
+def test_day_runner_loads_stock_metrics_once_and_computes_only_missing_metrics() -> None:
+    registry = build_default_registry()
+    stock_load_calls: list[tuple[date, tuple[str, ...]]] = []
+    per_metric_load_calls: list[str] = []
+    persisted: list[str] = []
+    client = FakeKdbClient(
+        {
+            "quoted_spread_bps": {
+                "date": [date(2026, 5, 1)],
+                "time_bucket": ["09:00-09:05"],
+                "sym": ["7203"],
+                "quoted_spread_bps": [12.5],
+                "top_of_book_depth": [5000],
+            }
+        }
+    )
+
+    def load_stock_metrics(
+        trading_day: date,
+        requests: tuple[MetricRunRequest, ...],
+        keys: tuple[MetricDayCacheKey, ...],
+        metric_names: tuple[str, ...],
+    ) -> tuple[dict[str, object], ...]:
+        stock_load_calls.append((trading_day, tuple(metric_names)))
+        assert [key.trading_day for key in keys] == [trading_day, trading_day]
+        assert [request.metric.name for request in requests] == list(metric_names)
+        return (
+            {
+                "date": trading_day,
+                "timeBucket": "09:00-09:05",
+                "bucketSize": "5m",
+                "sym": "7203",
+                "groupType": "symbol",
+                "groupValue": "7203",
+                "turnover": 1000.0,
+            },
+        )
+
+    def load_cached(
+        key: MetricDayCacheKey,
+        request: MetricRunRequest,
+    ) -> MetricTimeSeries | None:
+        per_metric_load_calls.append(key.metric_name)
+        return None
+
+    def persist_cached(
+        key: MetricDayCacheKey,
+        request: MetricRunRequest,
+        series: MetricTimeSeries,
+    ) -> None:
+        persisted.append(key.metric_name)
+
+    runner = KdbMetricRunner(
+        client,  # type: ignore[arg-type]
+        cache_hooks=MetricDayCacheHooks(
+            load=load_cached,
+            persist=persist_cached,
+            load_stock_metrics=load_stock_metrics,
+        ),
+    )
+    common = {
+        "period": _single_day_period(),
+        "group_by": ["sym"],
+        "table_names": {
+            "trades": "trade",
+            "quotes": "quote",
+            "reference_data": "ref",
+        },
+        "source_functions": {
+            "reference_data": ".sb.mmsr.getRef",
+            "trades": ".sb.mmsr.getTrade",
+            "quotes": ".sb.mmsr.getQuote",
+        },
+    }
+
+    series = runner.run_day(
+        [
+            MetricRunRequest(metric=registry.get("turnover"), **common),
+            MetricRunRequest(metric=registry.get("quoted_spread_bps"), **common),
+        ]
+    )
+
+    assert [item.metric_name for item in series] == [
+        "turnover",
+        "quoted_spread_bps",
+    ]
+    assert series[0].metadata == {"storage": "stockMetrics", "cache_status": "hit"}
+    assert series[0].values == (1000.0,)
+    assert series[1].metadata["cache_status"] == "miss"
+    assert stock_load_calls == [
+        (date(2026, 5, 1), ("turnover", "quoted_spread_bps"))
+    ]
+    assert per_metric_load_calls == ["quoted_spread_bps"]
+    assert persisted == ["quoted_spread_bps"]
+    assert len(client.queries) == 1
+    assert "`$\"turnover\"" not in client.queries[0]
+    assert "`$\"quoted_spread_bps\"" in client.queries[0]
+
+
+def test_day_runner_persists_computed_misses_as_one_stock_metrics_batch() -> None:
+    registry = build_default_registry()
+    client = FakeKdbClient(
+        {
+            "turnover": {
+                "date": [date(2026, 5, 1)],
+                "time_bucket": ["09:00-09:05"],
+                "sym": ["7203"],
+                "turnover": [1000.0],
+                "volume": [100],
+                "trade_count": [3],
+            },
+            "quoted_spread_bps": {
+                "date": [date(2026, 5, 1)],
+                "time_bucket": ["09:00-09:05"],
+                "sym": ["7203"],
+                "quoted_spread_bps": [12.5],
+                "top_of_book_depth": [5000],
+            },
+        }
+    )
+    persisted_batches: list[tuple[date, tuple[str, ...], tuple[dict[str, object], ...]]] = []
+    per_metric_persist_calls: list[str] = []
+
+    def persist_stock_metrics(
+        trading_day: date,
+        requests: tuple[MetricRunRequest, ...],
+        keys: tuple[MetricDayCacheKey, ...],
+        rows: tuple[dict[str, object], ...],
+    ) -> None:
+        persisted_batches.append(
+            (
+                trading_day,
+                tuple(key.metric_name for key in keys),
+                rows,
+            )
+        )
+        assert [request.metric.name for request in requests] == [
+            "turnover",
+            "quoted_spread_bps",
+        ]
+
+    def persist_cached(
+        key: MetricDayCacheKey,
+        request: MetricRunRequest,
+        series: MetricTimeSeries,
+    ) -> None:
+        per_metric_persist_calls.append(key.metric_name)
+
+    runner = KdbMetricRunner(
+        client,  # type: ignore[arg-type]
+        cache_hooks=MetricDayCacheHooks(
+            persist=persist_cached,
+            persist_stock_metrics=persist_stock_metrics,
+        ),
+    )
+    common = {
+        "period": _single_day_period(),
+        "group_by": ["sym"],
+        "table_names": {
+            "trades": "trade",
+            "quotes": "quote",
+            "reference_data": "ref",
+        },
+        "source_functions": {
+            "reference_data": ".sb.mmsr.getRef",
+            "trades": ".sb.mmsr.getTrade",
+            "quotes": ".sb.mmsr.getQuote",
+        },
+    }
+
+    series = runner.run_day(
+        [
+            MetricRunRequest(metric=registry.get("turnover"), **common),
+            MetricRunRequest(metric=registry.get("quoted_spread_bps"), **common),
+        ]
+    )
+
+    assert [item.metadata["cache_status"] for item in series] == ["miss", "miss"]
+    assert per_metric_persist_calls == []
+    assert len(persisted_batches) == 1
+    trading_day, metric_names, rows = persisted_batches[0]
+    assert trading_day == date(2026, 5, 1)
+    assert metric_names == ("turnover", "quoted_spread_bps")
+    assert rows == (
+        {
+            "date": date(2026, 5, 1),
+            "timeBucket": "09:00-09:05",
+            "bucketSize": "5m",
+            "sym": "7203",
+            "groupType": "symbol",
+            "groupValue": "7203",
+            "turnover": 1000.0,
+            "quoted_spread_bps": 12.5,
+        },
+    )
+
+
+def test_day_runner_rejects_cached_series_for_wrong_metric_or_day() -> None:
+    registry = build_default_registry()
+    wrong_series = MetricTimeSeries.from_observations(
+        [
+            MetricObservation(
+                metric_name="turnover",
+                date=date(2026, 5, 2),
+                time_bucket="09:00",
+                group={},
+                value=1000.0,
+            )
+        ]
+    )
+
+    def load_cached(
+        key: MetricDayCacheKey,
+        request: MetricRunRequest,
+    ) -> MetricTimeSeries | None:
+        return wrong_series
+
+    runner = KdbMetricRunner(
+        FakeKdbClient({}),  # type: ignore[arg-type]
+        cache_hooks=MetricDayCacheHooks(load=load_cached),
+    )
+
+    with pytest.raises(KdbMetricRunnerError, match="quoted_spread_bps"):
+        runner.run_day(
+            [
+                MetricRunRequest(
+                    metric=registry.get("quoted_spread_bps"),
+                    period=_single_day_period(),
+                    group_by=[],
+                    table_names={
+                        "quotes": "quote",
+                        "reference_data": "ref",
+                    },
+                    source_functions={
+                        "reference_data": ".sb.mmsr.getRef",
+                        "quotes": ".sb.mmsr.getQuote",
+                    },
+                )
+            ]
+        )
+
+
+def test_stock_metrics_rows_use_time_bucket_and_bucket_size_only() -> None:
+    key = MetricDayCacheKey.from_request(
+        MetricRunRequest(
+            metric=build_default_registry().get("quoted_spread_bps"),
+            period=_single_day_period(),
+            group_by=["sym"],
+            table_names={"quotes": "quote", "reference_data": "ref"},
+        )
+    )
+    series = MetricTimeSeries.from_observations(
+        [
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 1),
+                time_bucket="AMO",
+                group={"sym": "7203"},
+                value=12.5,
+                metadata={"top_of_book_depth": 5000},
+            )
+        ]
+    )
+
+    rows = stock_metrics_rows_from_series(key, series)
+
+    assert rows == (
+        {
+            "date": date(2026, 5, 1),
+            "timeBucket": "AMO",
+            "bucketSize": "5m",
+            "sym": "7203",
+            "groupType": "symbol",
+            "groupValue": "7203",
+            "quoted_spread_bps": 12.5,
+        },
+    )
+    assert "timeSegmentType" not in rows[0]
+    assert "timeSegmentSort" not in rows[0]
+    assert "bucketSort" not in rows[0]
+
+
+def test_stock_metrics_rows_can_round_trip_metric_series() -> None:
+    rows = [
+        {
+            "date": date(2026, 5, 1),
+            "timeBucket": "09:00-09:05",
+            "bucketSize": "5m",
+            "sym": "7203",
+            "groupType": "symbol",
+            "groupValue": "7203",
+            "quoted_spread_bps": 12.5,
+            "top_of_book_depth": 5000,
+        },
+        {
+            "date": "2026.05.01",
+            "timeBucket": "AMO",
+            "bucketSize": "5m",
+            "sym": "ALL",
+            "groupType": "market",
+            "groupValue": "ALL",
+            "quoted_spread_bps": 10.0,
+        },
+    ]
+
+    series = metric_series_from_stock_metrics_rows(
+        "quoted_spread_bps",
+        rows,
+        metadata={"cache_status": "hit"},
+    )
+
+    assert series is not None
+    assert series.metadata == {"cache_status": "hit"}
+    assert series.time_buckets == ("09:00-09:05", "AMO")
+    assert series.values == (12.5, 10.0)
+    assert series.observations[0].group == {"sym": "7203"}
+    assert series.observations[0].metadata == {"top_of_book_depth": 5000}
+    assert series.observations[1].group == {}
+
+
+def test_merge_stock_metrics_rows_widens_rows_by_canonical_dimensions() -> None:
+    spread_rows = [
+        {
+            "date": date(2026, 5, 1),
+            "timeBucket": "09:00-09:05",
+            "bucketSize": "5m",
+            "sym": "7203",
+            "groupType": "symbol",
+            "groupValue": "7203",
+            "quoted_spread_bps": 12.5,
+        }
+    ]
+    depth_rows = [
+        {
+            "date": date(2026, 5, 1),
+            "timeBucket": "09:00-09:05",
+            "bucketSize": "5m",
+            "sym": "7203",
+            "groupType": "symbol",
+            "groupValue": "7203",
+            "top_of_book_depth": 5000,
+        }
+    ]
+
+    assert merge_stock_metrics_rows([spread_rows, depth_rows]) == (
+        {
+            "date": date(2026, 5, 1),
+            "timeBucket": "09:00-09:05",
+            "bucketSize": "5m",
+            "sym": "7203",
+            "groupType": "symbol",
+            "groupValue": "7203",
+            "quoted_spread_bps": 12.5,
+            "top_of_book_depth": 5000,
+        },
+    )

@@ -5,6 +5,12 @@
 {{ calculation_namespace }}.sumNotional:{[price;size] sum price * size};
 {{ calculation_namespace }}.sumSize:{[size] sum size};
 {{ calculation_namespace }}.rowCount:{[rows] count rows};
+{{ calculation_namespace }}.partedSym:{[t]
+    / Reversion aj paths are day-scoped in production. After xasc by the aj
+    / grouping keys, sym is contiguous for one runDate, so p# lets aj use the
+    / partitioned sym attribute instead of repeatedly scanning symbol groups.
+    $[`sym in cols t; @[t;`sym;{`p#x}]; t]
+    };
 {{ calculation_namespace }}.medianQuotedSpreadBps:{[bid;ask] med 10000 * (ask - bid) % ((ask + bid) % 2)};
 {{ calculation_namespace }}.medianTopOfBookDepth:{[bidSize;askSize] med bidSize + askSize};
 {{ calculation_namespace }}.weightedAverage:{[weights;values] wavg[weights; values]};
@@ -94,199 +100,11 @@
     0!result
     };
 
-{{ calculation_namespace }}.calcLiquidityTicks:{[rawQuotes;refs;params]
-    quotes: rawQuotes lj refs;
-    result: select
-        quoted_spread_ticks: med (askPrice - bidPrice) % tick_size
-    by date,
-       time_bucket: {{ calculation_namespace }}.timeBucketContinuous[time; params`bucket],
-       sym,
-       topixCapGrp
-    from quotes
-    where date within (params`start_date; params`end_date),
-          bidPrice > 0,
-          askPrice > bidPrice,
-          tick_size > 0,
-          not null sym;
-    0!result
-    };
-
-{{ calculation_namespace }}.calcFlow:{[rawTrades;refs;params]
-    trades: rawTrades lj refs;
-    result: select
-        signed_turnover: sum aggressorSide * tradePrice * tradeSize,
-        trade_imbalance: (sum aggressorSide * tradeSize) % sum tradeSize,
-        signed_volume: sum aggressorSide * tradeSize,
-        volume: sum tradeSize,
-        trade_count: count i
-    by date,
-       time_bucket: {{ calculation_namespace }}.timeBucket[time; session; auction; params`bucket],
-       sym,
-       topixCapGrp
-    from trades
-    where date within (params`start_date; params`end_date),
-          tradePrice > 0,
-          tradeSize > 0,
-          aggressorSide in 1 -1,
-          not null sym;
-    0!result
-    };
-
-{{ calculation_namespace }}.calcRealizedVolatility:{[rawQuoteRows;refs;params]
-    quotes: rawQuoteRows lj refs;
-    cleanQuotes:
-        select from quotes
-        where date within (params`start_date; params`end_date),
-              bidPrice > 0,
-              askPrice > bidPrice,
-              not null sym;
-    quoteMids:
-        update mid: (bidPrice + askPrice) % 2 from cleanQuotes;
-    quoteReturns:
-        update log_return: log_mid - prev log_mid
-        by date, sym
-        from `date`sym`time xasc update log_mid: log mid from quoteMids;
-    result: select
-        realized_volatility: 10000 * sqrt avg log_return * log_return,
-        return_count: count i,
-        first_mid: first mid,
-        last_mid: last mid
-    by date,
-       time_bucket: {{ calculation_namespace }}.timeBucketContinuous[time; params`bucket],
-       sym,
-       topixCapGrp
-    from quoteReturns
-    where not null log_return;
-    0!result
-    };
-
-{{ calculation_namespace }}.calcEffectiveSpread:{[rawTradeRows;rawQuoteRows;refs;params]
-    rawTrades: rawTradeRows lj refs;
-    rawQuotes: rawQuoteRows lj refs;
-    trades:
-        select
-            date,
-            time,
-            sym,
-            topixCapGrp,
-            tradePrice,
-            tradeSize,
-            session,
-            auction,
-            notional: tradePrice * tradeSize
-        from rawTrades
-        where date within (params`start_date; params`end_date),
-              tradePrice > 0,
-              tradeSize > 0,
-              not null sym;
-    quotes:
-        select
-            date,
-            time,
-            quoteTime: time,
-            sym,
-            mid: (bidPrice + askPrice) % 2
-        from rawQuotes
-        where date within (params`start_date; params`end_date),
-              bidPrice > 0,
-              askPrice > bidPrice,
-              not null sym;
-    tradeWithMid: aj[`date`sym`time; `date`sym`time xasc trades; `date`sym`time xasc quotes];
-    scored:
-        update
-            quoteAge: time - quoteTime,
-            effective_spread_bps: 20000 * abs[tradePrice - mid] % mid
-        from tradeWithMid;
-    result: select
-        effective_spread_bps: med effective_spread_bps,
-        trade_count: count i,
-        notional: sum notional
-    by date,
-       time_bucket: {{ calculation_namespace }}.timeBucket[time; session; auction; params`bucket],
-       sym,
-       topixCapGrp
-    from scored
-    where quoteAge <= params`max_quote_age,
-          not null mid,
-          mid > 0;
-    0!result
-    };
-
-{{ calculation_namespace }}.calcPriceImpact:{[rawTradeRows;rawQuoteRows;refs;params]
-    rawTrades: rawTradeRows lj refs;
-    rawQuotes: rawQuoteRows lj refs;
-    trades:
-        select
-            date,
-            time,
-            sym,
-            topixCapGrp,
-            tradePrice,
-            tradeSize,
-            session,
-            auction,
-            notional: tradePrice * tradeSize
-        from rawTrades
-        where date within (params`start_date; params`end_date),
-              tradePrice > 0,
-              tradeSize > 0,
-              not null sym;
-    quotes:
-        select
-            date,
-            time,
-            quoteTime: time,
-            sym,
-            mid: (bidPrice + askPrice) % 2
-        from rawQuotes
-        where date within (params`start_date; params`end_date),
-              bidPrice > 0,
-              askPrice > bidPrice,
-              not null sym;
-    tradesWithBefore:
-        aj[`date`sym`time; `date`sym`time xasc trades; `date`sym`time xasc quotes];
-    horizonRequests:
-        update
-            aggressorSide: {{ calculation_namespace }}.inferAggressorSide[tradePrice; mid],
-            horizonTime: time + params`horizon,
-            quoteAge: time - quoteTime
-        from tradesWithBefore;
-    horizonQuotes:
-        select
-            date,
-            sym,
-            horizonTime: time,
-            horizonQuoteTime: time,
-            horizonMid: mid
-        from quotes;
-    scored:
-        update
-            horizonQuoteAge: horizonTime - horizonQuoteTime,
-            price_impact_30s_bps: aggressorSide * 10000 * (horizonMid - mid) % mid
-        from aj[
-            `date`sym`horizonTime;
-            `date`sym`horizonTime xasc horizonRequests;
-            `date`sym`horizonTime xasc horizonQuotes
-        ];
-    result: select
-        price_impact_30s_bps: med price_impact_30s_bps,
-        trade_count: count i,
-        notional: sum notional
-    by date,
-       time_bucket: {{ calculation_namespace }}.timeBucket[time; session; auction; params`bucket],
-       sym,
-       topixCapGrp
-    from scored
-    where quoteAge <= params`max_quote_age,
-          horizonQuoteAge <= params`max_horizon_quote_age,
-          aggressorSide in 1 -1,
-          not null mid,
-          not null horizonMid,
-          mid > 0;
-    0!result
-    };
-
-{{ calculation_namespace }}.calcToxicityReversion:{[rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;params]
+{{ calculation_namespace }}.prepareToxicityReversion:{[rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;params]
+    / Source functions in the day runner are expected to return one runDate.
+    / The date predicates below are kept as defensive guards for direct
+    / multi-day template calls, but production day execution should not depend on
+    / them for performance.
     rawPtsTrades: rawPtsTradeRows lj refs;
     rawPtsQuotes: rawPtsQuoteRows lj refs;
     rawPrimaryQuotes: rawPrimaryQuoteRows lj refs;
@@ -340,25 +158,22 @@
               bidPrice > 0,
               askPrice > bidPrice,
               not null sym;
+    sortedPtsTrades: {{ calculation_namespace }}.partedSym[`date`sym`venue`time xasc ptsTrades];
+    sortedPtsQuotes: {{ calculation_namespace }}.partedSym[`date`sym`venue`time xasc ptsQuotes];
     tradeWithPtsQuote:
         aj[
             `date`sym`venue`time;
-            `date`sym`venue`time xasc ptsTrades;
-            `date`sym`venue`time xasc ptsQuotes
+            sortedPtsTrades;
+            sortedPtsQuotes
         ];
+    sortedTradeWithPtsQuote: {{ calculation_namespace }}.partedSym[`date`sym`time xasc tradeWithPtsQuote];
+    sortedPrimaryQuotes: {{ calculation_namespace }}.partedSym[`date`sym`time xasc primaryQuotes];
     tradeWithPreMid:
         aj[
             `date`sym`time;
-            `date`sym`time xasc tradeWithPtsQuote;
-            `date`sym`time xasc primaryQuotes
+            sortedTradeWithPtsQuote;
+            sortedPrimaryQuotes
         ];
-    tradeForHorizon:
-        update
-            aggressorSide: {{ calculation_namespace }}.inferAggressorSide[tradePrice; ptsMid],
-            horizonTime: time + params`horizon,
-            ptsQuoteAge: time - ptsQuoteTime,
-            primaryQuoteAge: time - primaryQuoteTime
-        from tradeWithPreMid;
     postQuotes:
         select
             date,
@@ -367,7 +182,26 @@
             sym,
             postMid: primaryMid
         from primaryQuotes;
-    tradeWithPostMid: aj[`date`sym`horizonTime; `date`sym`horizonTime xasc tradeForHorizon; `date`sym`horizonTime xasc postQuotes];
+    postQuotes: {{ calculation_namespace }}.partedSym[`date`sym`horizonTime xasc postQuotes];
+    `tradeWithPreMid`postQuotes!(tradeWithPreMid;postQuotes)
+    };
+
+{{ calculation_namespace }}.calcToxicityReversionPrepared:{[tradeWithPreMid;postQuotes;params]
+    tradeForHorizon:
+        update
+            aggressorSide: {{ calculation_namespace }}.inferAggressorSide[tradePrice; ptsMid],
+            horizonTime: time + params`horizon,
+            ptsQuoteAge: time - ptsQuoteTime,
+            primaryQuoteAge: time - primaryQuoteTime
+        from tradeWithPreMid;
+    sortedTradeForHorizon: {{ calculation_namespace }}.partedSym[`date`sym`horizonTime xasc tradeForHorizon];
+    sortedPostQuotes: {{ calculation_namespace }}.partedSym[`date`sym`horizonTime xasc postQuotes];
+    tradeWithPostMid:
+        aj[
+            `date`sym`horizonTime;
+            sortedTradeForHorizon;
+            sortedPostQuotes
+        ];
     scored:
         update
             reversion_bps: aggressorSide * 10000 * (postMid - primaryMid) % postMid,
@@ -402,6 +236,37 @@
     0!result
     };
 
+{{ calculation_namespace }}.calcToxicityReversion:{[rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;params]
+    prepared: {{ calculation_namespace }}.prepareToxicityReversion[
+        rawPtsTradeRows;
+        rawPtsQuoteRows;
+        rawPrimaryQuoteRows;
+        refs;
+        params];
+    {{ calculation_namespace }}.calcToxicityReversionPrepared[
+        prepared`tradeWithPreMid;
+        prepared`postQuotes;
+        params]
+    };
+
+{{ calculation_namespace }}.calcToxicityReversionFamily:{[rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;paramsByMetric;metricNames]
+    if[0=count metricNames; :()!()];
+    firstParams: paramsByMetric first metricNames;
+    prepared: {{ calculation_namespace }}.prepareToxicityReversion[
+        rawPtsTradeRows;
+        rawPtsQuoteRows;
+        rawPrimaryQuoteRows;
+        refs;
+        firstParams];
+    sortedPostQuotes: prepared`postQuotes;
+    metricNames!({[tradeWithPreMid;postQuotes;paramsByMetric;metricName]
+        {{ calculation_namespace }}.calcToxicityReversionPrepared[
+            tradeWithPreMid;
+            postQuotes;
+            paramsByMetric metricName]
+        }[prepared`tradeWithPreMid;sortedPostQuotes;paramsByMetric] each metricNames)
+    };
+
 {{ calculation_namespace }}.applyUniverseFilters:{[refs;universeFilters]
     filteredRefs: refs;
     if[`symbols in key universeFilters;
@@ -432,6 +297,10 @@
     rawSources
     };
 
+{{ calculation_namespace }}.isToxicityReversionMetric:{[metricName]
+    string[metricName] like "primary_quote_reversion_*_bps"
+    };
+
 {{ calculation_namespace }}.runMetric:{[metricName;rawSources;metricParams]
     if[metricName in `turnover`volume`trade_count;
         :{{ calculation_namespace }}.calcActivity[rawSources`trades;rawSources`refs;metricParams]
@@ -439,22 +308,7 @@
     if[metricName in `quoted_spread_bps`top_of_book_depth;
         :{{ calculation_namespace }}.calcLiquidity[rawSources`quotes;rawSources`refs;metricParams]
         ];
-    if[metricName in enlist `quoted_spread_ticks;
-        :{{ calculation_namespace }}.calcLiquidityTicks[rawSources`quotes;rawSources`refs;metricParams]
-        ];
-    if[metricName in enlist `realized_volatility;
-        :{{ calculation_namespace }}.calcRealizedVolatility[rawSources`quotes;rawSources`refs;metricParams]
-        ];
-    if[metricName in `signed_turnover`trade_imbalance;
-        :{{ calculation_namespace }}.calcFlow[rawSources`trades;rawSources`refs;metricParams]
-        ];
-    if[metricName in enlist `effective_spread_bps;
-        :{{ calculation_namespace }}.calcEffectiveSpread[rawSources`trades;rawSources`quotes;rawSources`refs;metricParams]
-        ];
-    if[metricName in enlist `price_impact_30s_bps;
-        :{{ calculation_namespace }}.calcPriceImpact[rawSources`trades;rawSources`quotes;rawSources`refs;metricParams]
-        ];
-    if[string[metricName] like "primary_quote_reversion_*_bps";
+    if[{{ calculation_namespace }}.isToxicityReversionMetric[metricName];
         :{{ calculation_namespace }}.calcToxicityReversion[
             rawSources`pts_trades;
             rawSources`pts_quotes;
@@ -483,9 +337,24 @@
     chunkResults: { [runDate;refs;sourceFunctions;metricNames;metricParams;chunkSyms]
             chunkRefs: `sym xkey select from 0!refs where sym in chunkSyms;
             rawSources: {{ calculation_namespace }}.loadReportSources[runDate;chunkRefs;sourceFunctions];
-            metricNames!({[rawSources;metricParams;metricName]
-                {{ calculation_namespace }}.runMetric[metricName;rawSources;metricParams[metricName]]
-                }[rawSources;metricParams] each metricNames)
+            reversionMetrics: metricNames where {{ calculation_namespace }}.isToxicityReversionMetric each metricNames;
+            regularMetrics: metricNames where not {{ calculation_namespace }}.isToxicityReversionMetric each metricNames;
+            resultDict: ()!();
+            if[0<count regularMetrics;
+                resultDict,: regularMetrics!({[rawSources;metricParams;metricName]
+                    {{ calculation_namespace }}.runMetric[metricName;rawSources;metricParams[metricName]]
+                    }[rawSources;metricParams] each regularMetrics)
+                ];
+            if[0<count reversionMetrics;
+                resultDict,: {{ calculation_namespace }}.calcToxicityReversionFamily[
+                    rawSources`pts_trades;
+                    rawSources`pts_quotes;
+                    rawSources`primary_quotes;
+                    rawSources`refs;
+                    metricParams;
+                    reversionMetrics]
+                ];
+            resultDict
         }[runDate;refs;sourceFunctions;metricNames;metricParams] each chunks;
 
     metricNames!({[chunkResults;requestedAggregationLevels;metricName]

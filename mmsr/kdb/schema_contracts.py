@@ -65,102 +65,8 @@ LIQUIDITY_OUTPUT_AGGREGATE_COLUMNS: tuple[str, ...] = (
     "quoted_spread_bps",
     "top_of_book_depth",
 )
-LIQUIDITY_TICKS_QUOTES_REQUIRED_COLUMNS: tuple[str, ...] = (
-    *LIQUIDITY_QUOTES_REQUIRED_COLUMNS,
-    "tick_size",
-)
-LIQUIDITY_TICKS_QUOTES_ASSUMPTIONS: tuple[str, ...] = (
-    *LIQUIDITY_QUOTES_ASSUMPTIONS,
-    "tick_size is a positive numeric value for the applicable symbol and quote",
-)
-LIQUIDITY_TICKS_OUTPUT_COLUMN = "quoted_spread_ticks"
 
-REALIZED_VOLATILITY_QUOTES_REQUIRED_COLUMNS: tuple[str, ...] = (
-    "date",
-    "time",
-    "sym",
-    "bidPrice",
-    "askPrice",
-)
-REALIZED_VOLATILITY_QUOTES_ASSUMPTIONS: tuple[str, ...] = (
-    "sym is required so adjacent mid-price returns are computed within each symbol",
-    "bidPrice and askPrice are positive numeric prices with askPrice > bidPrice",
-    "requested group_by columns may be supplied by the reference-data source",
-)
-REALIZED_VOLATILITY_OUTPUT_COLUMN = "realized_volatility"
-REALIZED_VOLATILITY_OUTPUT_METADATA_COLUMNS: tuple[str, ...] = (
-    "return_count",
-    "first_mid",
-    "last_mid",
-)
 
-FLOW_TRADES_REQUIRED_COLUMNS: tuple[str, ...] = (
-    "date",
-    "time",
-    "sym",
-    *TICK_STATE_REQUIRED_COLUMNS,
-    "tradePrice",
-    "tradeSize",
-    "aggressorSide",
-)
-FLOW_TRADES_ASSUMPTIONS: tuple[str, ...] = (
-    "aggressorSide uses buy=1 and sell=-1",
-    "tradePrice and tradeSize are positive for included trades",
-    "optional symbol filtering requires a sym column",
-    "requested group_by columns may be supplied by the reference-data source",
-)
-FLOW_OUTPUT_AGGREGATE_COLUMNS: tuple[str, ...] = (
-    "signed_turnover",
-    "trade_imbalance",
-)
-FLOW_OUTPUT_METADATA_COLUMNS: tuple[str, ...] = (
-    "signed_volume",
-    "volume",
-    "trade_count",
-)
-
-TRANSACTION_COST_TRADES_REQUIRED_COLUMNS: tuple[str, ...] = (
-    "date",
-    "time",
-    "sym",
-    *TICK_STATE_REQUIRED_COLUMNS,
-    "tradePrice",
-    "tradeSize",
-)
-TRANSACTION_COST_QUOTES_REQUIRED_COLUMNS: tuple[str, ...] = (
-    "date",
-    "time",
-    "sym",
-    "bidPrice",
-    "askPrice",
-)
-TRANSACTION_COST_TRADES_ASSUMPTIONS: tuple[str, ...] = (
-    "sym is required so trades can be aligned to the prevailing quote for the same symbol",
-    "tradePrice and tradeSize are positive for included trades",
-    "requested group_by columns may be supplied by the reference-data source",
-)
-TRANSACTION_COST_QUOTES_ASSUMPTIONS: tuple[str, ...] = (
-    "sym is required so quotes can be aligned to same-symbol trades",
-    "bidPrice and askPrice are positive numeric prices with askPrice > bidPrice",
-    "quote timestamps are comparable to trade timestamps for as-of joins",
-)
-EFFECTIVE_SPREAD_OUTPUT_COLUMN = "effective_spread_bps"
-EFFECTIVE_SPREAD_OUTPUT_METADATA_COLUMNS: tuple[str, ...] = (
-    "trade_count",
-    "notional",
-)
-PRICE_IMPACT_TRADES_REQUIRED_COLUMNS: tuple[str, ...] = (
-    *TRANSACTION_COST_TRADES_REQUIRED_COLUMNS,
-)
-PRICE_IMPACT_TRADES_ASSUMPTIONS: tuple[str, ...] = (
-    "MMSR infers aggressorSide from the prevailing quote midpoint",
-    *TRANSACTION_COST_TRADES_ASSUMPTIONS,
-)
-PRICE_IMPACT_OUTPUT_COLUMN = "price_impact_30s_bps"
-PRICE_IMPACT_OUTPUT_METADATA_COLUMNS: tuple[str, ...] = (
-    "trade_count",
-    "notional",
-)
 
 STARTER_OUTPUT_BASE_COLUMNS: tuple[str, ...] = ("date", "time_bucket")
 
@@ -356,14 +262,14 @@ def activity_input_schema_contract(
     trades_table: str = "trades",
     extra_required_columns: Sequence[str] = (),
 ) -> QTemplateInputTableSchemaContract:
-    """Return the raw source contract for ``activity.q``.
+    """Return the raw source contract for ``activity``.
 
     ``extra_required_columns`` should include requested grouping columns and
     ``sym`` when callers render a symbol-bounded smoke/report query.
     """
 
     return QTemplateInputTableSchemaContract(
-        template_name="activity.q",
+        template_name="activity",
         table_role="trades",
         table_name=trades_table,
         required_columns=_dedupe(
@@ -378,10 +284,10 @@ def liquidity_input_schema_contract(
     quotes_table: str = "quotes",
     extra_required_columns: Sequence[str] = (),
 ) -> QTemplateInputTableSchemaContract:
-    """Return the raw source contract for ``liquidity.q``."""
+    """Return the raw source contract for ``liquidity``."""
 
     return QTemplateInputTableSchemaContract(
-        template_name="liquidity.q",
+        template_name="liquidity",
         table_role="quotes",
         table_name=quotes_table,
         required_columns=_dedupe(
@@ -391,159 +297,14 @@ def liquidity_input_schema_contract(
     )
 
 
-def liquidity_ticks_input_schema_contract(
-    *,
-    quotes_table: str = "quotes",
-    extra_required_columns: Sequence[str] = (),
-) -> QTemplateInputTableSchemaContract:
-    """Return the raw source contract for ``liquidity_ticks.q``.
-
-    The tick-normalized spread template intentionally requires ``tick_size`` on
-    the canonical quote source. A client raw-data function may satisfy this by
-    joining symbol metadata in kdb before returning rows to MMSR.
-    """
-
-    return QTemplateInputTableSchemaContract(
-        template_name="liquidity_ticks.q",
-        table_role="quotes",
-        table_name=quotes_table,
-        required_columns=_dedupe(
-            (*LIQUIDITY_TICKS_QUOTES_REQUIRED_COLUMNS, *extra_required_columns)
-        ),
-        assumptions=LIQUIDITY_TICKS_QUOTES_ASSUMPTIONS,
-    )
-
-
-def realized_volatility_input_schema_contract(
-    *,
-    quotes_table: str = "quotes",
-    extra_required_columns: Sequence[str] = (),
-) -> QTemplateInputTableSchemaContract:
-    """Return the raw source contract for quote-mid ``realized_volatility.q``."""
-
-    return QTemplateInputTableSchemaContract(
-        template_name="realized_volatility.q",
-        table_role="quotes",
-        table_name=quotes_table,
-        required_columns=_dedupe(
-            (*REALIZED_VOLATILITY_QUOTES_REQUIRED_COLUMNS, *extra_required_columns)
-        ),
-        assumptions=REALIZED_VOLATILITY_QUOTES_ASSUMPTIONS,
-    )
-
-
-def flow_input_schema_contract(
-    *,
-    trades_table: str = "trades",
-    extra_required_columns: Sequence[str] = (),
-) -> QTemplateInputTableSchemaContract:
-    """Return the raw source contract for feed-signed ``flow.q`` metrics."""
-
-    return QTemplateInputTableSchemaContract(
-        template_name="flow.q",
-        table_role="trades",
-        table_name=trades_table,
-        required_columns=_dedupe(
-            (*FLOW_TRADES_REQUIRED_COLUMNS, *extra_required_columns)
-        ),
-        assumptions=FLOW_TRADES_ASSUMPTIONS,
-    )
-
-
-def effective_spread_input_schema_contracts(
-    *,
-    trades_table: str = "trades",
-    quotes_table: str = "quotes",
-    extra_trade_required_columns: Sequence[str] = (),
-    extra_quote_required_columns: Sequence[str] = (),
-) -> tuple[QTemplateInputTableSchemaContract, QTemplateInputTableSchemaContract]:
-    """Return raw source contracts for ``effective_spread.q``.
-
-    Grouping columns are expected on the trade source because the output groups
-    aggregate trade executions after the prevailing quote-mid alignment. The
-    quote source only needs the same-symbol top-of-book columns required for the
-    as-of join.
-    """
-
-    return (
-        QTemplateInputTableSchemaContract(
-            template_name="effective_spread.q",
-            table_role="trades",
-            table_name=trades_table,
-            required_columns=_dedupe(
-                (
-                    *TRANSACTION_COST_TRADES_REQUIRED_COLUMNS,
-                    *extra_trade_required_columns,
-                )
-            ),
-            assumptions=TRANSACTION_COST_TRADES_ASSUMPTIONS,
-        ),
-        QTemplateInputTableSchemaContract(
-            template_name="effective_spread.q",
-            table_role="quotes",
-            table_name=quotes_table,
-            required_columns=_dedupe(
-                (
-                    *TRANSACTION_COST_QUOTES_REQUIRED_COLUMNS,
-                    *extra_quote_required_columns,
-                )
-            ),
-            assumptions=TRANSACTION_COST_QUOTES_ASSUMPTIONS,
-        ),
-    )
-
-
-def price_impact_input_schema_contracts(
-    *,
-    trades_table: str = "trades",
-    quotes_table: str = "quotes",
-    extra_trade_required_columns: Sequence[str] = (),
-    extra_quote_required_columns: Sequence[str] = (),
-) -> tuple[QTemplateInputTableSchemaContract, QTemplateInputTableSchemaContract]:
-    """Return raw source contracts for ``price_impact.q``.
-
-    Grouping columns are expected on the trade source because the output groups
-    aggregate trade executions after prevailing and horizon quote-mid alignment.
-    The quote source only needs the same-symbol top-of-book columns required for
-    the two as-of joins.
-    """
-
-    return (
-        QTemplateInputTableSchemaContract(
-            template_name="price_impact.q",
-            table_role="trades",
-            table_name=trades_table,
-            required_columns=_dedupe(
-                (
-                    *PRICE_IMPACT_TRADES_REQUIRED_COLUMNS,
-                    *extra_trade_required_columns,
-                )
-            ),
-            assumptions=PRICE_IMPACT_TRADES_ASSUMPTIONS,
-        ),
-        QTemplateInputTableSchemaContract(
-            template_name="price_impact.q",
-            table_role="quotes",
-            table_name=quotes_table,
-            required_columns=_dedupe(
-                (
-                    *TRANSACTION_COST_QUOTES_REQUIRED_COLUMNS,
-                    *extra_quote_required_columns,
-                )
-            ),
-            assumptions=TRANSACTION_COST_QUOTES_ASSUMPTIONS,
-        ),
-    )
-
-
 def activity_output_schema_contract(
     metric_name: str,
     *,
     group_by: Sequence[str] = (),
 ) -> QTemplateOutputSchemaContract:
-    """Return the output-schema contract for ``activity.q``.
+    """Return the output-schema contract for ``activity``.
 
-    ``activity.q`` emits every starter activity aggregate on each row, even when
+    ``activity`` emits every starter activity aggregate on each row, even when
     the runner is normalizing one requested metric. Keeping the sibling
     aggregate columns required makes the template boundary explicit and ensures
     those values remain available as row metadata for report diagnostics.
@@ -551,12 +312,12 @@ def activity_output_schema_contract(
 
     if metric_name not in ACTIVITY_OUTPUT_AGGREGATE_COLUMNS:
         raise OutputSchemaContractError(
-            "activity.q schema contracts only apply to activity metrics: "
+            "activity schema contracts only apply to activity metrics: "
             + ", ".join(ACTIVITY_OUTPUT_AGGREGATE_COLUMNS)
         )
 
     return QTemplateOutputSchemaContract(
-        template_name="activity.q",
+        template_name="activity",
         metric_value_column=metric_name,
         base_columns=STARTER_OUTPUT_BASE_COLUMNS,
         metadata_columns=tuple(
@@ -573,21 +334,21 @@ def liquidity_output_schema_contract(
     *,
     group_by: Sequence[str] = (),
 ) -> QTemplateOutputSchemaContract:
-    """Return the output-schema contract for ``liquidity.q``.
+    """Return the output-schema contract for ``liquidity``.
 
-    ``liquidity.q`` emits every starter liquidity aggregate on each row. The
+    ``liquidity`` emits every starter liquidity aggregate on each row. The
     non-requested aggregate column is required so the report boundary preserves
     it as deterministic row metadata.
     """
 
     if metric_name not in LIQUIDITY_OUTPUT_AGGREGATE_COLUMNS:
         raise OutputSchemaContractError(
-            "liquidity.q schema contracts only apply to liquidity metrics: "
+            "liquidity schema contracts only apply to liquidity metrics: "
             + ", ".join(LIQUIDITY_OUTPUT_AGGREGATE_COLUMNS)
         )
 
     return QTemplateOutputSchemaContract(
-        template_name="liquidity.q",
+        template_name="liquidity",
         metric_value_column=metric_name,
         base_columns=STARTER_OUTPUT_BASE_COLUMNS,
         metadata_columns=tuple(
@@ -599,138 +360,13 @@ def liquidity_output_schema_contract(
     )
 
 
-def liquidity_ticks_output_schema_contract(
-    metric_name: str,
-    *,
-    group_by: Sequence[str] = (),
-) -> QTemplateOutputSchemaContract:
-    """Return the output-schema contract for ``liquidity_ticks.q``."""
-
-    if metric_name != LIQUIDITY_TICKS_OUTPUT_COLUMN:
-        raise OutputSchemaContractError(
-            "liquidity_ticks.q schema contracts only apply to quoted_spread_ticks"
-        )
-
-    return QTemplateOutputSchemaContract(
-        template_name="liquidity_ticks.q",
-        metric_value_column=metric_name,
-        base_columns=STARTER_OUTPUT_BASE_COLUMNS,
-        group_columns=tuple(group_by),
-    )
-
-
-def realized_volatility_output_schema_contract(
-    metric_name: str,
-    *,
-    group_by: Sequence[str] = (),
-) -> QTemplateOutputSchemaContract:
-    """Return the output-schema contract for ``realized_volatility.q``."""
-
-    if metric_name != REALIZED_VOLATILITY_OUTPUT_COLUMN:
-        raise OutputSchemaContractError(
-            "realized_volatility.q schema contracts only apply to realized_volatility"
-        )
-
-    return QTemplateOutputSchemaContract(
-        template_name="realized_volatility.q",
-        metric_value_column=metric_name,
-        base_columns=STARTER_OUTPUT_BASE_COLUMNS,
-        metadata_columns=REALIZED_VOLATILITY_OUTPUT_METADATA_COLUMNS,
-        group_columns=tuple(group_by),
-    )
-
-
-def effective_spread_output_schema_contract(
-    metric_name: str,
-    *,
-    group_by: Sequence[str] = (),
-) -> QTemplateOutputSchemaContract:
-    """Return the output-schema contract for ``effective_spread.q``."""
-
-    if metric_name != EFFECTIVE_SPREAD_OUTPUT_COLUMN:
-        raise OutputSchemaContractError(
-            "effective_spread.q schema contracts only apply to effective_spread_bps"
-        )
-
-    return QTemplateOutputSchemaContract(
-        template_name="effective_spread.q",
-        metric_value_column=metric_name,
-        base_columns=STARTER_OUTPUT_BASE_COLUMNS,
-        metadata_columns=EFFECTIVE_SPREAD_OUTPUT_METADATA_COLUMNS,
-        group_columns=tuple(group_by),
-    )
-
-
-def price_impact_output_schema_contract(
-    metric_name: str,
-    *,
-    group_by: Sequence[str] = (),
-) -> QTemplateOutputSchemaContract:
-    """Return the output-schema contract for ``price_impact.q``."""
-
-    if metric_name != PRICE_IMPACT_OUTPUT_COLUMN:
-        raise OutputSchemaContractError(
-            "price_impact.q schema contracts only apply to price_impact_30s_bps"
-        )
-
-    return QTemplateOutputSchemaContract(
-        template_name="price_impact.q",
-        metric_value_column=metric_name,
-        base_columns=STARTER_OUTPUT_BASE_COLUMNS,
-        metadata_columns=PRICE_IMPACT_OUTPUT_METADATA_COLUMNS,
-        group_columns=tuple(group_by),
-    )
-
-
-def validate_effective_spread_output_schema(
-    *,
-    metric_name: str,
-    result: Any,
-    group_by: Sequence[str] = (),
-) -> None:
-    """Validate an ``effective_spread.q`` result object against its contract."""
-
-    effective_spread_output_schema_contract(
-        metric_name,
-        group_by=group_by,
-    ).validate_result(result)
-
-
-def validate_price_impact_output_schema(
-    *,
-    metric_name: str,
-    result: Any,
-    group_by: Sequence[str] = (),
-) -> None:
-    """Validate a ``price_impact.q`` result object against its contract."""
-
-    price_impact_output_schema_contract(
-        metric_name,
-        group_by=group_by,
-    ).validate_result(result)
-
-
-def validate_realized_volatility_output_schema(
-    *,
-    metric_name: str,
-    result: Any,
-    group_by: Sequence[str] = (),
-) -> None:
-    """Validate a ``realized_volatility.q`` result object against its contract."""
-
-    realized_volatility_output_schema_contract(
-        metric_name,
-        group_by=group_by,
-    ).validate_result(result)
-
-
 def validate_activity_output_schema(
     *,
     metric_name: str,
     result: Any,
     group_by: Sequence[str] = (),
 ) -> None:
-    """Validate an ``activity.q`` result object against its schema contract."""
+    """Validate an ``activity`` result object against its schema contract."""
 
     activity_output_schema_contract(metric_name, group_by=group_by).validate_result(
         result
@@ -743,62 +379,11 @@ def validate_liquidity_output_schema(
     result: Any,
     group_by: Sequence[str] = (),
 ) -> None:
-    """Validate a ``liquidity.q`` result object against its schema contract."""
+    """Validate a ``liquidity`` result object against its schema contract."""
 
     liquidity_output_schema_contract(metric_name, group_by=group_by).validate_result(
         result
     )
-
-
-def validate_liquidity_ticks_output_schema(
-    *,
-    metric_name: str,
-    result: Any,
-    group_by: Sequence[str] = (),
-) -> None:
-    """Validate a ``liquidity_ticks.q`` result object against its contract."""
-
-    liquidity_ticks_output_schema_contract(
-        metric_name,
-        group_by=group_by,
-    ).validate_result(result)
-
-
-def flow_output_schema_contract(
-    metric_name: str,
-    *,
-    group_by: Sequence[str] = (),
-) -> QTemplateOutputSchemaContract:
-    """Return the output-schema contract for feed-signed ``flow.q`` metrics."""
-
-    if metric_name not in FLOW_OUTPUT_AGGREGATE_COLUMNS:
-        raise OutputSchemaContractError(
-            "flow.q schema contracts only apply to flow metrics: "
-            + ", ".join(FLOW_OUTPUT_AGGREGATE_COLUMNS)
-        )
-
-    return QTemplateOutputSchemaContract(
-        template_name="flow.q",
-        metric_value_column=metric_name,
-        base_columns=STARTER_OUTPUT_BASE_COLUMNS,
-        metadata_columns=tuple(
-            column
-            for column in (*FLOW_OUTPUT_AGGREGATE_COLUMNS, *FLOW_OUTPUT_METADATA_COLUMNS)
-            if column != metric_name
-        ),
-        group_columns=tuple(group_by),
-    )
-
-
-def validate_flow_output_schema(
-    *,
-    metric_name: str,
-    result: Any,
-    group_by: Sequence[str] = (),
-) -> None:
-    """Validate a ``flow.q`` result object against its schema contract."""
-
-    flow_output_schema_contract(metric_name, group_by=group_by).validate_result(result)
 
 
 def toxicity_reversion_input_schema_contracts(
@@ -814,7 +399,7 @@ def toxicity_reversion_input_schema_contracts(
     QTemplateInputTableSchemaContract,
     QTemplateInputTableSchemaContract,
 ]:
-    """Return required production raw-source schemas for ``toxicity_reversion.q``.
+    """Return required production raw-source schemas for ``toxicity_reversion``.
 
     These contracts intentionally encode only the columns and feed conventions
     the q template requires. They do not validate business quality, symbol
@@ -823,7 +408,7 @@ def toxicity_reversion_input_schema_contracts(
 
     return (
         QTemplateInputTableSchemaContract(
-            template_name="toxicity_reversion.q",
+            template_name="toxicity_reversion",
             table_role="pts_trades",
             table_name=pts_trades_table,
             required_columns=_dedupe(
@@ -832,14 +417,14 @@ def toxicity_reversion_input_schema_contracts(
             assumptions=REVERSION_PTS_TRADES_ASSUMPTIONS,
         ),
         QTemplateInputTableSchemaContract(
-            template_name="toxicity_reversion.q",
+            template_name="toxicity_reversion",
             table_role="pts_quotes",
             table_name=pts_quotes_table,
             required_columns=REVERSION_PTS_QUOTES_REQUIRED_COLUMNS,
             assumptions=REVERSION_PTS_QUOTES_ASSUMPTIONS,
         ),
         QTemplateInputTableSchemaContract(
-            template_name="toxicity_reversion.q",
+            template_name="toxicity_reversion",
             table_role="primary_quotes",
             table_name=primary_quotes_table,
             required_columns=REVERSION_PRIMARY_QUOTES_REQUIRED_COLUMNS,
@@ -848,7 +433,7 @@ def toxicity_reversion_input_schema_contracts(
         reference_data_input_schema_contract(
             reference_table=reference_table,
             extra_required_columns=extra_required_columns,
-            template_name="toxicity_reversion.q",
+            template_name="toxicity_reversion",
         ),
     )
 
@@ -862,7 +447,7 @@ def validate_toxicity_reversion_input_schemas(
     pts_quotes_table: str = "pts_quotes",
     primary_quotes_table: str = "primary_quotes",
 ) -> None:
-    """Validate raw-source columns for ``toxicity_reversion.q``."""
+    """Validate raw-source columns for ``toxicity_reversion``."""
 
     (
         pts_contract,
@@ -884,7 +469,7 @@ def toxicity_reversion_output_schema_contract(
     *,
     group_by: Sequence[str] = (),
 ) -> QTemplateOutputSchemaContract:
-    """Return the output-schema contract for ``toxicity_reversion.q``.
+    """Return the output-schema contract for ``toxicity_reversion``.
 
     The reversion template must always emit ``venue`` and ``horizon`` in
     addition to the rendered metric value column. Caller-provided report groups,
@@ -894,12 +479,12 @@ def toxicity_reversion_output_schema_contract(
 
     if not metric_name.startswith("primary_quote_reversion_"):
         raise OutputSchemaContractError(
-            "toxicity_reversion.q schema contracts only apply to "
+            "toxicity_reversion schema contracts only apply to "
             "primary_quote_reversion_* metrics"
         )
 
     return QTemplateOutputSchemaContract(
-        template_name="toxicity_reversion.q",
+        template_name="toxicity_reversion",
         metric_value_column=metric_name,
         base_columns=REVERSION_OUTPUT_BASE_COLUMNS,
         metadata_columns=REVERSION_OUTPUT_METADATA_COLUMNS,
@@ -930,24 +515,11 @@ def output_schema_contract_for_template(
 ) -> QTemplateOutputSchemaContract:
     """Return the normalized output contract for a rendered q template."""
 
-    if template_name == "activity.q":
+    if template_name == "activity":
         return activity_output_schema_contract(metric_name, group_by=group_by)
-    if template_name == "liquidity.q":
+    if template_name == "liquidity":
         return liquidity_output_schema_contract(metric_name, group_by=group_by)
-    if template_name == "liquidity_ticks.q":
-        return liquidity_ticks_output_schema_contract(metric_name, group_by=group_by)
-    if template_name == "realized_volatility.q":
-        return realized_volatility_output_schema_contract(
-            metric_name,
-            group_by=group_by,
-        )
-    if template_name == "effective_spread.q":
-        return effective_spread_output_schema_contract(metric_name, group_by=group_by)
-    if template_name == "price_impact.q":
-        return price_impact_output_schema_contract(metric_name, group_by=group_by)
-    if template_name == "flow.q":
-        return flow_output_schema_contract(metric_name, group_by=group_by)
-    if template_name == "toxicity_reversion.q":
+    if template_name == "toxicity_reversion":
         return toxicity_reversion_output_schema_contract(
             metric_name,
             group_by=group_by,

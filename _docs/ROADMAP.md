@@ -96,16 +96,10 @@ promoted into default configs or report sections.
 
 **Optional market-microstructure add-ons, not enabled by default:**
 
-- `quoted_spread_ticks`
-- `realized_volatility`
-- `signed_turnover`
-- `trade_imbalance`
 
-Transaction-cost metrics such as `effective_spread_bps` and
-`price_impact_30s_bps` are out of scope for the default market-monitoring
-report. Existing q-template support remains available for compatibility, but
-future report implementation should not add transaction-cost sections unless the
-product scope explicitly changes.
+Transaction-cost metrics are out of scope for the market-monitoring
+report. The production runner and q library should not carry transaction-cost
+calculation paths unless the product scope explicitly changes.
 
 **Exit criteria:**
 
@@ -408,13 +402,10 @@ users define raw trade/quote access while MMSR owns metric q calculations.
   and cross-venue primary-quote reversion.
 - Optional market-microstructure add-ons have checked-in q-template support but
   are intentionally not enabled in the minimal/default report config:
-  `quoted_spread_ticks` uses `liquidity_ticks.q`, `realized_volatility` uses
-  quote-mid `realized_volatility.q`, and `signed_turnover` / `trade_imbalance`
-  share feed-signed `flow.q`.
-- Transaction-cost templates (`effective_spread.q` and `price_impact.q`) are
-  kept outside the default market-monitoring report scope. Future work should
-  focus on market structure, liquidity, activity, volatility, and reversion
-  unless the report scope explicitly expands.
+  The production q runner supports only the default activity, displayed-liquidity, and reversion families.
+- Transaction-cost calculation paths are not part of the production runner or
+  reusable q library. Future work should focus on market structure, liquidity,
+  activity, volatility, and reversion unless the report scope explicitly expands.
 
 **Exit criteria:**
 
@@ -448,20 +439,19 @@ users define raw trade/quote access while MMSR owns metric q calculations.
 
 **Current implementation status:**
 
-- A deterministic mock-kdb integration demo now executes rendered `activity.q`
-  and `liquidity.q` queries through `KdbMetricRunner` and a tiny mock client.
+- A deterministic mock-kdb integration demo now executes rendered `activity`
+  and `liquidity` queries through `KdbMetricRunner` and a tiny mock client.
 - The mock-kdb result is normalized into canonical `MetricTimeSeries` objects,
   compared with deterministic reference observations, and rendered through the
   same `build_market_monitor_report()` path as production-format reports.
 - Starter-template output schema contracts now cover the default
-  market-monitoring templates (`activity.q`, `liquidity.q`, and
-  `toxicity_reversion.q`) plus optional market-microstructure add-ons
-  (`liquidity_ticks.q`, quote-mid `realized_volatility.q`, and feed-signed
-  `flow.q`). Existing transaction-cost templates remain tested for compatibility
+  market-monitoring templates (`activity`, `liquidity`, and
+  `toxicity_reversion`) plus optional market-microstructure add-ons
+  Legacy optional template families are removed from active planning/contracts
   but are not part of the default market report.
 - The mock-vs-live integration-test boundary remains explicit, and live-kdb
   execution remains environment-gated: `mmsr plan` and `mmsr preflight` now build bounded
-  `activity.q` and `liquidity.q` smoke requests from documented `MMSR_KDB_*`
+  `activity` and `liquidity` smoke requests from documented `MMSR_KDB_*`
   variables, skips safely in pytest when variables are absent, and reuses the
   existing `KdbMetricRunner` output schema-contract boundary before
   normalization.

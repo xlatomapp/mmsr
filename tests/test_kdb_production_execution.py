@@ -232,8 +232,8 @@ def test_production_plan_summary_reports_scope_and_contracts() -> None:
         "volume",
         "quoted_spread_bps",
     ]
-    assert summary.metric_contracts[0].template_name == "activity.q"
-    assert summary.metric_contracts[1].template_name == "liquidity.q"
+    assert summary.metric_contracts[0].template_name == "activity"
+    assert summary.metric_contracts[1].template_name == "liquidity"
     assert "sym" in summary.metric_contracts[0].source_contracts[0].required_columns
     lines = "\n".join(summary.summary_lines())
     assert "Production plan summary:" in lines
@@ -250,11 +250,11 @@ def test_production_plan_summary_reports_scope_and_contracts() -> None:
 @pytest.mark.parametrize(
     ("metric_name", "template_name", "source_role"),
     [
-        ("volume", "activity.q", "trades"),
-        ("quoted_spread_bps", "liquidity.q", "quotes"),
+        ("volume", "activity", "trades"),
+        ("quoted_spread_bps", "liquidity", "quotes"),
         (
             "primary_quote_reversion_10ms_bps",
-            "toxicity_reversion.q",
+            "toxicity_reversion",
             "pts_trades",
         ),
     ],

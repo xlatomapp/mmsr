@@ -102,7 +102,7 @@ calendar assumptions are not production ready.
 | `.sb.mmsr.getTradingCalendar` or configured equivalent | Returns a date vector or table/dict with `date` rows for trading days between `start` and `end`, inclusive. |
 | Session metadata or equivalent, if used upstream | Confirms AM/PM sessions, lunch break, and auction boundaries used by bucket grids. |
 
-### Trade raw-data function for `activity.q` and optional `flow.q`
+### Trade raw-data function for `activity`
 
 | Required field | Purpose |
 | --- | --- |
@@ -111,22 +111,19 @@ calendar assumptions are not production ready.
 | `sym` | Symbol-level and metadata joins. |
 | `tradePrice` | Turnover and optional signed-turnover calculations. |
 | `tradeSize` | Volume, turnover, and optional imbalance calculations. |
-| `aggressorSide` | Required only for `signed_turnover` and `trade_imbalance` / `flow.q`; convention must be `buy=1`, `sell=-1`. |
 
-### Quote raw-data function for `liquidity.q` and optional liquidity/volatility add-ons
+### Quote raw-data function for `liquidity` and optional liquidity/volatility add-ons
 
 | Required field | Purpose |
 | --- | --- |
 | `date` | Report-period filtering and reference comparison grouping. |
 | `time` | Intraday bucket assignment and quote-return ordering. |
-| `sym` | Symbol-level and metadata joins; required for optional `realized_volatility.q` so adjacent mid-price returns are calculated within each symbol. |
 | `bidPrice` | Quoted spread, top-of-book, primary-mid reversion, and optional quote-mid realized-volatility metrics. |
 | `askPrice` | Quoted spread, top-of-book, primary-mid reversion, and optional quote-mid realized-volatility metrics. |
 | `bidSize` | Top-of-book depth metrics. |
 | `askSize` | Top-of-book depth metrics. |
-| `tick_size` | Required only for `quoted_spread_ticks` / `liquidity_ticks.q`; may be supplied by a symbol-metadata or tick-ladder join inside the user quote function. |
 
-### PTS trade raw-data function for `toxicity_reversion.q`
+### PTS trade raw-data function for `toxicity_reversion`
 
 | Required field | Purpose |
 | --- | --- |
@@ -136,9 +133,8 @@ calendar assumptions are not production ready.
 | `venue` | Cross-venue series grouping. |
 | `tradePrice` | Reversion denominator and execution anchor. |
 | `tradeSize` | Sample-size and notional diagnostics. |
-| `aggressorSide` | Not required from the raw source for reversion; MMSR calculates it from the matched same-PTS-venue/same-symbol PTS quote with inferred buy=1 and sell=-1. Reversion then uses that side against the TSE/primary mid path. |
 
-### PTS quote raw-data function for `toxicity_reversion.q`
+### PTS quote raw-data function for `toxicity_reversion`
 
 | Required field | Purpose |
 | --- | --- |
@@ -149,7 +145,7 @@ calendar assumptions are not production ready.
 | `bidPrice` | PTS midpoint calculation for trade-side inference. |
 | `askPrice` | PTS midpoint calculation; rows should satisfy `askPrice > bidPrice`. |
 
-### Primary quote raw-data function for `toxicity_reversion.q`
+### Primary quote raw-data function for `toxicity_reversion`
 
 | Required field | Purpose |
 | --- | --- |
@@ -194,7 +190,6 @@ be joined to normalized metric rows before comparison facts are built.
 - The minimal production config has been reviewed against the configured raw
   source functions for activity, displayed liquidity, and cross-venue
   primary-quote reversion. Optional add-ons such as tick-normalized spread,
-  quote-mid realized volatility, or feed-signed order-flow imbalance should be
   enabled only after the required extra source fields are confirmed.
 - No credentials, client host names, or private market-data extracts are
   committed to the repository.

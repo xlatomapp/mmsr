@@ -38,9 +38,7 @@ Default report implementation must stay centered on:
 Do not add default config entries, report sections, executive-summary language,
 or next-step roadmap items for effective spread, implementation shortfall,
 slippage, price impact, order-routing analytics, or other execution-cost/TCA
-features unless the user explicitly changes the product scope. Existing
-compatibility q templates may remain tested, but they must not drive the default
-market report design.
+features unless the user explicitly changes the product scope. Do not keep production runner paths for these transaction-cost metrics unless the product scope explicitly changes.
 
 Do not expand report-local validation helpers into a reusable validation
 framework inside this package. After several reports exist, repeated validation
