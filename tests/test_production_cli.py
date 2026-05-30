@@ -158,7 +158,7 @@ def test_render_production_report_file_uses_live_execution_path(tmp_path, monkey
     assert "Large" in html
     assert "Current versus reference" in html
     assert "Reference and Target Daily Trends" in html
-    assert "Reference observation unit: trading day" in html
+    assert "Market Summary headline:" in html
     assert any("getTradingCalendar" in query for query in FakeProductionKdbClient.queries)
     metric_queries = [
         query for query in FakeProductionKdbClient.queries if query.strip().startswith(".desk.mmsr.runReportDay")

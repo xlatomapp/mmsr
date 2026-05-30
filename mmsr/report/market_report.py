@@ -8,12 +8,15 @@ rendering path should remain shared.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from datetime import date
+from html import escape
+from math import isfinite
 
 from mmsr.metrics.base import MetricDefinition
 from mmsr.metrics.results import MetricComparison, MetricTimeSeries
-from mmsr.report.components import ReportBranding, ReportDocument, ReportPage
+from mmsr.report.components import CommentaryBlock, HtmlBlock, PlotlyChart, ReportBranding, ReportDocument, ReportPage
 from mmsr.report.drilldowns import (
     DEFAULT_DRILLDOWN_GROUP_KEYS,
     DrilldownReportPageOptions,
@@ -142,6 +145,17 @@ class MarketReportOptions:
     max_chart_points: int | None = None
     max_heatmap_cells: int | None = None
     max_overview_metrics: int = 5
+    overview_top_change_diversification: str = "metric"
+    max_summary_story_charts: int = 3
+    include_summary_kpi_snapshot: bool = True
+    summary_kpi_metric_names: tuple[str, ...] = (
+        "turnover",
+        "quoted_spread_bps",
+        "top_of_book_depth",
+        "primary_quote_reversion_100ms_bps",
+    )
+    include_primary_intraday_signal: bool = True
+    primary_intraday_signal_metric_name: str = "quoted_spread_bps"
     include_toxicity_reversion_page: bool = True
     include_toxicity_reversion_metrics_in_detail_page: bool = False
     toxicity_reversion_page_title: str = "Cross-Venue Toxicity"
@@ -260,6 +274,11 @@ class MarketReportOptions:
         _require_optional_non_negative(self.max_chart_points, "max_chart_points")
         _require_optional_non_negative(self.max_heatmap_cells, "max_heatmap_cells")
         _require_non_negative(self.max_overview_metrics, "max_overview_metrics")
+        if self.overview_top_change_diversification not in {"metric", "family"}:
+            raise ValueError("overview_top_change_diversification must be one of: metric, family")
+        _require_non_negative(self.max_summary_story_charts, "max_summary_story_charts")
+        _require_metric_name_sequence(self.summary_kpi_metric_names, "summary_kpi_metric_names")
+        _require_non_empty(self.primary_intraday_signal_metric_name, "primary_intraday_signal_metric_name")
         _require_non_empty(
             self.toxicity_reversion_page_title,
             "toxicity_reversion_page_title",
@@ -415,6 +434,16 @@ def _build_summary_page(
     *,
     options: MarketReportOptions,
 ) -> ReportPage:
+    summary_comparisons = _aggregate_market_summary_comparisons(
+        report_input.comparisons,
+        symbol_group_keys=options.symbol_group_keys,
+    )
+    summary_metric_card_comparisons = _select_metric_level_summary_comparisons(summary_comparisons)
+    meta_strip_block = _build_summary_meta_strip_block(
+        summary_comparisons,
+        options=options,
+    )
+
     comparison_options = ComparisonSectionOptions(
         max_metric_cards=options.max_metric_cards,
         max_comments=options.max_comments,
@@ -422,33 +451,439 @@ def _build_summary_page(
     )
     base_page = build_comparison_report_page(
         options.summary_page_title,
-        report_input.comparisons,
+        summary_metric_card_comparisons,
         definitions,
         options=comparison_options,
     )
     executive_overview = build_executive_market_overview_block(
-        report_input.comparisons,
+        summary_comparisons,
         definitions,
         options=ExecutiveOverviewOptions(
             title=options.executive_overview_title,
             help_text=options.executive_overview_help_text,
             max_metric_summaries=options.max_overview_metrics,
+            top_change_diversification=options.overview_top_change_diversification,
         ),
+    )
+    kpi_snapshot_block = _build_market_kpi_snapshot_block(
+        summary_metric_card_comparisons,
+        definitions,
+        options=options,
     )
     comparison_table = build_comparison_metric_table(
         options.comparison_table_title,
-        report_input.comparisons,
+        summary_comparisons,
         definitions,
         max_rows=options.max_table_rows,
         help_text=options.comparison_help_text,
     )
+    summary_story_charts = _build_summary_story_charts(
+        report_input,
+        definitions,
+        options=options,
+    )
+    primary_intraday_chart = _build_primary_intraday_signal_chart(
+        report_input,
+        definitions,
+        options=options,
+    )
+    ordered_summary_charts: list[PlotlyChart] = []
+    if primary_intraday_chart is not None:
+        ordered_summary_charts.append(primary_intraday_chart)
+    primary_chart_title = None if primary_intraday_chart is None else primary_intraday_chart.title
+    ordered_summary_charts.extend(chart for chart in summary_story_charts if chart.title != primary_chart_title)
+    insight_callout_block = _build_primary_intraday_insight_callout(
+        summary_comparisons,
+        definitions,
+        options=options,
+    )
+    summary_commentary_blocks = (
+        [insight_callout_block] if insight_callout_block is not None else []
+    ) + base_page.commentary_blocks
     return ReportPage(
         title=base_page.title,
-        html_blocks=[executive_overview],
+        html_blocks=(
+            ([meta_strip_block] if meta_strip_block is not None else [])
+            + ([kpi_snapshot_block] if kpi_snapshot_block is not None else [])
+            + [executive_overview]
+        ),
         metric_cards=base_page.metric_cards,
+        plotly_charts=ordered_summary_charts,
         metric_tables=[comparison_table],
-        commentary_blocks=base_page.commentary_blocks,
+        commentary_blocks=summary_commentary_blocks,
     )
+
+
+def _build_summary_meta_strip_block(
+    summary_comparisons: tuple[MetricComparison, ...],
+    *,
+    options: MarketReportOptions,
+) -> HtmlBlock:
+    dates = sorted({comparison.date for comparison in summary_comparisons if comparison.date is not None})
+    period_text = _format_period_text(dates)
+    reference_method = _dominant_reference_method(summary_comparisons)
+    scope_text = options.summary_scope_label.strip()
+    run_tag = (options.generated_at_text or "production run").strip()
+
+    fields = (
+        ("Period", period_text),
+        ("Reference", reference_method),
+        ("Scope", scope_text),
+        ("Run Tag", run_tag),
+    )
+    items = "".join(
+        (
+            '<article class="report-meta-strip__item">'
+            f'<p class="report-meta-strip__label">{escape(label)}</p>'
+            f'<p class="report-meta-strip__value">{escape(value)}</p>'
+            "</article>"
+        )
+        for label, value in fields
+    )
+    body_html = f'  <section class="report-meta-strip">{items}</section>'
+    return HtmlBlock(
+        title="Report Meta",
+        help_text="Page-1 run metadata for period, reference method, scope, and run tag.",
+        body_html=body_html,
+    )
+
+
+def _format_period_text(dates: list[date]) -> str:
+    if not dates:
+        return "n/a"
+    if len(dates) == 1:
+        return f"{dates[0].isoformat()} (1 day)"
+    return f"{dates[0].isoformat()} to {dates[-1].isoformat()} ({len(dates)} days)"
+
+
+def _dominant_reference_method(comparisons: tuple[MetricComparison, ...]) -> str:
+    methods = [comparison.comparison_method for comparison in comparisons if comparison.comparison_method]
+    if not methods:
+        return "same_intraday_bucket"
+    counts: dict[str, int] = {}
+    for method in methods:
+        counts[method] = counts.get(method, 0) + 1
+    return max(counts.items(), key=lambda item: item[1])[0]
+
+
+def _build_primary_intraday_signal_chart(
+    report_input: MarketReportInput,
+    definitions: Mapping[str, MetricDefinition],
+    *,
+    options: MarketReportOptions,
+) -> PlotlyChart | None:
+    if not options.include_primary_intraday_signal or not report_input.reference_series:
+        return None
+
+    metric_name = options.primary_intraday_signal_metric_name
+    current_by_metric = {
+        series.metric_name: series
+        for series in report_input.current_series
+        if not _series_has_symbol_scope(series, options.symbol_group_keys)
+    }
+    reference_by_metric = {
+        series.metric_name: series
+        for series in report_input.reference_series
+        if not _series_has_symbol_scope(series, options.symbol_group_keys)
+    }
+    target_series = current_by_metric.get(metric_name)
+    reference_series = reference_by_metric.get(metric_name)
+    if target_series is None or reference_series is None:
+        return None
+    definition = _require_definition(metric_name, definitions)
+    return build_reference_target_intraday_profile_chart(
+        f"Primary Intraday Signal — {definition.label}",
+        reference_series=reference_series,
+        target_series=target_series,
+        metric_definition=definition,
+        group_by=("topixCapGrp", "market_cap_bucket", "segment", "sector"),
+        max_groups=options.max_displayed_liquidity_groups,
+        help_text="Primary intraday target-versus-reference diagnostic for page-1 market monitoring.",
+    )
+
+
+def _build_primary_intraday_insight_callout(
+    summary_comparisons: tuple[MetricComparison, ...],
+    definitions: Mapping[str, MetricDefinition],
+    *,
+    options: MarketReportOptions,
+) -> CommentaryBlock | None:
+    metric_name = options.primary_intraday_signal_metric_name
+    metric_rows = [comparison for comparison in summary_comparisons if comparison.metric_name == metric_name]
+    if not metric_rows:
+        return None
+    definition = definitions.get(metric_name)
+    if definition is None:
+        return None
+
+    alert_count = sum(1 for comparison in metric_rows if comparison.status == "alert")
+    watch_count = sum(1 for comparison in metric_rows if comparison.status == "watch")
+    change_pcts = [comparison.change_pct for comparison in metric_rows if comparison.change_pct is not None]
+    avg_change_pct = (sum(change_pcts) / len(change_pcts)) if change_pcts else None
+    direction = "up" if (avg_change_pct or 0.0) >= 0 else "down"
+    pct_text = "n/a" if avg_change_pct is None else f"{abs(avg_change_pct):.1%}"
+    comment = (
+        f"{definition.label} is {direction} {pct_text} versus reference. "
+        f"Status mix: {alert_count} alerts, {watch_count} watch rows across {len(metric_rows)} market contexts."
+    )
+    return CommentaryBlock(title="Insight Callout", comments=[comment])
+
+
+def _build_market_kpi_snapshot_block(
+    summary_metric_comparisons: tuple[MetricComparison, ...],
+    definitions: Mapping[str, MetricDefinition],
+    *,
+    options: MarketReportOptions,
+):
+    if not options.include_summary_kpi_snapshot:
+        return None
+
+    comparisons_by_metric = {comparison.metric_name: comparison for comparison in summary_metric_comparisons}
+    cards_html: list[str] = []
+    for metric_name in options.summary_kpi_metric_names:
+        comparison = comparisons_by_metric.get(metric_name)
+        if comparison is None:
+            continue
+        definition = definitions.get(metric_name)
+        if definition is None:
+            continue
+        value_text = _format_metric_value(comparison.value, definition.unit)
+        change_text = _format_change_text(comparison.change_abs, comparison.change_pct, definition.unit)
+        status = comparison.status if comparison.status in {"alert", "watch", "comparison_only", "normal"} else "normal"
+        cards_html.append(
+            '    <article class="kpi-snapshot__card">'
+            f'<p class="kpi-snapshot__label">{escape(definition.label)}</p>'
+            f'<p class="kpi-snapshot__value">{escape(value_text)}</p>'
+            f'<p class="kpi-snapshot__change kpi-snapshot__change--{escape(status)}">{escape(change_text)}</p>'
+            "</article>"
+        )
+
+    if not cards_html:
+        return None
+
+    return HtmlBlock(
+        title="Market KPI Snapshot",
+        help_text=(
+            "Market-level daily snapshot for core metrics. Values are summary-level "
+            "comparisons aggregated by market context and date."
+        ),
+        body_html='  <section class="kpi-snapshot">\n' + "\n".join(cards_html) + "\n  </section>",
+    )
+
+
+def _format_metric_value(value: float | int | None, unit: str) -> str:
+    if value is None:
+        return "n/a"
+    if unit == "JPY":
+        return f"{value:,.0f} JPY"
+    if unit == "count":
+        return f"{value:,.0f}"
+    if unit == "shares":
+        return f"{value:,.0f} shares"
+    return f"{value:,.4f} {unit}".strip()
+
+
+def _format_change_text(change_abs: float | None, change_pct: float | None, unit: str) -> str:
+    if change_abs is None and change_pct is None:
+        return "no comparison"
+    parts: list[str] = []
+    if change_abs is not None:
+        if unit == "JPY":
+            parts.append(f"{change_abs:+,.0f} JPY")
+        elif unit == "shares" or unit == "count":
+            parts.append(f"{change_abs:+,.0f}")
+        else:
+            parts.append(f"{change_abs:+,.4f} {unit}".strip())
+    if change_pct is not None:
+        parts.append(f"{change_pct:+.1%}")
+    return "change " + " ".join(parts)
+
+
+def _aggregate_market_summary_comparisons(
+    comparisons: tuple[MetricComparison, ...],
+    *,
+    symbol_group_keys: tuple[str, ...],
+) -> tuple[MetricComparison, ...]:
+    symbol_keys = {key.casefold() for key in symbol_group_keys} | {"sym", "symbol", "ticker", "ric", "isin"}
+    grouped: dict[tuple[str, object, tuple[tuple[str, str], ...]], list[MetricComparison]] = {}
+    for comparison in comparisons:
+        if any(str(group_key).casefold() in symbol_keys for group_key in comparison.group):
+            continue
+        group_items = tuple(sorted((str(key), str(value)) for key, value in comparison.group.items()))
+        key = (comparison.metric_name, comparison.date, group_items)
+        grouped.setdefault(key, []).append(comparison)
+
+    aggregated: list[MetricComparison] = []
+    for (metric_name, aggregate_date, group_items), group_rows in grouped.items():
+        representative = min(
+            group_rows,
+            key=lambda row: (
+                _summary_status_priority(row.status),
+                -(abs(row.z_score or 0.0)),
+                -(abs(row.change_pct or 0.0)),
+            ),
+        )
+        avg_value = _avg_numeric(row.value for row in group_rows)
+        avg_reference_value = _avg_numeric(row.reference_value for row in group_rows)
+        change_abs = None
+        change_pct = None
+        if avg_value is not None and avg_reference_value is not None:
+            change_abs = avg_value - avg_reference_value
+            if avg_reference_value != 0:
+                change_pct = change_abs / avg_reference_value
+        aggregated.append(
+            MetricComparison(
+                metric_name=metric_name,
+                value=avg_value,
+                reference_value=avg_reference_value,
+                change_abs=change_abs,
+                change_pct=change_pct,
+                z_score=representative.z_score,
+                percentile=representative.percentile,
+                status=representative.status,
+                group=dict(group_items),
+                date=aggregate_date,
+                time_bucket=None,
+                metadata={},
+                reference_sample_size=sum(
+                    row.reference_sample_size or 0 for row in group_rows if row.reference_sample_size is not None
+                )
+                or None,
+                comparison_confidence=representative.comparison_confidence,
+                comparison_method=representative.comparison_method,
+            )
+        )
+
+    return tuple(
+        sorted(
+            aggregated,
+            key=lambda row: (
+                _summary_status_priority(row.status),
+                -(abs(row.z_score or 0.0)),
+                -(abs(row.change_pct or 0.0)),
+                row.metric_name,
+                tuple(sorted((str(key), str(value)) for key, value in row.group.items())),
+            ),
+        )
+    )
+
+
+def _select_metric_level_summary_comparisons(
+    comparisons: tuple[MetricComparison, ...],
+) -> tuple[MetricComparison, ...]:
+    best_by_metric: dict[str, MetricComparison] = {}
+    for comparison in comparisons:
+        current = best_by_metric.get(comparison.metric_name)
+        if current is None:
+            best_by_metric[comparison.metric_name] = comparison
+            continue
+        if (
+            _summary_status_priority(comparison.status),
+            -(abs(comparison.z_score or 0.0)),
+            -(abs(comparison.change_pct or 0.0)),
+        ) < (
+            _summary_status_priority(current.status),
+            -(abs(current.z_score or 0.0)),
+            -(abs(current.change_pct or 0.0)),
+        ):
+            best_by_metric[comparison.metric_name] = comparison
+    return tuple(
+        sorted(
+            best_by_metric.values(),
+            key=lambda row: (
+                _summary_status_priority(row.status),
+                -(abs(row.z_score or 0.0)),
+                -(abs(row.change_pct or 0.0)),
+                row.metric_name,
+            ),
+        )
+    )
+
+
+def _summary_status_priority(status: str) -> int:
+    if status == "alert":
+        return 0
+    if status == "watch":
+        return 1
+    if status == "comparison_only":
+        return 2
+    return 3
+
+
+def _avg_numeric(values: Iterable[float | int | None]) -> float | None:
+    observed: list[float] = []
+    for value in values:
+        if value is None:
+            continue
+        numeric = float(value)
+        if isfinite(numeric):
+            observed.append(numeric)
+    if not observed:
+        return None
+    return sum(observed) / len(observed)
+
+
+def _build_summary_story_charts(
+    report_input: MarketReportInput,
+    definitions: Mapping[str, MetricDefinition],
+    *,
+    options: MarketReportOptions,
+) -> list[PlotlyChart]:
+    if not report_input.reference_series or options.max_summary_story_charts == 0:
+        return []
+
+    current_by_metric = {
+        series.metric_name: series
+        for series in report_input.current_series
+        if not _series_has_symbol_scope(series, options.symbol_group_keys)
+    }
+    reference_by_metric = {
+        series.metric_name: series
+        for series in report_input.reference_series
+        if not _series_has_symbol_scope(series, options.symbol_group_keys)
+    }
+
+    charts = []
+
+    for metric_name in options.activity_distribution_metric_names:
+        target_series = current_by_metric.get(metric_name)
+        reference_series = reference_by_metric.get(metric_name)
+        if target_series is None or reference_series is None:
+            continue
+        definition = _require_definition(metric_name, definitions)
+        charts.append(
+            build_activity_intraday_distribution_chart(
+                f"{definition.label} cumulative intraday distribution",
+                reference_series=reference_series,
+                target_series=target_series,
+                metric_definition=definition,
+                help_text=options.activity_distribution_help_text,
+            )
+        )
+        if len(charts) >= options.max_summary_story_charts:
+            return charts
+
+    for metric_name in options.displayed_liquidity_metric_names:
+        target_series = current_by_metric.get(metric_name)
+        reference_series = reference_by_metric.get(metric_name)
+        if target_series is None or reference_series is None:
+            continue
+        definition = _require_definition(metric_name, definitions)
+        charts.append(
+            build_reference_target_intraday_profile_chart(
+                f"{definition.label} intraday profile",
+                reference_series=reference_series,
+                target_series=target_series,
+                metric_definition=definition,
+                group_by=("market_cap_bucket", "segment", "sector", "venue"),
+                max_groups=options.max_displayed_liquidity_groups,
+                help_text=options.displayed_liquidity_help_text,
+            )
+        )
+        if len(charts) >= options.max_summary_story_charts:
+            return charts
+
+    return charts
 
 
 def _build_activity_distribution_page(

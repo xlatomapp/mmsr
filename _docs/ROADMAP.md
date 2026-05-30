@@ -237,6 +237,9 @@ desk-first market monitoring.
 - Verify default page ordering remains stable and market-first.
 - Tighten report-option/help text to avoid wording that implies symbol-first
   default behavior.
+- Decision lock: `Key changes this period` and `Top market drivers` must use
+  market+date aggregated comparisons, collapse time buckets, and apply
+  metric-diversified ranking before repeats.
 
 **Exit criteria:**
 

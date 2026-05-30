@@ -63,6 +63,8 @@ def test_executive_market_overview_summarizes_status_and_key_metrics() -> None:
     assert "1 alerts, 1 watch items, 0 comparison-only items, and 1 normal items" in block.body_html
     assert "2 key metrics and 3 comparisons" in block.body_html
     assert "Key changes this period" in block.body_html
+    assert "Top market drivers" in block.body_html
+    assert "Driver intensity (|z|)" in block.body_html
     assert "Quoted Spread" in block.body_html
     assert "average current 41.0000 bps versus reference 31.0000 bps" in block.body_html
     assert "change +10.0000 bps +32.5%" in block.body_html
@@ -71,6 +73,88 @@ def test_executive_market_overview_summarizes_status_and_key_metrics() -> None:
     assert "AMO auction" in block.body_html
     assert "time_bucket=" not in block.body_html
     assert "market_cap_bucket=" not in block.body_html
+
+
+def test_executive_market_overview_top_drivers_capped_and_market_only() -> None:
+    block = build_executive_market_overview_block(
+        [
+            MetricComparison(
+                metric_name="quoted_spread_bps",
+                value=42.0,
+                reference_value=30.0,
+                change_abs=12.0,
+                change_pct=0.4,
+                z_score=3.1,
+                percentile=None,
+                status="alert",
+                group={"topixCapGrp": "Small"},
+                time_bucket="AMO",
+            ),
+            MetricComparison(
+                metric_name="quoted_spread_bps",
+                value=41.0,
+                reference_value=33.0,
+                change_abs=8.0,
+                change_pct=0.24,
+                z_score=2.8,
+                percentile=None,
+                status="alert",
+                group={"topixCapGrp": "Large"},
+                time_bucket="09:00-09:05",
+            ),
+            MetricComparison(
+                metric_name="volume",
+                value=1000.0,
+                reference_value=800.0,
+                change_abs=200.0,
+                change_pct=0.25,
+                z_score=2.6,
+                percentile=None,
+                status="watch",
+                group={"topixCapGrp": "Core30"},
+            ),
+            MetricComparison(
+                metric_name="volume",
+                value=1100.0,
+                reference_value=900.0,
+                change_abs=200.0,
+                change_pct=0.22,
+                z_score=2.4,
+                percentile=None,
+                status="watch",
+                group={"topixCapGrp": "Mid"},
+            ),
+            MetricComparison(
+                metric_name="volume",
+                value=1200.0,
+                reference_value=950.0,
+                change_abs=250.0,
+                change_pct=0.26,
+                z_score=2.2,
+                percentile=None,
+                status="watch",
+                group={"topixCapGrp": "Prime"},
+            ),
+            MetricComparison(
+                metric_name="volume",
+                value=1300.0,
+                reference_value=1000.0,
+                change_abs=300.0,
+                change_pct=0.30,
+                z_score=2.1,
+                percentile=None,
+                status="watch",
+                group={"sym": "7203"},
+            ),
+        ],
+        [QUOTED_SPREAD_BPS, VOLUME],
+    )
+
+    assert "Top market drivers" in block.body_html
+    assert "Symbol: 7203" not in block.body_html
+    assert block.body_html.count('class="executive-overview__drivers"') == 1
+    assert block.body_html.count('class="executive-overview__driver-bar-row"') == 5
+    assert block.body_html.index("Quoted Spread") < block.body_html.index("Volume")
 
 
 def test_executive_market_overview_limits_metric_summaries() -> None:
@@ -136,6 +220,9 @@ def test_executive_overview_options_validate_text_and_limits() -> None:
 
     with pytest.raises(ValueError, match="max_metric_summaries"):
         ExecutiveOverviewOptions(max_metric_summaries=-1)
+
+    with pytest.raises(ValueError, match="top_change_diversification"):
+        ExecutiveOverviewOptions(top_change_diversification="invalid")
 
 
 # ---------------------------------------------------------------------------
@@ -317,6 +404,128 @@ def test_select_top_changes_returns_empty_without_market_rows() -> None:
     )
 
     assert _select_top_changes(changes) == ()
+
+
+def test_select_top_changes_diversifies_metrics_before_repeats() -> None:
+    changes = (
+        MetricComparison(
+            metric_name="quoted_spread_bps",
+            value=10.0,
+            reference_value=7.0,
+            change_abs=3.0,
+            change_pct=3.0 / 7.0,
+            z_score=4.0,
+            percentile=None,
+            status="alert",
+            group={"topixCapGrp": "Mid"},
+        ),
+        MetricComparison(
+            metric_name="quoted_spread_bps",
+            value=9.5,
+            reference_value=7.0,
+            change_abs=2.5,
+            change_pct=2.5 / 7.0,
+            z_score=3.5,
+            percentile=None,
+            status="alert",
+            group={"topixCapGrp": "Large"},
+        ),
+        MetricComparison(
+            metric_name="volume",
+            value=1300.0,
+            reference_value=1000.0,
+            change_abs=300.0,
+            change_pct=0.30,
+            z_score=2.8,
+            percentile=None,
+            status="alert",
+            group={"topixCapGrp": "Mid"},
+        ),
+        MetricComparison(
+            metric_name="trade_count",
+            value=140.0,
+            reference_value=100.0,
+            change_abs=40.0,
+            change_pct=0.40,
+            z_score=2.2,
+            percentile=None,
+            status="watch",
+            group={"topixCapGrp": "Mid"},
+        ),
+    )
+
+    selected = _select_top_changes(changes)
+    assert selected[0].metric_name == "quoted_spread_bps"
+    assert selected[1].metric_name == "volume"
+    assert selected[2].metric_name == "trade_count"
+
+
+def test_top_market_drivers_context_is_tpx_first() -> None:
+    block = build_executive_market_overview_block(
+        [
+            MetricComparison(
+                metric_name="quoted_spread_bps",
+                value=42.0,
+                reference_value=30.0,
+                change_abs=12.0,
+                change_pct=0.4,
+                z_score=3.1,
+                percentile=None,
+                status="alert",
+                group={
+                    "sector": "Tech",
+                    "segment": "Prime",
+                    "market_cap_bucket": "Large",
+                    "topixCapGrp": "Core30",
+                },
+            ),
+        ],
+        [QUOTED_SPREAD_BPS],
+    )
+
+    assert "(Core30, Large, Prime, Tech)" in block.body_html
+
+
+def test_select_top_changes_can_diversify_by_family() -> None:
+    changes = (
+        MetricComparison(
+            metric_name="quoted_spread_bps",
+            value=10.0,
+            reference_value=7.0,
+            change_abs=3.0,
+            change_pct=3.0 / 7.0,
+            z_score=4.0,
+            percentile=None,
+            status="alert",
+            group={"topixCapGrp": "Mid"},
+        ),
+        MetricComparison(
+            metric_name="top_of_book_depth",
+            value=1100.0,
+            reference_value=1500.0,
+            change_abs=-400.0,
+            change_pct=-0.27,
+            z_score=3.2,
+            percentile=None,
+            status="alert",
+            group={"topixCapGrp": "Large"},
+        ),
+        MetricComparison(
+            metric_name="volume",
+            value=1300.0,
+            reference_value=1000.0,
+            change_abs=300.0,
+            change_pct=0.30,
+            z_score=2.8,
+            percentile=None,
+            status="alert",
+            group={"topixCapGrp": "Mid"},
+        ),
+    )
+
+    selected = _select_top_changes(changes, diversification="family")
+    assert selected[0].metric_name == "quoted_spread_bps"
+    assert selected[1].metric_name == "volume"
 
 
 def test_change_narrative_sentence_includes_context_and_interpretation() -> None:

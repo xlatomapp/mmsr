@@ -54,7 +54,9 @@ def test_mock_kdb_demo_executes_q_templates_and_builds_report() -> None:
     trend_page = result.document.pages[3]
     drilldown_page = result.document.pages[4]
     detail_page = result.document.pages[5]
-    assert summary_page.html_blocks[0].title == "Executive Market Overview"
+    assert summary_page.html_blocks[0].title == "Report Meta"
+    assert summary_page.html_blocks[1].title == "Market KPI Snapshot"
+    assert summary_page.html_blocks[2].title == "Executive Market Overview"
     assert len(summary_page.metric_tables[0].rows) == 6
     assert len(activity_page.plotly_charts) == 1
     assert len(liquidity_page.plotly_charts) == 2
@@ -91,7 +93,7 @@ def test_mock_kdb_demo_report_renders_canonical_report_visuals_and_labels() -> N
     assert "Compact plot data" in html
     assert "AM opening auction" in html
     assert "Market cap bucket: Small cap" in html
-    assert "Reference observation unit: trading day" in html
+    assert "Market Summary headline:" in html
     assert "time-series-chart__placeholder" not in html
     assert "heatmap__placeholder" not in html
     assert "time_bucket=" not in html
@@ -121,7 +123,8 @@ def test_mock_kdb_demo_options_can_omit_appendix_and_limit_components() -> None:
     ]
     assert len(document.pages[0].metric_cards) == 2
     assert len(document.pages[0].metric_tables[0].rows) == 3
-    assert len(document.pages[0].commentary_blocks[0].comments) == 2
+    assert len(document.pages[0].commentary_blocks[0].comments) == 1
+    assert len(document.pages[0].commentary_blocks[1].comments) == 2
     assert len(document.pages[1].plotly_charts) == 1
     assert len(document.pages[2].plotly_charts) == 2
     assert all(len(chart.points) == 1 for chart in document.pages[3].time_series_charts)

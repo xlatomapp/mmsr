@@ -2,6 +2,386 @@
 
 This file must be updated after every implementation step.
 
+## 2026-05-30 — D1 implementation: final page-1 hierarchy contract hooks
+
+### What changed
+- Added explicit summary-page structural hooks in template:
+  - summary page class: `report-page--summary`
+  - html-block attribute: `data-block-title="<Block Title>"`
+- Added summary-page hierarchy polish styles for tighter spacing rhythm and
+  stronger heading/section structure.
+- Added HTML-level structural assertions to lock order and presence of:
+  - `Report Meta`
+  - `Market KPI Snapshot`
+  - `Executive Market Overview`
+  plus ordering around `Primary Intraday Signal`, `Insight Callout`, and
+  `Current versus reference`.
+- Updated compatibility assertions in offline demo tests for the new
+  `html-block` markup shape.
+
+### Milestone status
+- Current milestone: `D1` page-1 redesign
+- Progress to next implementation gate: `100%` for planned D1 contract slices
+- Remaining deterministic implementation work: begin D2 visual-priority refactor for downstream sections (activity/liquidity/reversion pages) while preserving deterministic semantics.
+
+### Next deterministic step
+- Start D2: make section-level visual hierarchy consistent by adding explicit
+  per-section lead-chart constraints and demoting auxiliary diagnostics in
+  activity/distributed-liquidity/reversion pages.
+
+### Exit gate after implementation step
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache pre-commit run --all-files` passes fully.
+
+## 2026-05-30 — D1 implementation: deterministic Insight Callout under primary chart
+
+### What changed
+- Added deterministic page-1 `Insight Callout` as a `CommentaryBlock` derived
+  from the configured primary intraday signal metric.
+- Fact inputs used:
+  - average percent change direction/magnitude for primary metric
+  - alert/watch row counts for that metric
+  - count of market contexts
+- Summary-page commentary now prepends:
+  1. `Insight Callout`
+  2. existing deterministic `Market Summary` commentary
+- Updated template ordering so `Market Summary` renders commentary blocks before
+  the summary comparison table, ensuring:
+  - `Primary Intraday Signal` chart
+  - then `Insight Callout`
+  - then `Current versus reference` table.
+- Updated tests in:
+  - `tests/test_market_report.py`
+  - `tests/test_offline_demo.py`
+  - `tests/test_mock_kdb_demo.py`
+
+### Milestone status
+- Current milestone: `D1` page-1 redesign
+- Progress to next implementation gate: `~90%` of D1
+- Remaining deterministic implementation work: tighten final page-1 spacing/visual hierarchy contract and add one regression assertion set for block order + section anchors in rendered HTML.
+
+### Next deterministic step
+- Implement final D1 page-1 hierarchy polish (section spacing/heading rhythm for `Report Meta`, `KPI Snapshot`, `Executive Overview`, `Primary Intraday Signal`, `Insight Callout`) and lock with HTML-level structural assertions.
+
+### Exit gate after implementation step
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache pre-commit run --all-files` passes fully.
+
+## 2026-05-30 — D1 implementation: page-1 Report Meta strip
+
+### What changed
+- Added a Python-composed `Report Meta` block above KPI Snapshot on page 1.
+- Block fields:
+  - `Period` (from summary comparison dates)
+  - `Reference` (dominant comparison method)
+  - `Scope` (summary scope label)
+  - `Run Tag` (generated-at text fallback)
+- Updated summary page composition order:
+  1. Report Meta
+  2. Market KPI Snapshot
+  3. Executive Market Overview
+- Added responsive styling for the meta strip.
+- Updated tests to lock new page-1 block ordering and visibility:
+  - `tests/test_market_report.py`
+  - `tests/test_offline_demo.py`
+  - `tests/test_mock_kdb_demo.py`
+
+### Milestone status
+- Current milestone: `D1` page-1 redesign
+- Progress to next implementation gate: `~80%` of D1
+- Remaining deterministic implementation work: enforce fixed section spacing/visual rhythm and introduce one explicit page-1 “insight callout” block under the primary intraday signal.
+
+### Next deterministic step
+- Implement a deterministic page-1 `Insight Callout` block (non-LLM, fact-derived) directly under `Primary Intraday Signal`, with strict ordering assertions.
+
+### Exit gate after implementation step
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache pre-commit run --all-files` passes fully.
+
+## 2026-05-30 — D1 implementation: Primary Intraday Signal on page 1
+
+### What changed
+- Added a fixed-position page-1 `Primary Intraday Signal` chart in
+  `mmsr/report/market_report.py`.
+- New summary-page options:
+  - `include_primary_intraday_signal` (default `True`)
+  - `primary_intraday_signal_metric_name` (default `quoted_spread_bps`)
+- Summary chart ordering now places this primary chart first in page-1 plotly
+  charts, then appends remaining summary charts.
+- Updated tests to lock:
+  - presence of `Primary Intraday Signal`
+  - ordering after top-driver narrative and before comparison table content
+  - option validation for primary signal metric name.
+
+### Milestone status
+- Current milestone: `D1` page-1 redesign
+- Progress to next implementation gate: `~60%` of D1
+- Remaining deterministic implementation work: tighten page-1 layout contract for visual rhythm (header meta strip + consistent block spacing hierarchy) and lock with explicit HTML-level assertions.
+
+### Next deterministic step
+- Implement a compact page-1 report meta strip (`period`, `benchmark/reference`, `run tag`) as a Python-composed block above KPI snapshot, then add ordering/visibility tests.
+
+### Exit gate after implementation step
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache pre-commit run --all-files` passes fully.
+
+## 2026-05-30 — Design decision: Python-first section rendering
+
+### What changed
+- Updated `_docs/report_design_roadmap.md` with a rendering strategy decision:
+  - keep Jinja as a thin shell layer
+  - implement redesigned report sections in Python builders first
+  - avoid new `.j2` partials unless strong reuse is proven
+
+### Milestone status
+- Current milestone: `D1` page-1 redesign
+- Progress to next implementation gate: `~35%` of D1
+- Remaining deterministic implementation work: add fixed-position primary intraday signal chart in page-1 flow using Python-first composition.
+
+### Next deterministic step
+- Implement `Primary Intraday Signal` as a Python-composed section in summary-page assembly and lock strict page-1 ordering tests.
+
+### Exit gate after implementation step
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache pre-commit run --all-files` passes fully.
+
+## 2026-05-30 — D1 implementation start: Market KPI Snapshot row on page 1
+
+### What changed
+- Implemented a new page-1 `Market KPI Snapshot` block in summary assembly:
+  - file: `mmsr/report/market_report.py`
+  - rendered before `Executive Market Overview`
+  - uses market+date aggregated summary comparisons
+  - default KPI metric set:
+    - `turnover`
+    - `quoted_spread_bps`
+    - `top_of_book_depth`
+    - `primary_quote_reversion_100ms_bps`
+- Added `MarketReportOptions` controls:
+  - `include_summary_kpi_snapshot` (default `True`)
+  - `summary_kpi_metric_names`
+- Added styling for a compact 4-cell KPI row in:
+  - `mmsr/report/templates/report.html.j2`
+- Updated report tests to lock the new page-1 block order and content expectations:
+  - `tests/test_market_report.py`
+  - `tests/test_offline_demo.py`
+  - `tests/test_mock_kdb_demo.py`
+
+### Milestone status
+- Current milestone: design roadmap `D1` execution (page-1 redesign)
+- Progress to next implementation gate: `~35%` of D1
+- Remaining deterministic implementation work in D1: add explicit page-1 primary intraday chart contract (single lead chart in fixed position) and lock HTML ordering assertions.
+
+### Next deterministic step
+- Implement a fixed-position `Primary Intraday Signal` chart block on page 1 (target vs reference for quoted spread by default), rendered immediately after Top Drivers, and add deterministic order tests.
+
+### Exit gate after implementation step
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache pre-commit run --all-files` passes fully.
+
+## 2026-05-30 — Design roadmap metric alignment update
+
+### What changed
+- Updated `_docs/report_design_roadmap.md` to explicitly separate:
+  - reference layout signals
+  - MMSR default metric content
+- Added a metric coverage matrix mapping reference cards/charts to MMSR metric
+  families and replacements.
+- Explicitly corrected `Price Impact` wording to MMSR default
+  `Cross-venue reversion` metrics for default reporting.
+- Added a concrete list of required MVP default metrics and a list of
+  intentionally non-default metric families.
+
+### Milestone status
+- Current milestone: `R6` (active implementation stream), design roadmap drafted.
+- Progress to next implementation gate: `99%`
+- Remaining deterministic implementation work: wire optional family-diversification mode into user-facing YAML/docs.
+
+### Next deterministic step
+- Add config documentation/examples for `overview_top_change_diversification`
+  (`metric` default, optional `family`) in report config docs and README snippets.
+
+### Exit gate after implementation step
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache pre-commit run --all-files` passes fully.
+
+## 2026-05-30 — Added dedicated report redesign roadmap document
+
+### What changed
+- Added `_docs/report_design_roadmap.md` based on the provided visual reference.
+- Defined target information architecture, design principles, section-by-section redesign intent, and implementation milestones (`D0`..`D5`).
+- Included explicit acceptance criteria and direct mapping to current report modules/tests.
+
+### Milestone status
+- Current milestone: `R6` (current implementation stream)
+- Progress to next implementation gate: `99%`
+- Remaining deterministic implementation work in current stream: wire optional family diversification mode into YAML/config docs (default remains metric diversification).
+
+### Next deterministic step
+- Start `D1` in implementation terms: lock page-1 visual contract with explicit ordering assertions for KPI row, key changes, top drivers + mini bars, and primary intraday chart.
+
+### Exit gate after implementation step
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache pre-commit run --all-files` passes fully.
+
+## 2026-05-30 — Configurable summary diversification mode (default unchanged)
+
+### What changed
+- Added configurable summary driver diversification mode:
+  - `metric` (default, current MVP behavior)
+  - `family` (future hardening mode)
+- Implementation:
+  - `ExecutiveOverviewOptions.top_change_diversification`
+  - `MarketReportOptions.overview_top_change_diversification`
+  - `_select_top_changes(..., diversification=...)` in `mmsr/report/overview.py`
+- Added validation and regression coverage:
+  - `tests/test_executive_overview.py`
+  - `tests/test_market_report.py`
+
+### Milestone status
+- Current milestone: `R6`
+- Progress to next implementation gate: `99%`
+- Remaining deterministic implementation work: expose this diversification mode in user-facing config/CLI docs with clear MVP default guidance.
+
+### Next deterministic step
+- Wire `overview_top_change_diversification` into YAML config loading/docs so users can opt into `family` mode without code changes, while preserving `metric` as default.
+
+### Exit gate after implementation step
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache pre-commit run --all-files` passes fully.
+
+## 2026-05-30 — TPX-first context ordering + roadmap decision lock
+
+### What changed
+- Implemented explicit TPX-first context ordering in executive summary context rendering:
+  - `topixCapGrp`/`topix_bucket` first, then market-cap, segment, sector.
+  - File: `mmsr/report/overview.py`
+- Added regression test:
+  - `tests/test_executive_overview.py::test_top_market_drivers_context_is_tpx_first`
+- Documented roadmap decision in `_docs/ROADMAP.md`:
+  - `Key changes` and `Top market drivers` use market+date aggregated rows,
+    time-bucket-collapsed summary, and metric-diversified ranking before repeats.
+
+### Milestone status
+- Current milestone: `R6`
+- Progress to next implementation gate: `99%`
+- Remaining deterministic implementation work: add family-level diversification option (metric-family quotas) as a future milestone item, not default MVP behavior.
+
+### Next deterministic step
+- Add a configurable family-diversification mode for summary drivers (off by default), and document it as a future milestone hardening path.
+
+### Exit gate after implementation step
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache pre-commit run --all-files` passes fully.
+
+## 2026-05-30 — Summary driver diversification: prevent single-metric monopolization
+
+### What changed
+- Updated `mmsr/report/overview.py::_select_top_changes`:
+  - keeps existing severity ordering (`alert/watch`, `|z|`, `|change_pct|`)
+  - adds first-pass metric diversification (one row per metric before repeats)
+  - fills remaining slots by severity only after diversity pass
+- Added regression test in `tests/test_executive_overview.py`:
+  - `test_select_top_changes_diversifies_metrics_before_repeats`
+  - verifies `Quoted Spread` does not crowd out `Volume` / `Trade Count` in first slots.
+
+### Milestone status
+- Current milestone: `R6`
+- Progress to next implementation gate: `99%`
+- Remaining deterministic implementation work: enforce deterministic context label ordering in top-driver display (`topixCapGrp` first) and add explicit assertion coverage.
+
+### Next deterministic step
+- Implement deterministic TPX-cap-first context label ordering in top-driver display text and add tests that fail on non-TPX-first ordering.
+
+### Exit gate after implementation step
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache pre-commit run --all-files` passes fully.
+
+## 2026-05-30 — Summary aggregation contract fix: market+date (not cross-date)
+
+### What changed
+- Updated summary aggregation in `mmsr/report/market_report.py` so summary rows aggregate at:
+  - `metric + market context + date`
+  - time-bucket is collapsed
+- This prevents duplicate bucket-level rows in summary while avoiding invalid cross-date blending.
+- Updated tests to reflect the aggregated summary surface:
+  - `tests/test_market_report.py`
+  - `tests/test_production_cli.py`
+
+### Milestone status
+- Current milestone: `R6`
+- Progress to next implementation gate: `98%`
+- Remaining deterministic implementation work: enforce TPX-cap-first display ordering in `Top market drivers` context text and verify with explicit context-order assertions.
+
+### Next deterministic step
+- Implement deterministic TPX-cap-first context label ordering for the executive `Top market drivers` section (`topixCapGrp`, then market-cap/segment/sector), and add tests that fail on wrong context order.
+
+### Exit gate after implementation step
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache pre-commit run --all-files` passes fully.
+
+## 2026-05-30 — MVP implementation: visible Top Market Drivers block on page 1
+
+### What changed
+- Added a dedicated `Top market drivers` block in `mmsr/report/overview.py` directly below the KPI strip.
+- Driver rows are deterministic and market-first:
+  - market-level only (symbol-scoped rows excluded),
+  - ranked by status severity then `|z|` then `|change_pct|`,
+  - capped by existing narrative cap (`5`) via shared selection path.
+- Added dedicated styling for the new block in `mmsr/report/templates/report.html.j2`.
+- Added coverage in:
+  - `tests/test_executive_overview.py`
+  - `tests/test_market_report.py`
+
+### Milestone status
+- Current milestone: `R6`
+- Progress to next gate: `97%`
+- Remaining deterministic implementation work: add the summary-page market-driver mini chart strip tied to the same top-5 drivers so narrative and visuals use one ranking source.
+
+### Next deterministic step
+- Implement a `Top market drivers` mini chart strip on page 1 (market-only, deterministic top-5, same ordering as driver list) and place it directly below the driver list.
+
+### Exit gate after implementation step
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache pre-commit run --all-files` passes fully.
+
+## 2026-05-30 — MVP implementation: Top Market Drivers mini chart strip
+
+### What changed
+- Implemented a new inline mini chart strip under `Top market drivers` in `mmsr/report/overview.py`.
+- The mini chart is driven by the exact same deterministic top-5 market-only driver selection already used by the driver list.
+- Added CSS for the bar-strip visualization in `mmsr/report/templates/report.html.j2`.
+- Added/updated assertions in:
+  - `tests/test_executive_overview.py`
+  - `tests/test_market_report.py`
+  so the mini chart section is required in summary output before the comparison table.
+
+### Milestone status
+- Current milestone: `R6`
+- Progress to next implementation gate: `98%`
+- Remaining deterministic implementation work: enforce TPX-cap-first context labeling in Top Market Drivers display and add explicit ordering test coverage for that display contract.
+
+### Next deterministic step
+- Implement TPX-cap-first context formatting for the `Top market drivers` section (prefer `topixCapGrp` in displayed context ordering, then market-cap/segment/sector), and lock it with deterministic tests.
+
+### Exit gate after implementation step
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache pre-commit run --all-files` passes fully.
+
+## 2026-05-30 — MVP implementation: summary page now plot-first
+
+### What changed
+- Implemented plot-first summary-page composition in `mmsr/report/market_report.py`:
+  - Added `max_summary_story_charts` option (default `3`).
+  - Added `_build_summary_story_charts(...)` to place market-level story charts directly on page 1.
+  - Summary page now includes:
+    - executive overview (narrative + KPI strip)
+    - metric cards
+    - summary story charts (activity + displayed-liquidity priority)
+    - comparison table (demoted below visuals)
+- Updated template render order in `mmsr/report/templates/report.html.j2` so charts render before tables globally.
+- Extended `tests/test_market_report.py` for:
+  - summary-page chart presence
+  - visual-before-table ordering assertion
+  - option validation for `max_summary_story_charts`.
+
+### Milestone status
+- Current milestone: `R6`
+- Progress to next gate: `95%`
+- Remaining deterministic gate: run full pre-commit after this code change and finalize commit.
+
+### Next deterministic step
+- Implement a dedicated `Top Market Drivers` block on page 1 (market-level only, max 5, deterministic severity ordering) directly under the executive KPI strip, then wire/validate it in report assembly tests.
+
+### Exit gate after implementation step
+- Run full pre-commit and resolve any failures from the new market-driver block wiring.
+
 ## 2026-05-30 — MVP reset: remove detour and enforce market-first story surface
 
 ### What changed

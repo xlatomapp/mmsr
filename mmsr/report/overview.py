@@ -50,6 +50,7 @@ class ExecutiveOverviewOptions:
         "metrics, query kdb+, or use an LLM."
     )
     max_metric_summaries: int = 5
+    top_change_diversification: str = "metric"
 
     def __post_init__(self) -> None:
         if not self.title.strip():
@@ -58,6 +59,8 @@ class ExecutiveOverviewOptions:
             raise ValueError("help_text must not be empty")
         if self.max_metric_summaries < 0:
             raise ValueError("max_metric_summaries must be non-negative")
+        if self.top_change_diversification not in {"metric", "family"}:
+            raise ValueError("top_change_diversification must be one of: metric, family")
 
 
 @dataclass(frozen=True)
@@ -112,6 +115,7 @@ def build_executive_market_overview_block(
         tuple(comparisons),
         definitions,
         max_metric_summaries=resolved_options.max_metric_summaries,
+        top_change_diversification=resolved_options.top_change_diversification,
     )
     return HtmlBlock(
         title=resolved_options.title.strip(),
@@ -125,6 +129,7 @@ def _overview_html(
     definitions: Mapping[str, MetricDefinition],
     *,
     max_metric_summaries: int,
+    top_change_diversification: str,
 ) -> str:
     if not comparisons:
         return (
@@ -140,8 +145,17 @@ def _overview_html(
     overall_status = _overall_status(status_counts)
 
     # Narrative highlights: top 3-5 specific changes with context
-    highlights_html = _narrative_highlights_html(comparisons, definitions)
+    highlights_html = _narrative_highlights_html(
+        comparisons,
+        definitions,
+        top_change_diversification=top_change_diversification,
+    )
     kpi_html = _status_kpi_strip_html(status_counts)
+    drivers_html = _top_market_drivers_html(
+        comparisons,
+        definitions,
+        top_change_diversification=top_change_diversification,
+    )
 
     # Compact status summary below the narrative
     status_text = _status_count_sentence(status_counts)
@@ -153,6 +167,7 @@ def _overview_html(
         f'<section class="executive-overview executive-overview--{escape(overall_status)}">\n'
         f"{highlights_html}"
         f"{kpi_html}"
+        f"{drivers_html}"
         '  <p class="executive-overview__status">'
         f"<strong>Overall:</strong> {_status_label(overall_status)} — "
         f"{escape(status_text)} across {len(_unique_metric_names(comparisons))} "
@@ -180,9 +195,11 @@ def _status_kpi_strip_html(status_counts: Counter[str]) -> str:
 def _narrative_highlights_html(
     comparisons: tuple[MetricComparison, ...],
     definitions: Mapping[str, MetricDefinition],
+    *,
+    top_change_diversification: str,
 ) -> str:
     """Return HTML for the top 3-5 specific market-level changes."""
-    top_changes = _select_top_changes(comparisons)
+    top_changes = _select_top_changes(comparisons, diversification=top_change_diversification)
     if not top_changes:
         return ""
 
@@ -203,8 +220,104 @@ def _narrative_highlights_html(
     )
 
 
+def _top_market_drivers_html(
+    comparisons: tuple[MetricComparison, ...],
+    definitions: Mapping[str, MetricDefinition],
+    *,
+    top_change_diversification: str,
+) -> str:
+    top_changes = _select_top_changes(comparisons, diversification=top_change_diversification)
+    if not top_changes:
+        return ""
+
+    rows = "\n".join(
+        _top_market_driver_item_html(comparison, definitions.get(comparison.metric_name)) for comparison in top_changes
+    )
+    mini_chart = _top_market_driver_mini_chart_html(top_changes, definitions)
+    return (
+        '  <div class="executive-overview__drivers">\n'
+        "    <p><strong>Top market drivers:</strong></p>\n"
+        "    <ol>\n"
+        f"{rows}\n"
+        "    </ol>\n"
+        f"{mini_chart}"
+        "  </div>\n"
+    )
+
+
+def _top_market_driver_item_html(
+    comparison: MetricComparison,
+    definition: MetricDefinition | None,
+) -> str:
+    metric_label = definition.label if definition is not None else comparison.metric_name
+    status_label = _status_label(comparison.status)
+    context = _format_change_context(comparison)
+    magnitude = _format_change_magnitude(comparison)
+    z_text = ""
+    if comparison.z_score is not None and isfinite(float(comparison.z_score)):
+        z_text = f", z={comparison.z_score:+.2f}"
+    context_text = f" ({context})" if context else ""
+    return (
+        "      <li>"
+        f"<strong>{escape(metric_label)}</strong>: "
+        f"{escape(status_label)}{escape(context_text)}"
+        f" — {escape(_change_direction_word(comparison, definition))}{escape(magnitude)}"
+        f"{escape(z_text)}."
+        "</li>"
+    )
+
+
+def _top_market_driver_mini_chart_html(
+    top_changes: tuple[MetricComparison, ...],
+    definitions: Mapping[str, MetricDefinition],
+) -> str:
+    max_abs_z = max(
+        (
+            abs(float(comparison.z_score))
+            for comparison in top_changes
+            if comparison.z_score is not None and isfinite(float(comparison.z_score))
+        ),
+        default=0.0,
+    )
+    if max_abs_z <= 0:
+        return ""
+
+    bars: list[str] = []
+    for comparison in top_changes:
+        if comparison.z_score is None or not isfinite(float(comparison.z_score)):
+            continue
+        definition = definitions.get(comparison.metric_name)
+        metric_label = definition.label if definition is not None else comparison.metric_name
+        bar_pct = max(8, int(round((abs(float(comparison.z_score)) / max_abs_z) * 100)))
+        status = comparison.status if comparison.status in _STATUS_PRIORITY else "normal"
+        bar_class = f"executive-overview__driver-bar executive-overview__driver-bar--{escape(status)}"
+        bar_style = f"width: {bar_pct}%"
+        bars.append(
+            '      <li class="executive-overview__driver-bar-row">'
+            f'<span class="executive-overview__driver-bar-label">{escape(metric_label)}</span>'
+            '<span class="executive-overview__driver-bar-track">'
+            f'<span class="{bar_class}" style="{bar_style}"></span>'
+            "</span>"
+            f'<span class="executive-overview__driver-bar-value">|z|={abs(float(comparison.z_score)):.2f}</span>'
+            "</li>"
+        )
+
+    if not bars:
+        return ""
+
+    return (
+        '    <div class="executive-overview__driver-mini-chart">\n'
+        "      <p><strong>Driver intensity (|z|):</strong></p>\n"
+        '      <ul class="executive-overview__driver-bars">\n' + "\n".join(bars) + "\n"
+        "      </ul>\n"
+        "    </div>\n"
+    )
+
+
 def _select_top_changes(
     comparisons: tuple[MetricComparison, ...],
+    *,
+    diversification: str = "metric",
 ) -> tuple[MetricComparison, ...]:
     """Return the top N comparison rows ranked by severity and magnitude."""
     # Only consider market-level rows (not symbol-level)
@@ -220,8 +333,47 @@ def _select_top_changes(
             -(abs(comp.change_pct or 0.0)),
         ),
     )
-    # Return top N, but only those with meaningful deviation
-    return tuple(comp for comp in ranked[:_NARRATIVE_MAX_CHANGES] if comp.status in ("alert", "watch"))
+    candidates = [comp for comp in ranked if comp.status in ("alert", "watch")]
+    if not candidates:
+        return ()
+
+    if diversification == "family":
+        first_pass_key = _metric_family_key
+    else:
+        first_pass_key = _metric_name_key
+
+    # First pass: diversify by configured key so one key does not monopolize summary.
+    selected: list[MetricComparison] = []
+    seen_keys: set[str] = set()
+    for comparison in candidates:
+        key = first_pass_key(comparison)
+        if key in seen_keys:
+            continue
+        selected.append(comparison)
+        seen_keys.add(key)
+        if len(selected) >= _NARRATIVE_MAX_CHANGES:
+            return tuple(selected)
+
+    # Second pass: fill remaining slots by severity regardless of metric.
+    for comparison in candidates:
+        if comparison in selected:
+            continue
+        selected.append(comparison)
+        if len(selected) >= _NARRATIVE_MAX_CHANGES:
+            break
+
+    return tuple(selected)
+
+
+def _metric_family_key(comparison: MetricComparison) -> str:
+    for family_label, metric_names in _MARKET_SUMMARY_FAMILIES:
+        if comparison.metric_name in metric_names:
+            return family_label
+    return comparison.metric_name
+
+
+def _metric_name_key(comparison: MetricComparison) -> str:
+    return comparison.metric_name
 
 
 def _is_symbol_scoped_group(group: Mapping[str, object]) -> bool:
@@ -280,9 +432,18 @@ def _format_change_context(comparison: MetricComparison) -> str:
     """Build context string from group, bucket, venue, and horizon metadata."""
     parts: list[str] = []
     group = comparison.group
-    # Include meaningful classification keys; skip identifiers and raw codes
-    _context_keys = ("topixCapGrp", "market_cap_bucket", "sector", "segment")
-    for key in _context_keys:
+    # Include meaningful classification keys in explicit TPX-first order.
+    for key in ("topixCapGrp", "topix_bucket"):
+        if key in group:
+            parts.append(str(group[key]))
+            break
+    for key in ("market_cap_bucket",):
+        if key in group:
+            parts.append(str(group[key]))
+    for key in ("segment",):
+        if key in group:
+            parts.append(str(group[key]))
+    for key in ("sector",):
         if key in group:
             parts.append(str(group[key]))
     # Venue and horizon context for reversion metrics

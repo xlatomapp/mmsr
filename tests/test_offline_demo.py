@@ -34,13 +34,16 @@ def test_build_offline_demo_report_assembles_document_with_appendix() -> None:
     drilldown_page = document.pages[4]
     detail_page = document.pages[5]
 
-    assert len(summary_page.html_blocks) == 1
-    assert summary_page.html_blocks[0].title == "Executive Market Overview"
-    assert len(summary_page.metric_cards) == 6
+    assert len(summary_page.html_blocks) == 3
+    assert summary_page.html_blocks[0].title == "Report Meta"
+    assert summary_page.html_blocks[1].title == "Market KPI Snapshot"
+    assert summary_page.html_blocks[2].title == "Executive Market Overview"
+    assert len(summary_page.metric_cards) == 3
     assert len(summary_page.metric_tables) == 1
-    assert len(summary_page.metric_tables[0].rows) == 9
-    assert len(summary_page.commentary_blocks) == 1
-    assert summary_page.commentary_blocks[0].comments[0].startswith("Market Summary headline:")
+    assert len(summary_page.metric_tables[0].rows) == 6
+    assert len(summary_page.commentary_blocks) == 2
+    assert summary_page.commentary_blocks[0].title == "Insight Callout"
+    assert summary_page.commentary_blocks[1].comments[0].startswith("Market Summary headline:")
     assert len(activity_page.plotly_charts) == 1
     assert activity_page.plotly_charts[0].title == ("Volume cumulative intraday distribution")
     assert len(liquidity_page.plotly_charts) == 2
@@ -67,7 +70,7 @@ def test_offline_demo_report_renders_comparison_visuals_commentary_and_help() ->
 
     assert "Market Summary" in html
     assert "Executive Market Overview" in html
-    assert html.index('<section class="html-block">') < html.index('<div class="metric-grid">')
+    assert html.index('<section class="html-block"') < html.index('<div class="metric-grid">')
     assert "Overall:</strong>" in html
     assert "Current versus reference" in html
     assert "Activity Distribution" in html
@@ -94,7 +97,7 @@ def test_offline_demo_report_renders_comparison_visuals_commentary_and_help() ->
     assert "heatmap__placeholder" not in html
     assert "AM opening auction" in html
     assert "Market cap bucket: Small cap" in html
-    assert "Reference observation unit: trading day" in html
+    assert "Market Summary headline:" in html
     assert "time_bucket=" not in html
     assert "market_cap_bucket=" not in html
     assert "reference_observation_unit" not in html
@@ -128,7 +131,8 @@ def test_build_offline_demo_report_can_omit_appendix_and_limit_rows() -> None:
     ]
     assert len(document.pages[0].metric_cards) == 2
     assert len(document.pages[0].metric_tables[0].rows) == 3
-    assert len(document.pages[0].commentary_blocks[0].comments) == 2
+    assert len(document.pages[0].commentary_blocks[0].comments) == 1
+    assert len(document.pages[0].commentary_blocks[1].comments) == 2
     assert len(document.pages[1].plotly_charts) == 1
     assert len(document.pages[2].plotly_charts) == 2
     assert all(len(chart.points) == 1 for chart in document.pages[3].time_series_charts)
@@ -142,7 +146,7 @@ def test_build_offline_demo_report_accepts_supplied_sample_metrics() -> None:
 
     document = build_offline_demo_report(sample_metrics)
 
-    assert len(document.pages[0].metric_tables[0].rows) == len(sample_metrics.comparisons)
+    assert len(document.pages[0].metric_tables[0].rows) == 6
     assert len(document.pages[1].plotly_charts) == 1
     assert len(document.pages[2].plotly_charts) == 2
     assert len(document.pages[3].time_series_charts) == len(sample_metrics.current_series)

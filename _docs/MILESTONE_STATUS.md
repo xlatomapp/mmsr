@@ -12,7 +12,7 @@ This audit validates the implementation against `_docs/ROADMAP.md` as of 2026-05
 | R3 | Complete | Drilldown/report structure aligned to market questions; symbol remains opt-in. |
 | R4 | Complete | Generic source-function/day-run aggregation contract enforced. |
 | R5 | Complete | stockMetrics cache behavior validated for hit/partial/miss/persist flows. |
-| R6 | Complete (code path); live validation pending | Live-kdb runtime budget capture remains environment-gated. |
+| R6 | In progress (future hardening toggle added) | Summary uses market+date aggregation, TPX-first context ordering, and metric-diversified drivers by default; configurable `family` diversification mode is added for future hardening while default stays `metric`. |
 | R7 | In progress | Default market-first shape lock tests added; final HTML-level coverage pending. |
 | R8 | In progress | Visible summary storytelling polish landed; final UI regression assertions pending. |
 

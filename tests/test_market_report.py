@@ -51,15 +51,22 @@ def test_market_monitor_report_is_canonical_production_format() -> None:
     drilldown_page = document.pages[4]
     detail_page = document.pages[5]
 
-    assert len(summary_page.html_blocks) == 1
-    assert summary_page.html_blocks[0].title == "Executive Market Overview"
-    assert "Overall:</strong>" in summary_page.html_blocks[0].body_html
-    assert "<strong>Market activity:</strong>" in summary_page.html_blocks[0].body_html
-    assert "<strong>Displayed liquidity:</strong>" in summary_page.html_blocks[0].body_html
-    assert len(summary_page.metric_cards) == 6
+    assert len(summary_page.html_blocks) == 3
+    assert summary_page.html_blocks[0].title == "Report Meta"
+    assert 'class="report-meta-strip"' in summary_page.html_blocks[0].body_html
+    assert summary_page.html_blocks[1].title == "Market KPI Snapshot"
+    assert 'class="kpi-snapshot"' in summary_page.html_blocks[1].body_html
+    assert summary_page.html_blocks[2].title == "Executive Market Overview"
+    assert "Overall:</strong>" in summary_page.html_blocks[2].body_html
+    assert "<strong>Market activity:</strong>" in summary_page.html_blocks[2].body_html
+    assert "<strong>Displayed liquidity:</strong>" in summary_page.html_blocks[2].body_html
+    assert len(summary_page.metric_cards) == 3
+    assert len(summary_page.plotly_charts) == 4
+    assert summary_page.plotly_charts[0].title.startswith("Primary Intraday Signal")
     assert len(summary_page.metric_tables) == 1
-    assert len(summary_page.commentary_blocks) == 1
-    assert summary_page.commentary_blocks[0].comments[0].startswith("Market Summary headline:")
+    assert len(summary_page.commentary_blocks) == 2
+    assert summary_page.commentary_blocks[0].title == "Insight Callout"
+    assert summary_page.commentary_blocks[1].comments[0].startswith("Market Summary headline:")
     assert len(activity_page.plotly_charts) == 1
     assert activity_page.plotly_charts[0].title == ("Volume cumulative intraday distribution")
     assert len(liquidity_page.plotly_charts) == 2
@@ -102,8 +109,27 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert "Sector, Segment, and Market-Cap Drilldowns" in html
     assert "Top group-level drilldowns" in html
     assert "Executive Market Overview" in html
-    assert html.index('<section class="html-block">') < html.index('<div class="metric-grid">')
+    assert "Market KPI Snapshot" in html
+    assert "Report Meta" in html
+    assert "Primary Intraday Signal" in html
+    assert "report-page--summary" in html
+    assert 'data-block-title="Report Meta"' in html
+    assert 'data-block-title="Market KPI Snapshot"' in html
+    assert 'data-block-title="Executive Market Overview"' in html
+    assert html.index('<section class="html-block"') < html.index('<div class="metric-grid">')
+    assert html.index("Report Meta") < html.index("Market KPI Snapshot")
+    assert html.index("Market KPI Snapshot") < html.index("Executive Market Overview")
+    assert html.index("Top market drivers") < html.index("Primary Intraday Signal")
+    assert html.index("Primary Intraday Signal") < html.index("Insight Callout")
+    assert html.index("Insight Callout") < html.index("Current versus reference")
+    assert html.index('data-block-title="Report Meta"') < html.index('data-block-title="Market KPI Snapshot"')
+    assert html.index('data-block-title="Market KPI Snapshot"') < html.index(
+        'data-block-title="Executive Market Overview"'
+    )
     assert html.index("Executive Market Overview") < html.index("Current versus reference")
+    assert html.index("Top market drivers") < html.index("Current versus reference")
+    assert html.index("Driver intensity (|z|)") < html.index("Current versus reference")
+    assert html.index("cumulative intraday distribution") < html.index("Current versus reference")
     assert "Overall:</strong>" in html
     assert "Market activity:" in html
     assert "Displayed liquidity:" in html
@@ -142,10 +168,12 @@ def test_market_monitor_report_can_omit_appendix_and_limit_components() -> None:
         "Sector, Segment, and Market-Cap Drilldowns",
         "Intraday Detail",
     ]
-    assert len(document.pages[0].html_blocks) == 1
+    assert len(document.pages[0].html_blocks) == 3
     assert len(document.pages[0].metric_cards) == 2
+    assert len(document.pages[0].plotly_charts) == 4
     assert len(document.pages[0].metric_tables[0].rows) == 3
     assert len(document.pages[0].commentary_blocks[0].comments) == 1
+    assert len(document.pages[0].commentary_blocks[1].comments) == 1
     assert len(document.pages[1].plotly_charts) == 1
     assert len(document.pages[2].plotly_charts) == 2
     assert all(len(chart.points) == 1 for chart in document.pages[3].time_series_charts)
@@ -223,6 +251,39 @@ def test_market_monitor_report_defaults_remain_market_first_with_symbol_rows_pre
     ]
     assert "Symbol Anomalies" not in [page.title for page in document.pages]
     assert all(not page.title.startswith("Symbol ") for page in document.pages)
+
+
+def test_market_summary_aggregates_bucket_level_duplicates_for_same_market_context() -> None:
+    sample = build_offline_sample_metrics()
+    duplicate_alerts = tuple(
+        MetricComparison(
+            metric_name="quoted_spread_bps",
+            value=9.0 + (0.1 * idx),
+            reference_value=7.0,
+            change_abs=2.0 + (0.1 * idx),
+            change_pct=(2.0 + (0.1 * idx)) / 7.0,
+            z_score=3.5 - (0.1 * idx),
+            percentile=None,
+            status="alert",
+            group={"topixCapGrp": "Mid"},
+            time_bucket=f"09:{idx:02d}-09:{idx + 1:02d}",
+        )
+        for idx in range(6)
+    )
+
+    document = build_market_monitor_report(
+        MarketReportInput(
+            metric_definitions=sample.metric_definitions,
+            current_series=sample.current_series,
+            comparisons=duplicate_alerts,
+        ),
+        options=MarketReportOptions(include_metric_definitions_appendix=False),
+    )
+
+    summary_page = document.pages[0]
+    quoted_spread_cards = [card for card in summary_page.metric_cards if card.metric.name == "quoted_spread_bps"]
+    assert len(quoted_spread_cards) == 1
+    assert "Top market drivers" in summary_page.html_blocks[2].body_html
 
 
 def test_market_monitor_report_passes_custom_drilldown_options() -> None:
@@ -319,6 +380,15 @@ def test_market_report_options_validate_text_and_limits() -> None:
 
     with pytest.raises(ValueError, match="max_metric_cards"):
         MarketReportOptions(max_metric_cards=-1)
+
+    with pytest.raises(ValueError, match="max_summary_story_charts"):
+        MarketReportOptions(max_summary_story_charts=-1)
+
+    with pytest.raises(ValueError, match="overview_top_change_diversification"):
+        MarketReportOptions(overview_top_change_diversification="invalid")
+
+    with pytest.raises(ValueError, match="primary_intraday_signal_metric_name"):
+        MarketReportOptions(primary_intraday_signal_metric_name=" ")
 
     with pytest.raises(ValueError, match="max_comments"):
         MarketReportOptions(max_comments=-1)
