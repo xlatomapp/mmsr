@@ -245,7 +245,7 @@ def test_q_library_run_report_day_includes_timing_instrumentation() -> None:
     assert ".elapsedMs:{[startTs;endTs]" in template
     assert "reportStartTs: .z.p;" in template
     assert "refLoadStartTs: .z.p;" in template
-    assert "chunkCalcStartTs: .z.p;" in template
+    assert "srcStart: .z.p;" in template
     assert "rollupStartTs: .z.p;" in template
     assert "report_ref_load_ms" in template
     assert "report_chunk_calc_ms" in template
