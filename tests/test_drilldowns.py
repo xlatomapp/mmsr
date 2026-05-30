@@ -223,8 +223,8 @@ def test_build_drilldown_report_page_formats_rows_with_metric_help() -> None:
     assert "drilldown-delta-bars" in page.html_blocks[0].body_html
     assert page.html_blocks[1].title == "Metric Explorer & Group Analysis"
     assert "data-drilldown-matrix-spec" in page.html_blocks[1].body_html
-    assert "&ge; +1.5 easier execution" in page.html_blocks[1].body_html
-    assert "&le; -1.5 degraded execution" in page.html_blocks[1].body_html
+    assert "Cells show mean % change" in page.html_blocks[1].body_html
+    assert "Cell format: mean % change (z-score reference)." in page.html_blocks[1].body_html
     # Heatmaps require at least 2 groups per metric — sparse test data
     # may produce 0 heatmaps. Integration tests cover the populated case.
     assert isinstance(page.heatmaps, list)
@@ -337,6 +337,7 @@ def test_drilldown_matrix_uses_liquidity_metrics_and_change_pct_fallback() -> No
     assert page is not None
     explorer_html = page.html_blocks[1].body_html
     assert "liquidity metrics" in explorer_html
+    assert "z-score in parentheses for reference" in explorer_html
     assert "Quoted Spread" in explorer_html
     assert "Top-of-Book Depth" in explorer_html
     assert "Turnover" not in explorer_html

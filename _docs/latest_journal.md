@@ -17,16 +17,17 @@ Use this file as the **active-step buffer**.
 
 ## Current Step Entry
 
-## 2026-05-30 — D4 implementation: execution-ease legend thresholds for liquidity heatmap
+## 2026-05-30 — Liquidity matrix semantics update: mean % change with z-score reference
 
 ### What changed
-- Added explicit execution-ease legend text to the liquidity group-metric heatmap panel:
-  - `>= +1.5` easier execution
-  - `-1.5 to +1.5` neutral
-  - `<= -1.5` degraded execution
-- Added dedicated legend styling in the report template for clear visual separation.
-- Added drilldown test assertions to lock legend threshold copy in the generated explorer block.
-- Per workflow, appended previous latest-journal entry into `_docs/journal.md` and reset this buffer before starting implementation.
+- Removed inaccurate threshold interpretation legend.
+- Updated liquidity matrix semantics to factual display:
+  - heatmap value uses **mean % change**
+  - cell label includes **mean z-score in parentheses** as reference
+- Updated panel copy and legend text to reflect data semantics only.
+- Updated Plotly hover and colorbar labeling:
+  - hover: `% Change / Z`
+  - colorbar: `Mean % change`
 
 ### Files changed
 - `mmsr/report/drilldowns.py`
@@ -36,7 +37,7 @@ Use this file as the **active-step buffer**.
 - `_docs/latest_journal.md`
 
 ### Tests updated
-- `tests/test_drilldowns.py` now asserts the threshold legend content in the explorer block.
+- Updated drilldown assertions for new factual matrix copy and legend text.
 
 ### Validation
 - `PRE_COMMIT_HOME=/tmp/pre-commit-cache conda run -n mmsr pre-commit run --all-files` passed.
@@ -45,13 +46,13 @@ Use this file as the **active-step buffer**.
 - D4 in progress.
 
 ### Estimated completion
-- ~95% of D4.
+- ~97% of D4.
 
 ### Remaining work
-- Optional: bind selected anomaly row directly to symbol detail-page anchor and add render assertions.
+- Optional: row-to-symbol-detail anchor binding from anomaly selector.
 
 ### Best next deterministic implementation step
-- Add deterministic “open detail page” anchor link from selected anomaly row when detail pages are emitted.
+- Add deterministic link from selected anomaly row to emitted symbol detail anchor and cover with render assertions.
 
 ### Open questions
 - None.

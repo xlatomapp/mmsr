@@ -226,7 +226,8 @@ def _build_group_metric_explorer_block(
     if not comparisons:
         return None
 
-    matrix_by_group_metric: dict[tuple[str, str], list[float]] = {}
+    pct_by_group_metric: dict[tuple[str, str], list[float]] = {}
+    z_by_group_metric: dict[tuple[str, str], list[float]] = {}
     trend_by_group_metric_date: dict[str, dict[str, dict[str, list[float]]]] = {}
     metric_definitions_by_label: dict[str, MetricDefinition] = {}
     group_values: set[str] = set()
@@ -248,14 +249,10 @@ def _build_group_metric_explorer_block(
         metric_label = definition.label
         metric_definitions_by_label[metric_label] = definition
         group_values.add(group_value)
-        execution_ease_score: float | None = None
+        if comp.change_pct is not None and isfinite(float(comp.change_pct)):
+            pct_by_group_metric.setdefault((group_value, metric_label), []).append(float(comp.change_pct) * 100.0)
         if comp.z_score is not None and isfinite(float(comp.z_score)):
-            execution_ease_score = float(comp.z_score) * (1.0 if definition.higher_is_better else -1.0)
-        elif comp.change_pct is not None and isfinite(float(comp.change_pct)):
-            # Fall back to signed percent-change score when z-score is absent.
-            execution_ease_score = float(comp.change_pct) * 100.0 * (1.0 if definition.higher_is_better else -1.0)
-        if execution_ease_score is not None:
-            matrix_by_group_metric.setdefault((group_value, metric_label), []).append(execution_ease_score)
+            z_by_group_metric.setdefault((group_value, metric_label), []).append(float(comp.z_score))
         if comp.value is not None:
             date_text = comp.date.isoformat() if comp.date is not None else "unknown"
             dates.add(date_text)
@@ -275,11 +272,16 @@ def _build_group_metric_explorer_block(
         z_row: list[float | None] = []
         text_row: list[str] = []
         for metric_label in ordered_metrics:
-            values = matrix_by_group_metric.get((group_value, metric_label), [])
+            values = pct_by_group_metric.get((group_value, metric_label), [])
             if values:
-                avg_score = sum(values) / len(values)
-                z_row.append(avg_score)
-                text_row.append(f"{avg_score:+.1f}")
+                avg_pct = sum(values) / len(values)
+                z_values_for_cell = z_by_group_metric.get((group_value, metric_label), [])
+                avg_z = (sum(z_values_for_cell) / len(z_values_for_cell)) if z_values_for_cell else None
+                z_row.append(avg_pct)
+                if avg_z is None:
+                    text_row.append(f"{avg_pct:+.1f}% (z —)")
+                else:
+                    text_row.append(f"{avg_pct:+.1f}% (z {avg_z:+.2f})")
             else:
                 z_row.append(None)
                 text_row.append("—")
@@ -289,7 +291,7 @@ def _build_group_metric_explorer_block(
     def _group_score(group_value: str) -> float:
         score = 0.0
         for metric_label in ordered_metrics:
-            values = matrix_by_group_metric.get((group_value, metric_label), [])
+            values = pct_by_group_metric.get((group_value, metric_label), [])
             if values:
                 score += abs(sum(values) / len(values))
         return score
@@ -327,10 +329,10 @@ def _build_group_metric_explorer_block(
     <div class="drilldown-matrix-explorer__panel">
       <h4>Group-Metric Heatmap</h4>
       <p>Rows are groups, columns are liquidity metrics.
-      Positive execution-ease score indicates easier execution; negative indicates worse execution.</p>
+      Cells show mean % change, with mean z-score in parentheses for reference.</p>
       <div class="drilldown-matrix-explorer__chart" data-drilldown-heatmap></div>
       <p class="drilldown-matrix-explorer__legend">
-        Legend: &ge; +1.5 easier execution, between -1.5 and +1.5 neutral, &le; -1.5 degraded execution.
+        Cell format: mean % change (z-score reference).
       </p>
     </div>
     <div class="drilldown-matrix-explorer__panel">
