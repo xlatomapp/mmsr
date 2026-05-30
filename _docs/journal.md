@@ -11355,9 +11355,55 @@ dictionary). The simple `select sum ... by ...` form is correct and safer.
 ### Current milestones
 
 - Main roadmap: R0-R2 complete → next: R3 (Drilldowns around market questions)
-- Design roadmap: D0-D3 complete → next: page reorder to target architecture
+- Design roadmap: D0-D3x complete → next: D4 (Symbol UX cleanup)
 
 ### Best next deterministic step
 
-- Reorder report pages: move drilldown page before intraday detail per the
-  target information architecture (Group Analysis → Intraday Detail).
+- D4: Symbol Drilldown UX Cleanup — improve anomaly table-to-detail linkage,
+  keep default report market-first.
+
+---
+
+## 2026-05-30 — Page reorder + matrix→heatmap + production drilldown fix
+
+### Implemented
+
+- **Page reorder**: Moved drilldown page assembly before symbol pages and
+  intraday detail. New order: Summary → Activity → Liquidity → Daily Trends →
+  Toxicity → Drilldowns → Symbol Anomalies → Intraday Detail → Appendix.
+  Matches target architecture (Group Analysis before intraday diagnostics).
+- **Matrix → Heatmap conversion**: Replaced `_build_group_comparison_matrix_block`
+  (HTML table with colored cells) with `_build_drilldown_heatmaps` (proper
+  `Heatmap` components that render as inline SVG). Each heatmap shows one
+  metric's `change_pct` across group values. Removed 5 dead helper functions
+  (`_pivot_comparison_matrix`, `_matrix_row_html`, `_matrix_cell_html`, old
+  `_primary_group_value`, and the matrix block builder).
+- **Production drilldown fix**: Added `topixCapGrp` to `DEFAULT_DRILLDOWN_GROUP_KEYS`
+  so production kdb runs (which use `topixCapGrp` as the group dimension) produce
+  drilldown pages with heatmaps. Also added `topixCapGrp` to
+  `_format_drilldown_group_label`.
+- Updated 6 test files: heatmap sections now expected in output (were
+  previously asserted absent).
+
+### Files changed
+
+- `mmsr/report/market_report.py` — page reorder
+- `mmsr/report/drilldowns.py` — heatmap conversion + topixCapGrp fix
+- `tests/test_drilldowns.py`, `tests/test_cli.py`, `tests/test_offline_demo.py`,
+  `tests/test_market_report.py`, `tests/test_mock_kdb_demo.py` — updated assertions
+
+### Validation
+
+- `pytest-full`: all 380+ tests pass
+- `ruff-check`, `ruff-format`, `mypy`: all pass
+- Offline demo: 3 per-metric SVG heatmaps rendered in drilldown page
+- Production: `topixCapGrp` now triggers drilldown heatmaps
+
+### Current milestones
+
+- Main roadmap: R0-R2 complete → next: R3
+- Design roadmap: D0-D3 complete → next: D4
+
+### Best next deterministic step
+
+- D4: Symbol Drilldown UX Cleanup

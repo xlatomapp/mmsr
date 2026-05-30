@@ -24,6 +24,7 @@ from mmsr.report.components import Heatmap, HeatmapCell, HtmlBlock, MetricTable,
 from mmsr.report.symbols import DEFAULT_SYMBOL_GROUP_KEYS
 
 DEFAULT_DRILLDOWN_GROUP_KEYS: tuple[str, ...] = (
+    "topixCapGrp",
     "market_cap_bucket",
     "market_segment",
     "segment",
@@ -194,7 +195,7 @@ def _delta_bar_row_html(
 
 def _format_drilldown_group_label(comparison: MetricComparison) -> str:
     parts: list[str] = []
-    for key in ("market_cap_bucket", "sector", "segment", "market_segment"):
+    for key in ("topixCapGrp", "market_cap_bucket", "sector", "segment", "market_segment"):
         if key in comparison.group:
             parts.append(str(comparison.group[key]))
     if not parts:
