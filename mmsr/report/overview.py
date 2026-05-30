@@ -30,7 +30,14 @@ _STATUS_LABELS: dict[str, str] = {
 _MARKET_SUMMARY_FAMILIES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("Market activity", ("turnover", "volume", "trade_count")),
     ("Displayed liquidity", ("quoted_spread_bps", "top_of_book_depth")),
+    (
+        "Cross-venue reversion",
+        tuple(f"primary_quote_reversion_{horizon}_bps" for horizon in ("10ms", "100ms", "500ms", "1s", "5s", "10s")),
+    ),
 )
+
+_NARRATIVE_MAX_CHANGES = 5
+_NARRATIVE_MIN_SEVERITY_SCORE = 0
 
 
 @dataclass(frozen=True)
@@ -132,38 +139,144 @@ def _overview_html(
 
     status_counts = Counter(comparison.status for comparison in comparisons)
     overall_status = _overall_status(status_counts)
-    metric_summaries = _metric_overviews(comparisons, definitions)
-    selected_summaries = metric_summaries[:max_metric_summaries]
-    omitted_count = max(len(metric_summaries) - len(selected_summaries), 0)
 
+    # Narrative highlights: top 3-5 specific changes with context
+    highlights_html = _narrative_highlights_html(comparisons, definitions)
+
+    # Compact status summary below the narrative
     status_text = _status_count_sentence(status_counts)
-    family_html = _metric_family_overview_html(comparisons, tuple(selected_summaries))
-    summary_items = "\n".join(_metric_overview_item(summary) for summary in selected_summaries)
-    omitted_html = (
-        ""
-        if omitted_count == 0
-        else (
-            '<p class="executive-overview__omitted">'
-            f"{omitted_count} additional metric summaries are available in the "
-            "diagnostic sections."
-            "</p>"
-        )
+    family_html = _metric_family_overview_html(
+        comparisons, tuple(_metric_overviews(comparisons, definitions)[:max_metric_summaries])
     )
 
     return (
         f'<section class="executive-overview executive-overview--{escape(overall_status)}">\n'
+        f"{highlights_html}"
         '  <p class="executive-overview__status">'
-        f"<strong>Overall status:</strong> {_status_label(overall_status)} — "
+        f"<strong>Overall:</strong> {_status_label(overall_status)} — "
         f"{escape(status_text)} across {len(_unique_metric_names(comparisons))} "
         f"key metrics and {len(comparisons)} comparisons."
         "</p>\n"
         f"{family_html}"
-        '  <ul class="executive-overview__metrics">\n'
-        f"{summary_items}\n"
-        "  </ul>\n"
-        f"  {omitted_html}\n"
         "</section>"
     )
+
+
+def _narrative_highlights_html(
+    comparisons: tuple[MetricComparison, ...],
+    definitions: Mapping[str, MetricDefinition],
+) -> str:
+    """Return HTML for the top 3-5 specific market-level changes."""
+    top_changes = _select_top_changes(comparisons)
+    if not top_changes:
+        return ""
+
+    sentences = [_change_narrative_sentence(change, definitions.get(change.metric_name)) for change in top_changes]
+    items = "\n".join(
+        f'    <li class="executive-overview__highlight">{escape(sentence)}</li>' for sentence in sentences if sentence
+    )
+    if not items.strip():
+        return ""
+
+    return (
+        '  <div class="executive-overview__highlights">\n'
+        "    <p><strong>Key changes this period:</strong></p>\n"
+        "    <ul>\n"
+        f"{items}\n"
+        "    </ul>\n"
+        "  </div>\n"
+    )
+
+
+def _select_top_changes(
+    comparisons: tuple[MetricComparison, ...],
+) -> tuple[MetricComparison, ...]:
+    """Return the top N comparison rows ranked by severity and magnitude."""
+    # Only consider market-level rows (not symbol-level)
+    market_comparisons = tuple(comp for comp in comparisons if "sym" not in comp.group)
+    if not market_comparisons:
+        return ()
+
+    ranked = sorted(
+        market_comparisons,
+        key=lambda comp: (
+            _STATUS_PRIORITY.get(comp.status, 99),
+            -(abs(comp.z_score or 0.0)),
+            -(abs(comp.change_pct or 0.0)),
+        ),
+    )
+    # Return top N, but only those with meaningful deviation
+    return tuple(comp for comp in ranked[:_NARRATIVE_MAX_CHANGES] if comp.status in ("alert", "watch"))
+
+
+def _change_narrative_sentence(
+    comparison: MetricComparison,
+    definition: MetricDefinition | None,
+) -> str:
+    """Build a deterministic sentence for one comparison change."""
+    label = definition.label if definition else comparison.metric_name
+    direction = _change_direction_word(comparison, definition)
+    magnitude = _format_change_magnitude(comparison)
+    context = _format_change_context(comparison)
+
+    sentence = f"{label} {direction}{magnitude}"
+    if context:
+        sentence += f" in {context}"
+    sentence += "."
+
+    if definition and definition.interpretation:
+        sentence += f" {definition.interpretation}"
+
+    return sentence
+
+
+def _change_direction_word(
+    comparison: MetricComparison,
+    definition: MetricDefinition | None,
+) -> str:
+    """Return a human-readable direction word for the change."""
+    pct = comparison.change_pct
+    if pct is None or not isfinite(float(pct)):
+        return "changed"
+    higher_is_better = definition.higher_is_better if definition else True
+    abs_pct = abs(pct)
+    if abs_pct < 0.01:
+        return "was flat"
+    if pct > 0:
+        return "increased" if higher_is_better else "rose"
+    return "decreased" if higher_is_better else "declined"
+
+
+def _format_change_magnitude(comparison: MetricComparison) -> str:
+    """Return a formatted magnitude suffix for the change, e.g. ' 40%'."""
+    if comparison.change_pct is not None and isfinite(float(comparison.change_pct)):
+        return f" {abs(comparison.change_pct):.0%}"
+    if comparison.change_abs is not None and isfinite(float(comparison.change_abs)):
+        return f" {comparison.change_abs:+,.0f}"
+    return ""
+
+
+def _format_change_context(comparison: MetricComparison) -> str:
+    """Build context string from group, bucket, venue, and horizon metadata."""
+    parts: list[str] = []
+    group = comparison.group
+    # Group-level context: iterate all non-sym, non-venue, non-horizon group keys
+    context_group_keys = {k: v for k, v in group.items() if k not in ("sym", "ric", "venue", "horizon")}
+    for _key, value in context_group_keys.items():
+        parts.append(str(value))
+    # Venue and horizon context for reversion metrics
+    if "venue" in group:
+        parts.append(str(group["venue"]))
+    if "horizon" in group:
+        parts.append(str(group["horizon"]))
+    # Auction bucket context
+    if comparison.time_bucket is not None:
+        bucket_str = str(comparison.time_bucket)
+        if bucket_str in ("AMO", "AMC", "PMO", "PMC"):
+            parts.append(f"{bucket_str} auction")
+    if not parts:
+        return ""
+    return ", ".join(parts)
 
 
 def _metric_overviews(

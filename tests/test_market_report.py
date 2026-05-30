@@ -52,7 +52,7 @@ def test_market_monitor_report_is_canonical_production_format() -> None:
 
     assert len(summary_page.html_blocks) == 1
     assert summary_page.html_blocks[0].title == "Executive Market Overview"
-    assert "Overall status:</strong>" in summary_page.html_blocks[0].body_html
+    assert "Overall:</strong>" in summary_page.html_blocks[0].body_html
     assert "<strong>Market activity:</strong>" in summary_page.html_blocks[0].body_html
     assert "<strong>Displayed liquidity:</strong>" in summary_page.html_blocks[0].body_html
     assert len(summary_page.metric_cards) == 6
@@ -103,7 +103,7 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert "Executive Market Overview" in html
     assert html.index('<section class="html-block">') < html.index('<div class="metric-grid">')
     assert html.index("Executive Market Overview") < html.index("Current versus reference")
-    assert "Overall status:" in html
+    assert "Overall:</strong>" in html
     assert "Market activity:" in html
     assert "Displayed liquidity:" in html
     assert "key metrics" in html

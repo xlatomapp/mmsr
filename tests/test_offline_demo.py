@@ -68,7 +68,7 @@ def test_offline_demo_report_renders_comparison_visuals_commentary_and_help() ->
     assert "Market Summary" in html
     assert "Executive Market Overview" in html
     assert html.index('<section class="html-block">') < html.index('<div class="metric-grid">')
-    assert "Overall status:" in html
+    assert "Overall:</strong>" in html
     assert "Current versus reference" in html
     assert "Activity Distribution" in html
     assert "cumulative intraday distribution" in html

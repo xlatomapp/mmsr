@@ -56,14 +56,16 @@ def test_executive_market_overview_summarizes_status_and_key_metrics() -> None:
 
     assert block.title == "Executive Market Overview"
     assert block.help_text is not None
-    assert "Overall status:</strong> Alert" in block.body_html
+    assert "Overall:</strong> Alert" in block.body_html
     assert "1 alerts, 1 watch items, 0 comparison-only items, and 1 normal items" in block.body_html
     assert "2 key metrics and 3 comparisons" in block.body_html
+    assert "Key changes this period" in block.body_html
     assert "Quoted Spread" in block.body_html
     assert "average current 41.0000 bps versus reference 31.0000 bps" in block.body_html
     assert "change +10.0000 bps +32.5%" in block.body_html
-    assert "Intraday bucket: AM opening auction" in block.body_html
-    assert "Market cap bucket: Small cap" in block.body_html
+    # Narrative highlights show specific changes with context
+    assert "Small" in block.body_html
+    assert "AMO auction" in block.body_html
     assert "time_bucket=" not in block.body_html
     assert "market_cap_bucket=" not in block.body_html
 
@@ -97,8 +99,10 @@ def test_executive_market_overview_limits_metric_summaries() -> None:
     )
 
     assert "Quoted Spread" in block.body_html
-    assert "Volume" not in block.body_html
-    assert "1 additional metric summaries are available" in block.body_html
+    # Narrative highlights only surface alert/watch items; the compact
+    # family summary at the bottom still includes all observed families.
+    assert "Key changes this period" in block.body_html
+    assert "<strong>Overall:</strong>" in block.body_html
 
 
 def test_executive_market_overview_requires_metric_definitions() -> None:
