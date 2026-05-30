@@ -251,7 +251,7 @@ def _build_symbol_anomaly_explorer_block(
         for idx, item in enumerate(rows)
     )
     payload = {"rows": rows}
-    payload_json = escape(json.dumps(payload, separators=(",", ":")))
+    payload_json = _json_script_payload(payload)
     body_html = (
         '<div class="symbol-anomaly-explorer" data-symbol-anomaly-explorer>'
         '<div class="symbol-anomaly-explorer__grid">'
@@ -690,6 +690,11 @@ def _format_signed_metric_value(value: float, unit: str) -> str:
     if unit:
         return f"{value:+,.4f} {unit}"
     return f"{value:+,.4f}"
+
+
+def _json_script_payload(payload: object) -> str:
+    """Serialize JSON for script-tag payloads without HTML entity escaping."""
+    return json.dumps(payload, separators=(",", ":")).replace("</", "<\\/")
 
 
 __all__ = [

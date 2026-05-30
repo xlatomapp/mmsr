@@ -226,48 +226,57 @@ def _build_group_metric_explorer_block(
     if not comparisons:
         return None
 
-    matrix_by_metric_group: dict[tuple[str, str], list[float]] = {}
+    matrix_by_group_metric: dict[tuple[str, str], list[float]] = {}
     trend_by_group_metric_date: dict[str, dict[str, dict[str, list[float]]]] = {}
-    metric_labels: dict[str, str] = {}
+    metric_definitions_by_label: dict[str, MetricDefinition] = {}
     group_values: set[str] = set()
     dates: set[str] = set()
+    preferred_metric_names = {
+        "quoted_spread_bps",
+        "top_of_book_depth",
+        "primary_quote_reversion_100ms_bps",
+        "primary_quote_reversion_500ms_bps",
+    }
 
     for comp in comparisons:
         definition = definitions.get(comp.metric_name)
         if definition is None:
             continue
+        if comp.metric_name not in preferred_metric_names:
+            continue
         group_value = _primary_group_value(comp)
         if not group_value:
             continue
         metric_label = definition.label
-        metric_labels[metric_label] = comp.metric_name
+        metric_definitions_by_label[metric_label] = definition
         group_values.add(group_value)
-        if comp.change_pct is not None:
-            matrix_by_metric_group.setdefault((metric_label, group_value), []).append(comp.change_pct)
+        if comp.z_score is not None and isfinite(float(comp.z_score)):
+            execution_ease_score = float(comp.z_score) * (1.0 if definition.higher_is_better else -1.0)
+            matrix_by_group_metric.setdefault((group_value, metric_label), []).append(execution_ease_score)
         if comp.value is not None:
             date_text = comp.date.isoformat() if comp.date is not None else "unknown"
             dates.add(date_text)
             metric_series = trend_by_group_metric_date.setdefault(group_value, {}).setdefault(metric_label, {})
             metric_series.setdefault(date_text, []).append(float(comp.value))
 
-    if len(metric_labels) < 2 or len(group_values) < 2:
+    if len(metric_definitions_by_label) < 2 or len(group_values) < 2:
         return None
 
-    ordered_metrics = sorted(metric_labels)
+    ordered_metrics = sorted(metric_definitions_by_label)
     ordered_groups = sorted(group_values)
     ordered_dates = sorted(dates)
 
     z_values: list[list[float | None]] = []
     text_values: list[list[str]] = []
-    for metric_label in ordered_metrics:
+    for group_value in ordered_groups:
         z_row: list[float | None] = []
         text_row: list[str] = []
-        for group_value in ordered_groups:
-            values = matrix_by_metric_group.get((metric_label, group_value), [])
+        for metric_label in ordered_metrics:
+            values = matrix_by_group_metric.get((group_value, metric_label), [])
             if values:
-                avg_change = sum(values) / len(values)
-                z_row.append(avg_change * 100.0)
-                text_row.append(f"{avg_change:+.1%}")
+                avg_score = sum(values) / len(values)
+                z_row.append(avg_score)
+                text_row.append(f"{avg_score:+.1f}")
             else:
                 z_row.append(None)
                 text_row.append("—")
@@ -277,7 +286,7 @@ def _build_group_metric_explorer_block(
     def _group_score(group_value: str) -> float:
         score = 0.0
         for metric_label in ordered_metrics:
-            values = matrix_by_metric_group.get((metric_label, group_value), [])
+            values = matrix_by_group_metric.get((group_value, metric_label), [])
             if values:
                 score += abs(sum(values) / len(values))
         return score
@@ -307,14 +316,15 @@ def _build_group_metric_explorer_block(
         "trend_values": trend_payload,
         "default_group": default_group,
     }
-    payload_json = escape(json.dumps(payload, separators=(",", ":")))
+    payload_json = _json_script_payload(payload)
 
     body_html = f"""
 <div class="drilldown-matrix-explorer" data-drilldown-matrix>
   <div class="drilldown-matrix-explorer__grid">
     <div class="drilldown-matrix-explorer__panel">
       <h4>Group-Metric Heatmap</h4>
-      <p>Rows are metrics, columns are groups. Click a cell to update the trend panel.</p>
+      <p>Rows are groups, columns are market-condition metrics.
+      Positive z-score indicates easier execution; negative indicates worse execution.</p>
       <div class="drilldown-matrix-explorer__chart" data-drilldown-heatmap></div>
     </div>
     <div class="drilldown-matrix-explorer__panel">
@@ -333,6 +343,11 @@ def _build_group_metric_explorer_block(
             "Unified group-versus-metric heatmap with click-linked daily trend rendered from existing comparison facts."
         ),
     )
+
+
+def _json_script_payload(payload: object) -> str:
+    """Serialize JSON for script-tag payloads without HTML entity escaping."""
+    return json.dumps(payload, separators=(",", ":")).replace("</", "<\\/")
 
 
 def _build_drilldown_heatmaps(

@@ -177,6 +177,7 @@ def test_drilldown_options_validate_keys_statuses_and_limits() -> None:
 QUOTED_SPREAD_BPS = next(metric for metric in STARTER_METRICS if metric.name == "quoted_spread_bps")
 TURNOVER = next(metric for metric in STARTER_METRICS if metric.name == "turnover")
 VOLUME = next(metric for metric in STARTER_METRICS if metric.name == "volume")
+TOP_OF_BOOK_DEPTH = next(metric for metric in STARTER_METRICS if metric.name == "top_of_book_depth")
 
 
 def test_build_drilldown_report_page_formats_rows_with_metric_help() -> None:
@@ -196,6 +197,13 @@ def test_build_drilldown_report_page_formats_rows_with_metric_help() -> None:
             change_pct=0.25,
         ),
         _comparison(
+            "top_of_book_depth",
+            {"segment": "Prime", "sector": "autos"},
+            status="watch",
+            z_score=1.9,
+            change_pct=-0.10,
+        ),
+        _comparison(
             "volume",
             {"symbol": "7203", "sector": "autos"},
             status="alert",
@@ -205,7 +213,7 @@ def test_build_drilldown_report_page_formats_rows_with_metric_help() -> None:
 
     page = build_drilldown_report_page(
         comparisons,
-        [QUOTED_SPREAD_BPS, TURNOVER, VOLUME],
+        [QUOTED_SPREAD_BPS, TURNOVER, TOP_OF_BOOK_DEPTH, VOLUME],
     )
 
     assert page is not None
@@ -227,6 +235,7 @@ def test_build_drilldown_report_page_formats_rows_with_metric_help() -> None:
     assert [row.metric.name for row in table.rows] == [
         "turnover",
         "quoted_spread_bps",
+        "top_of_book_depth",
     ]
     assert table.rows[0].value_text == "12 JPY"
     assert table.rows[0].reference_text == "10 JPY"

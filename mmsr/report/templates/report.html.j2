@@ -814,22 +814,23 @@
             [
               {
                 type: "heatmap",
-                x: groups,
-                y: metrics,
+                x: metrics,
+                y: groups,
                 z: z,
                 text: text,
                 texttemplate: "%{text}",
                 colorscale: "RdBu",
-                reversescale: true,
+                reversescale: false,
                 zmid: 0,
-                hovertemplate: "Group: %{x}<br>Metric: %{y}<br>Change: %{text}<extra></extra>",
+                hovertemplate: "Group: %{y}<br>Metric: %{x}<br>Execution ease z-score: %{text}<extra></extra>",
+                colorbar: {title: "Exec ease z"},
               },
             ],
             {
               template: "plotly_white",
               margin: {l: 92, r: 12, t: 16, b: 48},
-              xaxis: {title: "Group", type: "category"},
-              yaxis: {title: "Metric", type: "category"},
+              xaxis: {title: "Metric", type: "category"},
+              yaxis: {title: "Group", type: "category"},
               height: 320,
             },
             {responsive: true, displaylogo: false}
@@ -842,10 +843,10 @@
               return;
             }
             var point = eventData.points[0];
-            if (!point || typeof point.x !== "string") {
+            if (!point || typeof point.y !== "string") {
               return;
             }
-            renderTrend(point.x);
+            renderTrend(point.y);
           });
         });
       }

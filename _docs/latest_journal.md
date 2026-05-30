@@ -17,6 +17,59 @@ Use this file as the **active-step buffer**.
 
 ## Current Step Entry
 
+## 2026-05-30 — D3/D4 fix: render bug + execution-ease heatmap orientation update
+
+### What changed
+- Fixed the drilldown heatmap render bug by changing JSON payload serialization for script tags:
+  - removed HTML-entity escaping for embedded JSON
+  - added safe `</` escaping (`<\\/`) for script payloads
+- Applied the same script-payload fix to symbol anomaly explorer payloads.
+- Updated drilldown matrix heatmap orientation:
+  - rows = group values
+  - columns = market-condition metrics
+- Updated drilldown heatmap scoring semantics to execution ease:
+  - uses `z_score` when available
+  - sign-normalized by metric polarity (`higher_is_better`)
+  - positive score = easier execution, negative = worse execution
+- Scoped heatmap metrics to execution-condition set:
+  - `quoted_spread_bps`
+  - `top_of_book_depth`
+  - `primary_quote_reversion_100ms_bps`
+  - `primary_quote_reversion_500ms_bps`
+- Updated Plotly wiring for new axis orientation and click behavior (`point.y` selects group trend).
+- Updated drilldown symbol/report tests for the new selection and render behavior.
+
+### Files changed
+- `mmsr/report/drilldowns.py`
+- `mmsr/report/symbols.py`
+- `mmsr/report/templates/report.html.j2`
+- `tests/test_drilldowns.py`
+- `_docs/journal.md`
+- `_docs/latest_journal.md`
+
+### Tests updated
+- `tests/test_drilldowns.py` expectations updated for matrix availability/ordering under new metric filtering and sort behavior.
+
+### Validation
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache conda run -n mmsr pre-commit run --all-files` passed.
+
+### Current milestone
+- D3 complete and hardened.
+- D4 in progress.
+
+### Estimated completion
+- ~90% of D4 stream.
+
+### Remaining work
+- Optional: add explicit legend text block matching positive/negative execution-ease thresholds.
+- Optional: add anchor link from selected anomaly row to emitted symbol detail page section.
+
+### Best next deterministic implementation step
+- Add deterministic execution-ease legend thresholds and corresponding regression assertions in rendered HTML.
+
+### Open questions
+- None.
+
 ## 2026-05-30 — D4 implementation: anomaly row selector linked to detail panel
 
 ### What changed
