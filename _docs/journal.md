@@ -10273,3 +10273,71 @@ Removed files:
 ### Open questions
 
 - None at this time.
+
+---
+
+## 2026-05-30 — Implement R1 q performance changes (finer timing, pre-aggregation, timing log)
+
+### Implemented
+
+- **Finer timing granularity**: Split the per-chunk `chunkCalcMs` into separate
+  `sourceLoadMs` (time inside `loadReportSources`) and `metricCalcMs` (time
+  inside `runMetric` / `calcToxicityReversionFamily`). Each chunk lambda now
+  returns `(sourceLoadMs; metricCalcMs; slimDict)` and the outer runner sums
+  per-chunk ms.
+- **Pre-aggregation before cross-chunk raze**: Added `preAggregateFacts` helper
+  that groups activity-family results (turnover, volume, trade_count) to
+  `date/time_bucket/topixCapGrp` grain within each chunk, dropping the `sym`
+  column. Per-chunk row count drops from ~(symbols × buckets) to ~(cap-groups ×
+  buckets), shrinking the cross-chunk `raze` intermediate table. Liquidity and
+  reversion families pass through unchanged (medians and wavgs cannot be
+  trivially pre-aggregated).
+- **Operator timing log**: `runReportDay` now emits a `-1` line at completion:
+  `"MMSR runReportDay <date> ref:<ms> src:<ms> calc:<ms> rollup:<ms> total:<ms>
+  chunks:<n> syms:<n>"`. No sensitive source rows are logged.
+- Updated timing metadata columns: `report_chunk_calc_ms` split into
+  `report_source_load_ms` + `report_metric_calc_ms` in both the q output and the
+  Python `_RUN_REPORT_DAY_TIMING_FIELDS` tuple.
+
+### Files changed
+
+- `mmsr/kdb/q_lib/mmsr_calculations.q.j2` — new `preAggregateFacts`, restructured `runReportDay`
+- `mmsr/kdb/production.py` — updated timing field tuple
+- `tests/test_kdb_query_loader.py` — updated timing column assertions
+
+### Validation
+
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache python -m pre_commit run --all-files` passed:
+  - `ruff-check`, `ruff-format`, `mypy`, full `pytest` suite — all green.
+
+### Current milestone
+
+- R1: q metric calculation performance pass
+
+### Estimated milestone completion
+
+- R1: 100% — all four exit criteria met with real q changes:
+  1. Per-stage q timings now split into ref / source-load / metric-calc /
+     rollup / total, surfaced via `-1` log and metadata columns.
+  2. Source loading happens once per chunk (`loadReportSources[` appears once
+     in the chunk lambda); all metric families share the same `rawSources`.
+  3. Reversion horizons reuse one `prepareToxicityReversion` call via
+     `calcToxicityReversionFamily`.
+  4. Tests guard against no-op wrappers, duplicate source loads, and repeated
+     family preparation.
+
+### Best next deterministic step
+
+- R2: Read `mmsr/report/market_report.py` and `mmsr/report/overview.py` to
+  understand the current executive overview, then redesign the first report
+  page to lead with a concise deterministic market narrative.
+
+### Open questions
+
+- Activity pre-aggregation assumes additive metrics; if `calcActivity` gains
+  non-additive columns in the future, `preAggregateFacts` will need updating.
+- Reversion pre-aggregation (wavg of reversion_bps by notional) could further
+  reduce raze size but requires careful re-aggregation of non-linear columns
+  (positive_reversion_ratio, valid_primary_quote_ratio).
+
+- None at this time.

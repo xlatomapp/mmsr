@@ -62,6 +62,22 @@
     0!raze mmsrRollups
     };
 
+{{ calculation_namespace }}.preAggregateFacts:{[facts]
+    / Reduce per-chunk row count before cross-chunk raze by aggregating
+    / additive metric columns (turnover, volume, trade_count) to the
+    / date/time_bucket/cap-group grain. Drop the sym column so the raze
+    / operates on far fewer rows.
+    / Only called for activity-family metrics; liquidity and reversion
+    / families pass through unchanged.
+    if[0=count facts; :0!facts];
+    byCols: (`date`time_bucket`topixCapGrp) inter cols facts;
+    additiveSpec: `turnover`volume`trade_count!3#{(sum;x)};
+    aggCols: key[additiveSpec] inter cols facts;
+    $[0<count aggCols;
+        ?[facts;();{x!x}byCols;additiveSpec aggCols];
+        facts]
+    };
+
 {{ calculation_namespace }}.calcActivity:{[rawTrades;refs;params]
     trades: rawTrades lj refs;
     result: select
@@ -338,10 +354,14 @@
     chunks: enlist 0#`;
     if[0<count allSyms; chunks: chunkSize cut allSyms];
 
-    chunkCalcStartTs: .z.p;
+    / Each chunk returns (sourceLoadMs; metricCalcMs; per-chunk slim dict).
+    / Source loading and metric calculation are timed separately.
+    / Activity-family results are pre-aggregated to reduce cross-chunk raze rows.
     chunkResults: { [runDate;refs;sourceFunctions;metricNames;metricParams;chunkSyms]
             chunkRefs: `sym xkey select from 0!refs where sym in chunkSyms;
+            srcStart: .z.p;
             rawSources: {{ calculation_namespace }}.loadReportSources[runDate;chunkRefs;sourceFunctions];
+            srcEnd: .z.p;
             reversionMetrics: metricNames where {{ calculation_namespace }}.isToxicityReversionMetric each metricNames;
             regularMetrics: metricNames where not {{ calculation_namespace }}.isToxicityReversionMetric each metricNames;
             resultDict: ()!();
@@ -359,33 +379,48 @@
                     metricParams;
                     reversionMetrics]
                 ];
-            resultDict
+            calcEnd: .z.p;
+            / Pre-aggregate activity-family results to shrink the raze
+            slimDict: metricNames!({[resultDict;metricName]
+                    facts: resultDict[metricName];
+                    $[metricName in `turnover`volume`trade_count;
+                        {{ calculation_namespace }}.preAggregateFacts facts;
+                        facts]
+                    }[resultDict] each metricNames);
+            ({{ calculation_namespace }}.elapsedMs[srcStart;srcEnd];
+             {{ calculation_namespace }}.elapsedMs[srcEnd;calcEnd];
+             slimDict)
         }[runDate;refs;sourceFunctions;metricNames;metricParams] each chunks;
-    chunkCalcEndTs: .z.p;
+
+    sourceLoadMs: sum {first x} each chunkResults;
+    metricCalcMs: sum {x 1} each chunkResults;
 
     rollupStartTs: .z.p;
     rolledMetricDict: metricNames!({[chunkResults;requestedAggregationLevels;metricName]
             {{ calculation_namespace }}.rollupMetricResult[
-                raze {[metricName;chunkResult] chunkResult[metricName]}[metricName] each chunkResults;
+                raze {[metricName;chunkResult] (x 2)[metricName]}[metricName] each chunkResults;
                 requestedAggregationLevels]
             }[chunkResults;requestedAggregationLevels] each metricNames);
     rollupEndTs: .z.p;
 
     refLoadMs: {{ calculation_namespace }}.elapsedMs[refLoadStartTs;refLoadEndTs];
-    chunkCalcMs: {{ calculation_namespace }}.elapsedMs[chunkCalcStartTs;chunkCalcEndTs];
     rollupMs: {{ calculation_namespace }}.elapsedMs[rollupStartTs;rollupEndTs];
     totalMs: {{ calculation_namespace }}.elapsedMs[reportStartTs;rollupEndTs];
     chunkCount: count chunks;
     symbolCount: count allSyms;
 
-    metricNames!({[rolledMetricDict;refLoadMs;chunkCalcMs;rollupMs;totalMs;chunkCount;symbolCount;metricName]
+    timingResult: metricNames!({[rolledMetricDict;refLoadMs;sourceLoadMs;metricCalcMs;rollupMs;totalMs;chunkCount;symbolCount;metricName]
             update
                 report_ref_load_ms: refLoadMs,
-                report_chunk_calc_ms: chunkCalcMs,
+                report_source_load_ms: sourceLoadMs,
+                report_metric_calc_ms: metricCalcMs,
                 report_rollup_ms: rollupMs,
                 report_total_ms: totalMs,
                 report_chunk_count: chunkCount,
                 report_symbol_count: symbolCount
             from rolledMetricDict[metricName]
-            }[rolledMetricDict;refLoadMs;chunkCalcMs;rollupMs;totalMs;chunkCount;symbolCount] each metricNames)
+            }[rolledMetricDict;refLoadMs;sourceLoadMs;metricCalcMs;rollupMs;totalMs;chunkCount;symbolCount] each metricNames);
+
+    -1 "MMSR runReportDay ",string[runDate]," ref:",string[refLoadMs],"ms src:",string[sourceLoadMs],"ms calc:",string[metricCalcMs],"ms rollup:",string[rollupMs],"ms total:",string[totalMs],"ms chunks:",string[chunkCount]," syms:",string[symbolCount];
+    timingResult
     };
