@@ -234,8 +234,6 @@ def _build_group_metric_explorer_block(
     preferred_metric_names = {
         "quoted_spread_bps",
         "top_of_book_depth",
-        "primary_quote_reversion_100ms_bps",
-        "primary_quote_reversion_500ms_bps",
     }
 
     for comp in comparisons:
@@ -250,8 +248,13 @@ def _build_group_metric_explorer_block(
         metric_label = definition.label
         metric_definitions_by_label[metric_label] = definition
         group_values.add(group_value)
+        execution_ease_score: float | None = None
         if comp.z_score is not None and isfinite(float(comp.z_score)):
             execution_ease_score = float(comp.z_score) * (1.0 if definition.higher_is_better else -1.0)
+        elif comp.change_pct is not None and isfinite(float(comp.change_pct)):
+            # Fall back to signed percent-change score when z-score is absent.
+            execution_ease_score = float(comp.change_pct) * 100.0 * (1.0 if definition.higher_is_better else -1.0)
+        if execution_ease_score is not None:
             matrix_by_group_metric.setdefault((group_value, metric_label), []).append(execution_ease_score)
         if comp.value is not None:
             date_text = comp.date.isoformat() if comp.date is not None else "unknown"
@@ -323,8 +326,8 @@ def _build_group_metric_explorer_block(
   <div class="drilldown-matrix-explorer__grid">
     <div class="drilldown-matrix-explorer__panel">
       <h4>Group-Metric Heatmap</h4>
-      <p>Rows are groups, columns are market-condition metrics.
-      Positive z-score indicates easier execution; negative indicates worse execution.</p>
+      <p>Rows are groups, columns are liquidity metrics.
+      Positive execution-ease score indicates easier execution; negative indicates worse execution.</p>
       <div class="drilldown-matrix-explorer__chart" data-drilldown-heatmap></div>
     </div>
     <div class="drilldown-matrix-explorer__panel">

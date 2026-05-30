@@ -288,6 +288,58 @@ def test_drilldown_heatmaps_use_uncapped_selection_even_when_table_is_limited() 
     assert len(page.html_blocks) == 1
 
 
+def test_drilldown_matrix_uses_liquidity_metrics_and_change_pct_fallback() -> None:
+    comparisons = [
+        _comparison(
+            "quoted_spread_bps",
+            {"topixCapGrp": "Large"},
+            status="watch",
+            z_score=None,
+            change_pct=0.05,
+        ),
+        _comparison(
+            "quoted_spread_bps",
+            {"topixCapGrp": "Mid"},
+            status="watch",
+            z_score=None,
+            change_pct=-0.03,
+        ),
+        _comparison(
+            "top_of_book_depth",
+            {"topixCapGrp": "Large"},
+            status="watch",
+            z_score=None,
+            change_pct=0.04,
+        ),
+        _comparison(
+            "top_of_book_depth",
+            {"topixCapGrp": "Mid"},
+            status="watch",
+            z_score=None,
+            change_pct=-0.02,
+        ),
+        _comparison(
+            "turnover",
+            {"topixCapGrp": "Large"},
+            status="watch",
+            z_score=1.5,
+            change_pct=0.10,
+        ),
+    ]
+
+    page = build_drilldown_report_page(
+        comparisons,
+        [QUOTED_SPREAD_BPS, TOP_OF_BOOK_DEPTH, TURNOVER],
+    )
+
+    assert page is not None
+    explorer_html = page.html_blocks[1].body_html
+    assert "liquidity metrics" in explorer_html
+    assert "Quoted Spread" in explorer_html
+    assert "Top-of-Book Depth" in explorer_html
+    assert "Turnover" not in explorer_html
+
+
 def test_drilldown_report_page_renders_as_html_metric_table() -> None:
     page = build_drilldown_report_page(
         [
