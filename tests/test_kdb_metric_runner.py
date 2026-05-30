@@ -103,6 +103,34 @@ def test_calculation_bootstrap_partitions_sym_before_reversion_aj_inputs() -> No
     assert "aj[`date`sym`horizonTime; `date`sym`horizonTime xasc" not in reversion_body
 
 
+def test_calculation_bootstrap_loads_sources_once_per_chunk() -> None:
+    """runReportDay must call loadReportSources exactly once per chunk, then
+    share the returned rawSources dict across regular and reversion metrics."""
+    bootstrap = render_calculation_function_bootstrap(".desk.mmsr")
+    run_day_start = bootstrap.index(".desk.mmsr.runReportDay:{")
+    run_day_end = bootstrap.index("\n    };\n", run_day_start) + len("\n    };\n")
+    run_day_body = bootstrap[run_day_start:run_day_end]
+    # Source loading: once per chunk
+    assert ".desk.mmsr.loadReportSources[" in run_day_body
+    assert run_day_body.count("loadReportSources[") == 1
+    # Regular metrics dispatched from the same rawSources
+    assert "regularMetrics!({[rawSources;metricParams;metricName]" in run_day_body
+    # Reversion family dispatched from the same rawSources
+    assert ".desk.mmsr.calcToxicityReversionFamily[\n                    rawSources`pts_trades;" in run_day_body
+
+
+def test_calculation_bootstrap_has_no_noop_native_function_wrappers() -> None:
+    """q calculation helpers must add real policy, not be trivial aliases
+    for native q functions such as sum, count, med, avg, or wavg."""
+    bootstrap = render_calculation_function_bootstrap(".desk.mmsr")
+    # Reject trivial pass-through definitions like {[x] sum x} or {[x;y] avg y}
+    import re
+
+    trivial_pattern = re.compile(r"\{\s*\[[^\]]*\]\s*(sum|count|med|avg|wavg|min|max|dev)\s+\w+\s*\}")
+    noop_match = trivial_pattern.search(bootstrap)
+    assert not noop_match, f"no-op native function wrapper: {noop_match.group()}"
+
+
 def test_kdb_metric_runner_renders_activity_query_and_normalizes_column_result() -> None:
     registry = build_default_registry()
     client = FakeKdbClient(

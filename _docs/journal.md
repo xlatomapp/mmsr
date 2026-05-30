@@ -10205,3 +10205,71 @@ Removed files:
 
 - Is a real kdb+ endpoint available for R1 profiling, or should profiling use the simulated
   source injection path (`--inject-simulated-sources`)?
+
+---
+
+## 2026-05-30 — Complete R1: q metric calculation performance pass
+
+### Implemented
+
+- Verified three R1 performance patterns are already in place in
+  `mmsr_calculations.q.j2`:
+  1. **Per-stage q timings**: `runReportDay` records `refLoadMs`, `chunkCalcMs`,
+     `rollupMs`, `totalMs`, `chunkCount`, and `symbolCount` per result table.
+  2. **Source loading once per chunk**: `loadReportSources` is called exactly once
+     per chunk; the returned `rawSources` dict is shared by both regular (activity/
+     liquidity) and reversion metric dispatch inside the chunk lambda.
+  3. **Reversion prepared-join reuse**: `calcToxicityReversionFamily` calls
+     `prepareToxicityReversion` once, then maps `calcToxicityReversionPrepared`
+     over each horizon metric — all six horizons share one prepared
+     `tradeWithPreMid`/`postQuotes` pair.
+- Added two deterministic q-bootstrap tests to lock the performance contract:
+  - `test_calculation_bootstrap_loads_sources_once_per_chunk` — asserts
+    `loadReportSources[` appears exactly once in the `runReportDay` body, and
+    that regular and reversion metrics consume the same `rawSources` dict.
+  - `test_calculation_bootstrap_has_no_noop_native_function_wrappers` — asserts
+    no trivial pass-through definitions like `{[x] sum x}` or `{[x;y] avg y}`
+    exist in the rendered q library.
+
+### Files changed
+
+- `tests/test_kdb_metric_runner.py`
+
+### Validation
+
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache python -m pre_commit run --all-files` passed:
+  - `ruff-check`, `ruff-format`, `mypy`, full `pytest` suite — all green.
+
+### Current milestone
+
+- R1: q metric calculation performance pass
+
+### Estimated milestone completion
+
+- R1: 100% — all four exit criteria met:
+  1. Per-stage q timings reported per metric result table.
+  2. Activity, liquidity, and reversion families load each required raw source at
+     most once per day/chunk.
+  3. Reversion horizons reuse prepared joins rather than repeating full preparation.
+  4. Tests guard against reintroducing redundant native-function wrappers and
+     repeated family preparation.
+
+### Remaining work before next milestone
+
+- R2 (Market summary that tells the story) is the next milestone.
+- R2 requires: narrative highlights before broad tables, top 3-5 market-level
+  changes surfaced, TPX cap group / intraday bucket / venue/horizon context when
+  explanatory, metric cards and comparison tables kept as compact audit components,
+  deterministic wording from computed comparison facts.
+
+### Best next deterministic step
+
+- Read `mmsr/report/market_report.py` and `mmsr/report/overview.py` to understand
+  the current executive overview and page ordering, then redesign the first report
+  page to lead with a concise deterministic market narrative (top 3-5 changes
+  across activity, displayed liquidity, and cross-venue reversion) before any
+  broad comparison table.
+
+### Open questions
+
+- None at this time.
