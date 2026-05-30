@@ -2,6 +2,32 @@
 
 This file must be updated after every implementation step.
 
+## 2026-05-30 — D2 implementation start: lead-chart-first defaults per section
+
+### What changed
+- Enforced visual-priority defaults by reducing default auxiliary chart count:
+  - `max_activity_distribution_charts`: `1`
+  - `max_displayed_liquidity_charts`: `1`
+  - `max_toxicity_reversion_charts`: `1`
+- This makes each section lead with one primary chart by default, with
+  additional diagnostics available through explicit option overrides.
+- Updated report/offline/mock tests to reflect new default chart counts and
+  preserved structural ordering assertions added in D1.
+
+### Milestone status
+- Current milestone: `D2` visual-priority refactor
+- Progress to next implementation gate: `~35%` of D2
+- Remaining deterministic implementation work: add explicit per-section lead
+  metric config fields (activity/liquidity/reversion) and deterministic tests
+  proving lead-metric precedence under custom metric ordering.
+
+### Next deterministic step
+- Implement configurable lead metric selectors for activity/liquidity/reversion
+  section charts and enforce lead chart precedence in section builders.
+
+### Exit gate after implementation step
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache pre-commit run --all-files` passes fully.
+
 ## 2026-05-30 — D1 implementation: final page-1 hierarchy contract hooks
 
 ### What changed
@@ -11407,3 +11433,85 @@ dictionary). The simple `select sum ... by ...` form is correct and safer.
 ### Best next deterministic step
 
 - D4: Symbol Drilldown UX Cleanup
+
+---
+
+## 2026-05-30 — Implement latest journal workflow rules
+
+### What changed
+- Added `_docs/latest_journal.md` as the mandatory active-step journal buffer.
+- Updated `_docs/AGENTS.md`:
+  - mandatory reading order now includes `_docs/latest_journal.md` before roadmap/journal.
+  - added mandatory start-of-task handoff:
+    - append existing `latest_journal` entry to bottom of `_docs/journal.md`
+    - reset `_docs/latest_journal.md` template
+  - added mandatory end-of-task write:
+    - write current step only to `_docs/latest_journal.md`
+    - do not write new step directly to `_docs/journal.md` in same task.
+
+### Files changed
+- `_docs/latest_journal.md`
+- `_docs/AGENTS.md`
+
+### Tests updated
+- None (docs/workflow change only).
+
+### Validation
+- Not run (docs-only workflow rule update).
+
+### Current milestone
+- Process/governance alignment for ongoing D2 work.
+
+### Estimated completion
+- 100% for this workflow step.
+
+### Remaining work
+- Follow this workflow in every subsequent task.
+
+### Best next deterministic implementation step
+- Continue D2 implementation: add explicit configurable lead-metric selectors per section and enforce lead chart precedence in builders/tests.
+
+### Open questions
+- None.
+
+## 2026-05-30 — D1–D4 review pass + workflow/roadmap gap fixes
+
+### What changed
+- Executed the new journal handoff workflow:
+  - appended prior `latest_journal` entry to the very bottom of `_docs/journal.md`
+  - reset `_docs/latest_journal.md` template before work
+- Fixed stale environment rule in `_docs/AGENTS.md`:
+  - corrected local live-kdb host from `192.163.3.99` to `192.168.3.99` in all examples.
+- Updated `_docs/report_design_roadmap.md` to match actual progress:
+  - added progress snapshot (`D0 complete, D1 complete, D2 in progress, D3 complete, D4 in progress`)
+  - replaced stale “Immediate Next Step = D1” with current D2 deterministic step.
+- Reviewed D1–D4 status consistency across roadmap/journal/rules and aligned the key governance/doc gaps.
+
+### Files changed
+- `_docs/journal.md`
+- `_docs/latest_journal.md`
+- `_docs/AGENTS.md`
+- `_docs/report_design_roadmap.md`
+
+### Tests updated
+- None (governance/docs review and fixes only).
+
+### Validation
+- Pending pre-commit run for this docs/rules update.
+
+### Current milestone
+- D2 in progress, D4 in progress (design roadmap stream).
+
+### Estimated completion
+- 100% for this review/fix step.
+
+### Remaining work
+- Implement D2 lead-metric configurability in section builders and tests.
+- Continue D4 symbol drilldown UX cleanup tasks.
+
+### Best next deterministic implementation step
+- Add configurable lead metric selectors for activity/liquidity/reversion pages
+  and enforce deterministic lead-chart precedence with regression tests.
+
+### Open questions
+- None.

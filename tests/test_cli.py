@@ -26,7 +26,7 @@ def test_render_offline_demo_report_file_writes_deterministic_html(tmp_path) -> 
     assert "plotly-chart__figure" in html
     assert "Compact plot data" in html
     assert "time-series-chart__placeholder" not in html
-    assert '<section class="heatmap">' in html
+    assert "data-drilldown-matrix-spec" in html
     assert "heatmap__placeholder" not in html
     assert "AM opening auction" in html
     assert "Market cap bucket: Small cap" in html
@@ -99,7 +99,7 @@ def test_main_offline_demo_can_include_intraday_heatmaps(tmp_path) -> None:
     assert exit_code == 0
     html = output_path.read_text(encoding="utf-8")
     assert "Intraday Detail" in html
-    assert '<section class="heatmap">' in html
+    assert "data-drilldown-matrix-spec" in html
     assert "bucket × market-cap view" in html
 
 
@@ -126,7 +126,7 @@ def test_render_mock_kdb_demo_report_file_writes_deterministic_html(tmp_path) ->
     assert "Executive Market Overview" in html
     assert "Metric Definitions Appendix" in html
     assert "plotly-chart__figure" in html
-    assert '<section class="heatmap">' in html
+    assert "data-drilldown-matrix-spec" in html
     assert "Compact plot data" in html
     assert "mock kdb integration" in html
     assert "time-series-chart__placeholder" not in html

@@ -121,6 +121,14 @@ aligned to the default report scope.
 
 ## Milestones
 
+## Progress Snapshot (2026-05-30)
+
+- D0: Complete
+- D1: Complete
+- D2: In progress
+- D3: Complete (matrix + linked trend explorer landed)
+- D4: In progress
+
 ## D0 — UX Contract Lock
 
 Scope:
@@ -243,7 +251,7 @@ Exit criteria:
 
 ## Immediate Next Deterministic Implementation Step
 
-Implement D1 end-to-end:
-- lock page-1 layout contract (KPI row, key changes, top drivers, mini bars, primary chart),
-- add explicit HTML-order assertions,
-- keep default aggregation as market+date with time-bucket collapse.
+Implement D4 anomaly-panel linkage:
+- wire anomaly-table row selection to the right-side detail panel state
+- keep default compact top-N anomaly list with deterministic selected row
+- add deterministic tests for initial selection and row-to-detail binding.

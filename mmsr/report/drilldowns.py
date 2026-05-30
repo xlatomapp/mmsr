@@ -8,6 +8,7 @@ and market-cap report drilldowns.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from html import escape
@@ -95,12 +96,22 @@ def build_drilldown_report_page(
         comparisons,
         options=resolved_options.selection,
     )
+    heatmap_selection = select_drilldown_comparisons(
+        comparisons,
+        options=DrilldownSelectionOptions(
+            group_keys=resolved_options.selection.group_keys,
+            max_rows=None,
+            include_symbol_scoped=resolved_options.selection.include_symbol_scoped,
+            symbol_group_keys=resolved_options.selection.symbol_group_keys,
+            statuses=resolved_options.selection.statuses,
+        ),
+    )
     if not selected:
         return None
 
     _require_metric_definitions_for_comparisons(selected, definitions)
     delta_bars_block = _build_group_delta_bars_block(selected, definitions)
-    drilldown_heatmaps = _build_drilldown_heatmaps(selected, definitions)
+    matrix_explorer_block = _build_group_metric_explorer_block(heatmap_selection, definitions)
     table = MetricTable(
         title=resolved_options.table_title.strip(),
         rows=[
@@ -116,10 +127,12 @@ def build_drilldown_report_page(
     html_blocks: list[HtmlBlock] = []
     if delta_bars_block is not None:
         html_blocks.append(delta_bars_block)
+    if matrix_explorer_block is not None:
+        html_blocks.append(matrix_explorer_block)
     return ReportPage(
         title=resolved_options.title.strip(),
         html_blocks=html_blocks,
-        heatmaps=drilldown_heatmaps,
+        heatmaps=[],
         metric_tables=[table],
     )
 
@@ -204,6 +217,122 @@ def _format_drilldown_group_label(comparison: MetricComparison) -> str:
 
 
 _DRILLDOWN_HEATMAP_MAX_GROUPS = 10
+
+
+def _build_group_metric_explorer_block(
+    comparisons: tuple[MetricComparison, ...],
+    definitions: Mapping[str, MetricDefinition],
+) -> HtmlBlock | None:
+    if not comparisons:
+        return None
+
+    matrix_by_metric_group: dict[tuple[str, str], list[float]] = {}
+    trend_by_group_metric_date: dict[str, dict[str, dict[str, list[float]]]] = {}
+    metric_labels: dict[str, str] = {}
+    group_values: set[str] = set()
+    dates: set[str] = set()
+
+    for comp in comparisons:
+        definition = definitions.get(comp.metric_name)
+        if definition is None:
+            continue
+        group_value = _primary_group_value(comp)
+        if not group_value:
+            continue
+        metric_label = definition.label
+        metric_labels[metric_label] = comp.metric_name
+        group_values.add(group_value)
+        if comp.change_pct is not None:
+            matrix_by_metric_group.setdefault((metric_label, group_value), []).append(comp.change_pct)
+        if comp.value is not None:
+            date_text = comp.date.isoformat() if comp.date is not None else "unknown"
+            dates.add(date_text)
+            metric_series = trend_by_group_metric_date.setdefault(group_value, {}).setdefault(metric_label, {})
+            metric_series.setdefault(date_text, []).append(float(comp.value))
+
+    if len(metric_labels) < 2 or len(group_values) < 2:
+        return None
+
+    ordered_metrics = sorted(metric_labels)
+    ordered_groups = sorted(group_values)
+    ordered_dates = sorted(dates)
+
+    z_values: list[list[float | None]] = []
+    text_values: list[list[str]] = []
+    for metric_label in ordered_metrics:
+        z_row: list[float | None] = []
+        text_row: list[str] = []
+        for group_value in ordered_groups:
+            values = matrix_by_metric_group.get((metric_label, group_value), [])
+            if values:
+                avg_change = sum(values) / len(values)
+                z_row.append(avg_change * 100.0)
+                text_row.append(f"{avg_change:+.1%}")
+            else:
+                z_row.append(None)
+                text_row.append("—")
+        z_values.append(z_row)
+        text_values.append(text_row)
+
+    def _group_score(group_value: str) -> float:
+        score = 0.0
+        for metric_label in ordered_metrics:
+            values = matrix_by_metric_group.get((metric_label, group_value), [])
+            if values:
+                score += abs(sum(values) / len(values))
+        return score
+
+    default_group = max(ordered_groups, key=_group_score)
+
+    trend_payload: dict[str, dict[str, list[float | None]]] = {}
+    for group_value in ordered_groups:
+        trend_payload[group_value] = {}
+        for metric_label in ordered_metrics:
+            values_by_date = trend_by_group_metric_date.get(group_value, {}).get(metric_label, {})
+            series: list[float | None] = []
+            for date_text in ordered_dates:
+                entries = values_by_date.get(date_text, [])
+                if entries:
+                    series.append(sum(entries) / len(entries))
+                else:
+                    series.append(None)
+            trend_payload[group_value][metric_label] = series
+
+    payload = {
+        "groups": ordered_groups,
+        "metrics": ordered_metrics,
+        "dates": ordered_dates,
+        "z": z_values,
+        "text": text_values,
+        "trend_values": trend_payload,
+        "default_group": default_group,
+    }
+    payload_json = escape(json.dumps(payload, separators=(",", ":")))
+
+    body_html = f"""
+<div class="drilldown-matrix-explorer" data-drilldown-matrix>
+  <div class="drilldown-matrix-explorer__grid">
+    <div class="drilldown-matrix-explorer__panel">
+      <h4>Group-Metric Heatmap</h4>
+      <p>Rows are metrics, columns are groups. Click a cell to update the trend panel.</p>
+      <div class="drilldown-matrix-explorer__chart" data-drilldown-heatmap></div>
+    </div>
+    <div class="drilldown-matrix-explorer__panel">
+      <h4>Selected Group Daily Trend</h4>
+      <p data-drilldown-selected-group></p>
+      <div class="drilldown-matrix-explorer__chart" data-drilldown-trend></div>
+    </div>
+  </div>
+  <script type="application/json" data-drilldown-matrix-spec>{payload_json}</script>
+</div>
+"""
+    return HtmlBlock(
+        title="Metric Explorer & Group Analysis",
+        body_html=body_html.strip(),
+        help_text=(
+            "Unified group-versus-metric heatmap with click-linked daily trend rendered from existing comparison facts."
+        ),
+    )
 
 
 def _build_drilldown_heatmaps(

@@ -132,6 +132,8 @@ rows.
 **Required changes:**
 
 - Add a dedicated TPX cap group drilldown page before generic diagnostic tables.
+- Use one matrix-style group explorer (metrics as rows, groups as columns) with
+  linked daily trend context instead of repeating separate per-metric heatmaps.
 - For activity metrics, show current cumulative intraday distribution versus
   reference distribution by TPX cap group.
 - For displayed liquidity metrics, show intraday profile shifts and largest

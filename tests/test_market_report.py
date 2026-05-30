@@ -69,9 +69,8 @@ def test_market_monitor_report_is_canonical_production_format() -> None:
     assert summary_page.commentary_blocks[1].comments[0].startswith("Market Summary headline:")
     assert len(activity_page.plotly_charts) == 1
     assert activity_page.plotly_charts[0].title == ("Volume cumulative intraday distribution")
-    assert len(liquidity_page.plotly_charts) == 2
+    assert len(liquidity_page.plotly_charts) == 1
     assert liquidity_page.plotly_charts[0].title == "Quoted Spread intraday profile"
-    assert liquidity_page.plotly_charts[1].title == "Top-of-Book Depth intraday profile"
     assert len(trend_page.time_series_charts) == 3
     assert trend_page.time_series_charts[0].x_axis_label == "Trading day"
     assert "reference" in trend_page.time_series_charts[0].points[0].metadata_text
@@ -110,8 +109,8 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert "Top group-level drilldowns" in html
     assert "drilldown-delta-bars" in html
     assert "Group Delta Overview" in html
-    assert "change by group" in html
-    assert "heatmap__svg" in html
+    assert "data-drilldown-matrix-spec" in html
+    assert "data-drilldown-heatmap" in html
     assert "Executive Market Overview" in html
     assert "Market KPI Snapshot" in html
     assert "Report Meta" in html
@@ -142,7 +141,6 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert "plotly-chart__figure" in html
     assert "Compact plot data" in html
     assert "time-series-chart__placeholder" not in html
-    assert '<section class="heatmap">' in html
     assert "heatmap__placeholder" not in html
     assert "AM opening auction" in html
     assert "Market cap bucket: Small cap" in html
@@ -179,7 +177,7 @@ def test_market_monitor_report_can_omit_appendix_and_limit_components() -> None:
     assert len(document.pages[0].commentary_blocks[0].comments) == 1
     assert len(document.pages[0].commentary_blocks[1].comments) == 1
     assert len(document.pages[1].plotly_charts) == 1
-    assert len(document.pages[2].plotly_charts) == 2
+    assert len(document.pages[2].plotly_charts) == 1
     assert all(len(chart.points) == 1 for chart in document.pages[3].time_series_charts)
     assert len(document.pages[4].metric_tables[0].rows) == 6
     assert all(len(chart.points) == 1 for chart in document.pages[5].time_series_charts)

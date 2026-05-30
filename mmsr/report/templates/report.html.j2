@@ -330,6 +330,30 @@
       letter-spacing: 0.03em;
     }
     .html-block__body { overflow-x: auto; }
+    .drilldown-matrix-explorer__grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .drilldown-matrix-explorer__panel {
+      background: #fff;
+      border: 1px solid var(--mmsr-border);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+    .drilldown-matrix-explorer__panel h4 {
+      font-size: 14px;
+      margin: 0 0 4px;
+    }
+    .drilldown-matrix-explorer__panel p {
+      color: var(--mmsr-muted);
+      font-size: 12px;
+      margin: 0 0 8px;
+    }
+    .drilldown-matrix-explorer__chart {
+      min-height: 320px;
+      width: 100%;
+    }
     .report-meta-strip {
       display: grid;
       gap: 10px;
@@ -562,6 +586,7 @@
       .executive-overview__driver-bar-row { grid-template-columns: 1fr; }
       .report-meta-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .kpi-snapshot { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .drilldown-matrix-explorer__grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -664,6 +689,97 @@
       };
       renderCharts();
       window.setTimeout(renderCharts, 250);
+
+      if (window.Plotly) {
+        document.querySelectorAll("[data-drilldown-matrix]").forEach(function (container) {
+          var specNode = container.querySelector("[data-drilldown-matrix-spec]");
+          var heatmapTarget = container.querySelector("[data-drilldown-heatmap]");
+          var trendTarget = container.querySelector("[data-drilldown-trend]");
+          var selectedLabel = container.querySelector("[data-drilldown-selected-group]");
+          if (!specNode || !heatmapTarget || !trendTarget || !selectedLabel) {
+            return;
+          }
+
+          var spec = JSON.parse(specNode.textContent || "{}");
+          var groups = spec.groups || [];
+          var metrics = spec.metrics || [];
+          var dates = spec.dates || [];
+          var z = spec.z || [];
+          var text = spec.text || [];
+          var trendValues = spec.trend_values || {};
+          var defaultGroup = spec.default_group || groups[0];
+          if (!groups.length || !metrics.length) {
+            return;
+          }
+
+          var renderTrend = function (groupName) {
+            var metricSeries = trendValues[groupName] || {};
+            var traces = metrics.map(function (metricLabel) {
+              return {
+                type: "scatter",
+                mode: "lines+markers",
+                name: metricLabel,
+                x: dates,
+                y: metricSeries[metricLabel] || [],
+              };
+            });
+            Plotly.react(
+              trendTarget,
+              traces,
+              {
+                template: "plotly_white",
+                margin: {l: 52, r: 16, t: 16, b: 48},
+                xaxis: {title: "Trading day", type: "category"},
+                yaxis: {title: "Current value (avg)"},
+                legend: {orientation: "h", y: -0.25},
+                hovermode: "x unified",
+                height: 320,
+              },
+              {responsive: true, displaylogo: false}
+            );
+            selectedLabel.textContent = "Selected group: " + groupName;
+          };
+
+          Plotly.newPlot(
+            heatmapTarget,
+            [
+              {
+                type: "heatmap",
+                x: groups,
+                y: metrics,
+                z: z,
+                text: text,
+                texttemplate: "%{text}",
+                colorscale: "RdBu",
+                reversescale: true,
+                zmid: 0,
+                hovertemplate: "Group: %{x}<br>Metric: %{y}<br>Change: %{text}<extra></extra>",
+              },
+            ],
+            {
+              template: "plotly_white",
+              margin: {l: 92, r: 12, t: 16, b: 48},
+              xaxis: {title: "Group", type: "category"},
+              yaxis: {title: "Metric", type: "category"},
+              height: 320,
+            },
+            {responsive: true, displaylogo: false}
+          ).then(function () {
+            renderTrend(defaultGroup);
+          });
+
+          heatmapTarget.on("plotly_click", function (eventData) {
+            if (!eventData || !eventData.points || !eventData.points.length) {
+              return;
+            }
+            var point = eventData.points[0];
+            if (!point || typeof point.x !== "string") {
+              return;
+            }
+            renderTrend(point.x);
+          });
+        });
+      }
     });
   </script>
 </body>

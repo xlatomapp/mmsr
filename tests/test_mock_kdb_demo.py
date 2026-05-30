@@ -59,7 +59,7 @@ def test_mock_kdb_demo_executes_q_templates_and_builds_report() -> None:
     assert summary_page.html_blocks[2].title == "Executive Market Overview"
     assert len(summary_page.metric_tables[0].rows) == 6
     assert len(activity_page.plotly_charts) == 1
-    assert len(liquidity_page.plotly_charts) == 2
+    assert len(liquidity_page.plotly_charts) == 1
     assert len(trend_page.time_series_charts) == 3
     assert trend_page.time_series_charts[0].x_axis_label == "Trading day"
     assert len(drilldown_page.metric_tables[0].rows) == 6
@@ -89,7 +89,7 @@ def test_mock_kdb_demo_report_renders_canonical_report_visuals_and_labels() -> N
     assert "mock kdb integration" in html
     assert "KdbMetricRunner" in html
     assert "plotly-chart__figure" in html
-    assert '<section class="heatmap">' in html
+    assert "data-drilldown-matrix-spec" in html
     assert "Compact plot data" in html
     assert "AM opening auction" in html
     assert "Market cap bucket: Small cap" in html
@@ -126,7 +126,7 @@ def test_mock_kdb_demo_options_can_omit_appendix_and_limit_components() -> None:
     assert len(document.pages[0].commentary_blocks[0].comments) == 1
     assert len(document.pages[0].commentary_blocks[1].comments) == 2
     assert len(document.pages[1].plotly_charts) == 1
-    assert len(document.pages[2].plotly_charts) == 2
+    assert len(document.pages[2].plotly_charts) == 1
     assert all(len(chart.points) == 1 for chart in document.pages[3].time_series_charts)
     assert len(document.pages[4].metric_tables[0].rows) == 6
     assert all(len(chart.points) == 1 for chart in document.pages[5].time_series_charts)

@@ -210,9 +210,11 @@ def test_build_drilldown_report_page_formats_rows_with_metric_help() -> None:
 
     assert page is not None
     assert page.title == "Sector, Segment, and Market-Cap Drilldowns"
-    assert len(page.html_blocks) == 1
+    assert len(page.html_blocks) == 2
     assert page.html_blocks[0].title == "Group Delta Overview"
     assert "drilldown-delta-bars" in page.html_blocks[0].body_html
+    assert page.html_blocks[1].title == "Metric Explorer & Group Analysis"
+    assert "data-drilldown-matrix-spec" in page.html_blocks[1].body_html
     # Heatmaps require at least 2 groups per metric — sparse test data
     # may produce 0 heatmaps. Integration tests cover the populated case.
     assert isinstance(page.heatmaps, list)
@@ -236,6 +238,45 @@ def test_build_drilldown_report_page_formats_rows_with_metric_help() -> None:
         "Date: 2026-05-25, Intraday bucket: AM opening auction, Market cap bucket: Large cap, Sector: technology"
     )
     assert "Formula:" in table.rows[0].help_text()
+
+
+def test_drilldown_heatmaps_use_uncapped_selection_even_when_table_is_limited() -> None:
+    comparisons = [
+        _comparison(
+            "quoted_spread_bps",
+            {"topixCapGrp": "Large"},
+            status="alert",
+            z_score=4.0,
+            change_pct=0.20,
+        ),
+        _comparison(
+            "quoted_spread_bps",
+            {"topixCapGrp": "Mid"},
+            status="watch",
+            z_score=1.8,
+            change_pct=0.08,
+        ),
+        _comparison(
+            "quoted_spread_bps",
+            {"topixCapGrp": "Small"},
+            status="watch",
+            z_score=1.6,
+            change_pct=-0.06,
+        ),
+    ]
+
+    page = build_drilldown_report_page(
+        comparisons,
+        [QUOTED_SPREAD_BPS],
+        options=DrilldownReportPageOptions(
+            selection=DrilldownSelectionOptions(max_rows=1),
+        ),
+    )
+
+    assert page is not None
+    assert len(page.metric_tables[0].rows) == 1
+    assert len(page.heatmaps) == 0
+    assert len(page.html_blocks) == 1
 
 
 def test_drilldown_report_page_renders_as_html_metric_table() -> None:

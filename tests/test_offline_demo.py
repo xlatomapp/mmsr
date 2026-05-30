@@ -46,9 +46,8 @@ def test_build_offline_demo_report_assembles_document_with_appendix() -> None:
     assert summary_page.commentary_blocks[1].comments[0].startswith("Market Summary headline:")
     assert len(activity_page.plotly_charts) == 1
     assert activity_page.plotly_charts[0].title == ("Volume cumulative intraday distribution")
-    assert len(liquidity_page.plotly_charts) == 2
+    assert len(liquidity_page.plotly_charts) == 1
     assert liquidity_page.plotly_charts[0].title == "Quoted Spread intraday profile"
-    assert liquidity_page.plotly_charts[1].title == "Top-of-Book Depth intraday profile"
     assert len(trend_page.time_series_charts) == 3
     assert trend_page.time_series_charts[0].x_axis_label == "Trading day"
     assert len(drilldown_page.metric_tables) == 1
@@ -84,8 +83,7 @@ def test_offline_demo_report_renders_comparison_visuals_commentary_and_help() ->
     assert "Sector, Segment, and Market-Cap Drilldowns" in html
     assert "Top group-level drilldowns" in html
     assert "Group Delta Overview" in html
-    assert "change by group" in html
-    assert "heatmap__svg" in html
+    assert "data-drilldown-matrix-spec" in html
     assert "Symbol 7203 Detail" not in html
     assert "Quoted Spread intraday time-bucket trend for symbol 7203" not in html
     assert "Volume intraday time-bucket trend for symbol 8306" not in html
@@ -96,7 +94,6 @@ def test_offline_demo_report_renders_comparison_visuals_commentary_and_help() ->
     assert "plotly-chart__figure" in html
     assert "Compact plot data" in html
     assert "time-series-chart__placeholder" not in html
-    assert '<section class="heatmap">' in html
     assert "heatmap__placeholder" not in html
     assert "AM opening auction" in html
     assert "Market cap bucket: Small cap" in html
@@ -137,7 +134,7 @@ def test_build_offline_demo_report_can_omit_appendix_and_limit_rows() -> None:
     assert len(document.pages[0].commentary_blocks[0].comments) == 1
     assert len(document.pages[0].commentary_blocks[1].comments) == 2
     assert len(document.pages[1].plotly_charts) == 1
-    assert len(document.pages[2].plotly_charts) == 2
+    assert len(document.pages[2].plotly_charts) == 1
     assert all(len(chart.points) == 1 for chart in document.pages[3].time_series_charts)
     assert len(document.pages[4].metric_tables[0].rows) == 6
     assert all(len(chart.points) == 1 for chart in document.pages[5].time_series_charts)
@@ -151,7 +148,7 @@ def test_build_offline_demo_report_accepts_supplied_sample_metrics() -> None:
 
     assert len(document.pages[0].metric_tables[0].rows) == 6
     assert len(document.pages[1].plotly_charts) == 1
-    assert len(document.pages[2].plotly_charts) == 2
+    assert len(document.pages[2].plotly_charts) == 1
     assert len(document.pages[3].time_series_charts) == len(sample_metrics.current_series)
     assert len(document.pages[4].metric_tables[0].rows) == 6
     assert len(document.pages[5].time_series_charts) == len(sample_metrics.current_series)
