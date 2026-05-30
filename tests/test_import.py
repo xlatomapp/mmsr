@@ -95,12 +95,13 @@ def test_report_public_api_imports() -> None:
     assert collect_metric_definitions_from_pages is not None
     assert metric_definitions_markdown is not None
 
+
 def test_examples_public_api_imports() -> None:
     from mmsr.examples import (
-        OfflineDemoReportOptions,
-        OfflineSampleMetrics,
         SAMPLE_REFERENCE_DATES,
         SAMPLE_REPORT_DATE,
+        OfflineDemoReportOptions,
+        OfflineSampleMetrics,
         build_offline_demo_report,
         build_offline_metric_comparisons,
         build_offline_metric_time_series,
@@ -117,4 +118,3 @@ def test_examples_public_api_imports() -> None:
     assert build_offline_metric_time_series is not None
     assert build_offline_reference_time_series is not None
     assert build_offline_sample_metrics is not None
-

@@ -9,16 +9,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from mmsr.examples.offline_fixtures import (
+    OfflineSampleMetrics,
+    build_offline_sample_metrics,
+)
 from mmsr.report.components import ReportDocument
 from mmsr.report.market_report import (
     MarketReportInput,
     MarketReportOptions,
     build_market_monitor_report,
-)
-
-from mmsr.examples.offline_fixtures import (
-    OfflineSampleMetrics,
-    build_offline_sample_metrics,
 )
 
 
@@ -96,9 +95,7 @@ class OfflineDemoReportOptions:
             include_daily_trend_page=self.include_daily_trend_page,
             include_intraday_heatmaps=self.include_intraday_heatmaps,
             summary_scope_label="mock data sample",
-            include_metric_definitions_appendix=(
-                self.include_metric_definitions_appendix
-            ),
+            include_metric_definitions_appendix=(self.include_metric_definitions_appendix),
             max_metric_cards=self.max_metric_cards,
             max_comments=self.max_comments,
             max_table_rows=self.max_table_rows,

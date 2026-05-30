@@ -20,6 +20,7 @@ from mmsr.kdb.query_plan import KdbMetricQueryPlanner
 from mmsr.metrics.results import MetricObservation, MetricTimeSeries
 from mmsr.periods import IntradayBucketSpec, ReportPeriod, TradingSession
 
+
 def _period() -> ReportPeriod:
     return ReportPeriod(
         start_date=date(2026, 5, 1),
@@ -30,6 +31,7 @@ def _period() -> ReportPeriod:
         ],
         bucket=IntradayBucketSpec("5m"),
     )
+
 
 def test_production_execution_planner_builds_daily_kdb_owned_requests() -> None:
     config = ReportConfig(
@@ -75,7 +77,6 @@ def test_production_execution_planner_builds_daily_kdb_owned_requests() -> None:
     assert "symbol_chunk_count" not in first.request.parameters
 
 
-
 def test_symbol_chunked_market_groups_add_per_symbol_aggregation_key() -> None:
     config = ReportConfig(
         title="Daily Monitor",
@@ -117,10 +118,14 @@ def test_production_query_requests_are_daily_and_use_date_syms_source_args() -> 
     )
 
     rendered = plan.steps[0].request
-    query_plan = __import__(
-        "mmsr.kdb.query_plan",
-        fromlist=["KdbMetricQueryPlanner"],
-    ).KdbMetricQueryPlanner().render(rendered)
+    query_plan = (
+        __import__(
+            "mmsr.kdb.query_plan",
+            fromlist=["KdbMetricQueryPlanner"],
+        )
+        .KdbMetricQueryPlanner()
+        .render(rendered)
+    )
 
     assert "`date`symbolChunkId`symbolChunkCount" not in query_plan.query
     assert '(`$"7203";`$"6758")' in query_plan.query
@@ -131,6 +136,7 @@ def test_production_query_requests_are_daily_and_use_date_syms_source_args() -> 
     assert "rawTrades: (.sb.mmsr.getTrade[2026.05.01;0!refs]);" in query_plan.query
     assert "calcActivity[rawTrades;refs;" in query_plan.query
 
+
 def test_production_planner_rejects_calendar_dates_outside_period() -> None:
     config = ReportConfig(title="Daily Monitor", metrics=["turnover"])
 
@@ -140,6 +146,7 @@ def test_production_planner_rejects_calendar_dates_outside_period() -> None:
             period=_period(),
             trading_days=[date(2026, 4, 30)],
         )
+
 
 class ReferenceCalendar:
     def __init__(self) -> None:
@@ -155,6 +162,7 @@ class ReferenceCalendar:
                 date(2026, 4, 30),
             ]
         return [date(2026, 5, 1), date(2026, 5, 4)]
+
 
 def test_production_reference_plan_uses_previous_trading_days_and_chunks() -> None:
     config = ReportConfig(
@@ -191,6 +199,7 @@ def test_production_reference_plan_uses_previous_trading_days_and_chunks() -> No
     assert len(plan.steps) == 3  # 3 reference days * 1 metric; q owns symbol chunking
     assert plan.steps[0].request.period.start_date == date(2026, 4, 27)
     assert plan.steps[-1].symbols == ("7203", "6758", "9984")
+
 
 def test_production_plan_summary_reports_scope_and_contracts() -> None:
     config = ReportConfig(
@@ -247,6 +256,7 @@ def test_production_plan_summary_reports_scope_and_contracts() -> None:
     assert len(runner.requests) == 0
     assert len(runner.planned_requests) == 2
 
+
 @pytest.mark.parametrize(
     ("metric_name", "template_name", "source_role"),
     [
@@ -298,18 +308,13 @@ def test_production_preflight_can_select_configured_metric(
     assert len(runner.planned_requests) == 1
     assert len(runner.requests) == 1
     assert runner.requests[0].metric.name == metric_name
-    assert any(
-        check.name == "metric_selection" and check.detail == metric_name
-        for check in result.checks
-    )
+    assert any(check.name == "metric_selection" and check.detail == metric_name for check in result.checks)
     assert result.sample_timing_ms is not None
     assert "report_ref_load_ms" in result.sample_timing_ms
-    assert any(
-        check.name == "sample_q_timing" and "report_ref_load_ms=" in check.detail
-        for check in result.checks
-    )
+    assert any(check.name == "sample_q_timing" and "report_ref_load_ms=" in check.detail for check in result.checks)
     summary_lines = "\n".join(result.summary_lines())
     assert "Sample q timings (ms):" in summary_lines
+
 
 def test_production_preflight_rejects_metric_not_configured() -> None:
     config = ReportConfig(title="Daily Monitor", metrics=["volume"])
@@ -325,11 +330,13 @@ def test_production_preflight_rejects_metric_not_configured() -> None:
             metric_name="quoted_spread_bps",
         )
 
+
 class FakeCalendar:
     def trading_days(self, start: date, end: date) -> list[date]:
         assert start == date(2026, 5, 1)
         assert end == date(2026, 5, 5)
         return [date(2026, 5, 1), date(2026, 5, 4)]
+
 
 class FakeSymbolUniverse:
     function = ".sb.mmsr.getRef"
@@ -395,6 +402,7 @@ class FakeRunner:
             metadata={"child": True},
         )
 
+
 def test_production_executor_uses_symbol_universe_when_symbols_not_explicit() -> None:
     config = ReportConfig(
         title="Daily Monitor",
@@ -452,6 +460,7 @@ def test_production_executor_uses_calendar_and_combines_metric_series() -> None:
         date(2026, 5, 4),
     )
 
+
 def test_production_executor_batches_metrics_by_day_and_symbol_chunk() -> None:
     config = ReportConfig(
         title="Daily Monitor",
@@ -475,11 +484,7 @@ def test_production_executor_batches_metrics_by_day_and_symbol_chunk() -> None:
     assert len(runner.batch_requests) == 2  # 2 days; q owns chunking
     assert all(len(batch) == 2 for batch in runner.batch_requests)
     assert len(runner.requests) == 4  # 2 days * 2 metrics
-    assert all(
-        step["batch_metric_count"] == 2
-        for metric_series in series
-        for step in metric_series.metadata["steps"]
-    )
+    assert all(step["batch_metric_count"] == 2 for metric_series in series for step in metric_series.metadata["steps"])
 
 
 def test_production_executor_run_reference_marks_reference_metadata() -> None:

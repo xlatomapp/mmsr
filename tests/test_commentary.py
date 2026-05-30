@@ -4,6 +4,8 @@ from mmsr.analysis.commentary import (
     commentary_facts_from_comparisons,
     section_summary_fact_from_comparisons,
 )
+from mmsr.metrics.results import MetricComparison
+from mmsr.metrics.starter_definitions import STARTER_METRICS
 
 
 def test_template_commentary_generates_alert_text() -> None:
@@ -46,10 +48,6 @@ def test_template_commentary_includes_grounded_caveats() -> None:
     )
 
     assert "Caveats: Low confidence: trade_count 20 < 100" in comments[0]
-
-
-from mmsr.metrics.results import MetricComparison
-from mmsr.metrics.starter_definitions import STARTER_METRICS
 
 
 def test_commentary_facts_from_comparisons_use_metric_docs_and_caveats() -> None:

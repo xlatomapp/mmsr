@@ -10,15 +10,18 @@ templates perform the metric calculations under the configured namespace.
 
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-import logging
 from datetime import date, timedelta
 from typing import Any
 
 from mmsr.config.models import ReportConfig
-from mmsr.kdb.query_plan import MetricRunRequest, RenderedMetricQuery, metric_family_for_metric
+from mmsr.kdb.query_plan import (
+    MetricRunRequest,
+    metric_family_for_metric,
+)
 from mmsr.kdb.runner import KdbMetricRunner
 from mmsr.kdb.schema_contracts import QTemplateInputTableSchemaContract
 from mmsr.metrics.registry import MetricRegistry, build_default_registry
@@ -96,19 +99,13 @@ class KdbProductionPlanSummary:
             ),
             f"Metrics: {self.metric_count} ({', '.join(self.metric_names)})",
             f"Symbol chunks per trading day: {self.symbol_chunk_count}",
-            (
-                "Chunk aggregation groups: "
-                + _format_group_columns(self.symbol_chunk_group_by)
-            ),
+            ("Chunk aggregation groups: " + _format_group_columns(self.symbol_chunk_group_by)),
             f"Target metric steps: {self.target_step_count}",
             f"Reference metric steps: {self.reference_step_count}",
             f"Total metric steps: {self.total_step_count}",
             f"Calculation namespace: {self.calculation_namespace}",
             "Source functions: " + _format_source_functions(self.source_functions),
-            (
-                "Reference-data universe function: "
-                + (self.reference_data_function or "none")
-            ),
+            ("Reference-data universe function: " + (self.reference_data_function or "none")),
             "Source-function contracts:",
         ]
         lines.extend(
@@ -158,19 +155,14 @@ class KdbProductionPreflightResult:
             f"Sample metric: {step.metric_name}",
             f"Sample trading day: {step.trading_day.isoformat()}",
             "Sample symbol chunk: kdb-owned",
-            "Sample metric family: "
-            + _metric_family_for_step(step),
-            "Required output columns: "
-            + ", ".join(self.rendered_query.required_output_columns),
+            "Sample metric family: " + _metric_family_for_step(step),
+            "Required output columns: " + ", ".join(self.rendered_query.required_output_columns),
             f"Validated sample rows: {self.result_row_count}",
             *(
                 (
                     "Sample q timings (ms): "
-                    + ", ".join(
-                        f"{name}={value}"
-                        for name, value in self.sample_timing_ms.items()
-                    )
-                ,)
+                    + ", ".join(f"{name}={value}" for name, value in self.sample_timing_ms.items()),
+                )
                 if self.sample_timing_ms
                 else ()
             ),
@@ -306,9 +298,7 @@ class KdbProductionExecutor:
         self.runner = runner
         self.calendar_source = calendar_source
         self.symbol_source = symbol_source
-        self.planner = (
-            KdbProductionExecutionPlanner() if planner is None else planner
-        )
+        self.planner = KdbProductionExecutionPlanner() if planner is None else planner
 
     def build_plan(
         self,
@@ -524,9 +514,7 @@ class KdbProductionExecutor:
                 LOGGER.info(
                     "Day batch q timings (ms): day=%s %s",
                     day_steps[0].trading_day.isoformat(),
-                    ", ".join(
-                        f"{name}={value}" for name, value in day_timing_ms.items()
-                    ),
+                    ", ".join(f"{name}={value}" for name, value in day_timing_ms.items()),
                 )
             representative_steps = _representative_steps_by_metric(day_steps)
             for step, series in zip(representative_steps, day_series, strict=True):
@@ -537,9 +525,7 @@ class KdbProductionExecutor:
                         "symbol_chunk_count": step.symbol_chunk_count,
                         "symbols": _symbols_for_day_steps(day_steps),
                         "calculation_namespace": step.request.calculation_namespace,
-                        "source_functions": tuple(
-                            sorted(step.request.source_functions.items())
-                        ),
+                        "source_functions": tuple(sorted(step.request.source_functions.items())),
                         "day_metric_count": len(representative_steps),
                         "batch_metric_count": len(representative_steps),
                         "execution_shape": "day_q_chunk_rollup",
@@ -578,7 +564,6 @@ class KdbProductionExecutor:
             )
             for metric_name, observations in observations_by_metric.items()
         )
-
 
     def _run_metric_step_day(
         self,
@@ -695,9 +680,7 @@ class KdbProductionPreflight:
         self.runner = runner
         self.calendar_source = calendar_source
         self.symbol_source = symbol_source
-        self.planner = (
-            KdbProductionExecutionPlanner() if planner is None else planner
-        )
+        self.planner = KdbProductionExecutionPlanner() if planner is None else planner
 
     def run(
         self,
@@ -725,10 +708,7 @@ class KdbProductionPreflight:
             KdbProductionPreflightCheck(
                 name="source_functions",
                 status="passed",
-                detail=", ".join(
-                    f"{role}={function_name}"
-                    for role, function_name in source_functions
-                ),
+                detail=", ".join(f"{role}={function_name}" for role, function_name in source_functions),
             ),
             KdbProductionPreflightCheck(
                 name="metric_selection",
@@ -745,9 +725,7 @@ class KdbProductionPreflight:
             period.start_date,
             period.end_date,
         )
-        trading_days = tuple(
-            self.calendar_source.trading_days(period.start_date, period.end_date)
-        )
+        trading_days = tuple(self.calendar_source.trading_days(period.start_date, period.end_date))
         LOGGER.info("Calendar returned %s preflight trading day(s)", len(trading_days))
         checks.append(
             KdbProductionPreflightCheck(
@@ -773,9 +751,7 @@ class KdbProductionPreflight:
             len(plan.steps),
         )
         if not plan.steps:
-            raise KdbProductionExecutionError(
-                "production preflight could not build any metric execution steps"
-            )
+            raise KdbProductionExecutionError("production preflight could not build any metric execution steps")
 
         step = _select_preflight_step(
             plan=plan,
@@ -818,10 +794,7 @@ class KdbProductionPreflight:
             KdbProductionPreflightCheck(
                 name="sample_result_schema",
                 status="passed",
-                detail=(
-                    f"validated {len(series.observations)} row(s) for "
-                    f"{step.metric_name}"
-                ),
+                detail=(f"validated {len(series.observations)} row(s) for {step.metric_name}"),
             )
         )
         if sample_timing_ms:
@@ -829,9 +802,7 @@ class KdbProductionPreflight:
                 KdbProductionPreflightCheck(
                     name="sample_q_timing",
                     status="passed",
-                    detail=", ".join(
-                        f"{name}={value}" for name, value in sample_timing_ms.items()
-                    ),
+                    detail=", ".join(f"{name}={value}" for name, value in sample_timing_ms.items()),
                 )
             )
 
@@ -914,9 +885,7 @@ def _preflight_metric_selection(
         return ()
 
     if not isinstance(metric_name, str) or not metric_name:
-        raise KdbProductionExecutionError(
-            "preflight metric selection must be a non-empty metric name"
-        )
+        raise KdbProductionExecutionError("preflight metric selection must be a non-empty metric name")
 
     configured = tuple(configured_metrics)
     if metric_name not in configured:
@@ -955,8 +924,7 @@ def _select_preflight_step(
             return step
 
     raise KdbProductionExecutionError(
-        "production preflight could not find a metric execution step for "
-        + ", ".join(metric_names)
+        "production preflight could not find a metric execution step for " + ", ".join(metric_names)
     )
 
 
@@ -997,9 +965,7 @@ def _chunk_safe_group_by(
     base = _clean_string_tuple(group_by, "group_by")
     if chunk_size is None:
         return base
-    return _dedupe_strings(
-        (*base, *_clean_string_tuple(chunk_group_by, "symbol_chunk_group_by"))
-    )
+    return _dedupe_strings((*base, *_clean_string_tuple(chunk_group_by, "symbol_chunk_group_by")))
 
 
 def _format_group_columns(group_by: Sequence[str]) -> str:
@@ -1016,9 +982,7 @@ def _symbols_by_trading_day(
     symbols_by_day: Mapping[date, Sequence[str]] | None,
 ) -> dict[date, tuple[str, ...]]:
     if symbols is not None and symbols_by_day is not None:
-        raise KdbProductionExecutionError(
-            "symbols and symbols_by_day cannot both be provided"
-        )
+        raise KdbProductionExecutionError("symbols and symbols_by_day cannot both be provided")
     if symbols_by_day is None:
         clean_symbols = _clean_string_tuple(symbols, "symbols")
         return {trading_day: clean_symbols for trading_day in trading_days}
@@ -1027,8 +991,7 @@ def _symbols_by_trading_day(
     for trading_day in trading_days:
         if trading_day not in symbols_by_day:
             raise KdbProductionExecutionError(
-                "reference-data universe did not return symbols for "
-                f"{trading_day.isoformat()}"
+                f"reference-data universe did not return symbols for {trading_day.isoformat()}"
             )
         clean_symbols = _clean_string_tuple(
             symbols_by_day[trading_day],
@@ -1036,8 +999,7 @@ def _symbols_by_trading_day(
         )
         if not clean_symbols:
             raise KdbProductionExecutionError(
-                "reference-data universe returned no symbols for "
-                f"{trading_day.isoformat()}"
+                f"reference-data universe returned no symbols for {trading_day.isoformat()}"
             )
         resolved[trading_day] = clean_symbols
     return resolved
@@ -1067,9 +1029,7 @@ def _format_date_summary(days: Sequence[date]) -> str:
 def _format_source_functions(source_functions: Sequence[tuple[str, str]]) -> str:
     if not source_functions:
         return "none"
-    return ", ".join(
-        f"{role}={function_name}" for role, function_name in source_functions
-    )
+    return ", ".join(f"{role}={function_name}" for role, function_name in source_functions)
 
 
 def _format_input_contracts(
@@ -1078,10 +1038,7 @@ def _format_input_contracts(
     if not contracts:
         return "none"
     return "; ".join(
-        (
-            f"{contract.table_role} via {contract.table_name} requires "
-            f"{', '.join(contract.required_columns)}"
-        )
+        (f"{contract.table_role} via {contract.table_name} requires {', '.join(contract.required_columns)}")
         for contract in contracts
     )
 
@@ -1099,13 +1056,9 @@ def _reference_window_from_calendar(
     # Trading calendars contain non-trading dates and exchange holidays. Query a
     # deterministic buffer before the target period, then keep the last requested
     # trading days so reference execution remains daily/chunk bounded.
-    calendar_start = target_period.start_date - timedelta(
-        days=max((lookback_days * 3) + 14, lookback_days + 14)
-    )
+    calendar_start = target_period.start_date - timedelta(days=max((lookback_days * 3) + 14, lookback_days + 14))
     if calendar_start > calendar_end:
-        raise KdbProductionExecutionError(
-            "could not derive a reference calendar range before the target period"
-        )
+        raise KdbProductionExecutionError("could not derive a reference calendar range before the target period")
 
     candidate_days = tuple(
         sorted(
@@ -1117,8 +1070,7 @@ def _reference_window_from_calendar(
     selected_days = candidate_days[-lookback_days:]
     if not selected_days:
         raise KdbProductionExecutionError(
-            "trading calendar returned no reference trading days before "
-            f"{target_period.start_date.isoformat()}"
+            f"trading calendar returned no reference trading days before {target_period.start_date.isoformat()}"
         )
 
     return KdbProductionReferenceWindow(
@@ -1136,9 +1088,7 @@ def _period_for_trading_days(
 ) -> ReportPeriod:
     days = tuple(trading_days)
     if not days:
-        raise KdbProductionExecutionError(
-            "reference period requires at least one trading day"
-        )
+        raise KdbProductionExecutionError("reference period requires at least one trading day")
     return ReportPeriod(
         start_date=days[0],
         end_date=days[-1],
@@ -1155,13 +1105,9 @@ def _validate_trading_days(
 ) -> tuple[date, ...]:
     days = tuple(trading_days)
     if not days:
-        raise KdbProductionExecutionError(
-            "trading calendar returned no trading days for the requested period"
-        )
+        raise KdbProductionExecutionError("trading calendar returned no trading days for the requested period")
 
-    out_of_range = [
-        day for day in days if day < period.start_date or day > period.end_date
-    ]
+    out_of_range = [day for day in days if day < period.start_date or day > period.end_date]
     if out_of_range:
         raise KdbProductionExecutionError(
             "trading calendar returned date(s) outside the report period: "
@@ -1192,10 +1138,7 @@ def _symbol_chunks(
     if chunk_size is None:
         return (clean_symbols,)
 
-    return tuple(
-        clean_symbols[index : index + chunk_size]
-        for index in range(0, len(clean_symbols), chunk_size)
-    )
+    return tuple(clean_symbols[index : index + chunk_size] for index in range(0, len(clean_symbols), chunk_size))
 
 
 def _clean_string_tuple(
@@ -1205,14 +1148,10 @@ def _clean_string_tuple(
     if values is None:
         return ()
     if isinstance(values, (str, bytes, bytearray)):
-        raise KdbProductionExecutionError(
-            f"{field_name} must be a sequence of strings, not a single string"
-        )
+        raise KdbProductionExecutionError(f"{field_name} must be a sequence of strings, not a single string")
     result = tuple(value for value in values if isinstance(value, str) and value)
     if len(result) != len(values):
-        raise KdbProductionExecutionError(
-            f"{field_name} must contain only non-empty strings"
-        )
+        raise KdbProductionExecutionError(f"{field_name} must contain only non-empty strings")
     return result
 
 

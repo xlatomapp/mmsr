@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import date, time
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 import yaml
 
@@ -20,8 +21,8 @@ from mmsr.config.models import (
     ReferenceDataConfig,
     ReportConfig,
     SymbolUniverseConfig,
-    ToxicityConfig,
     ToxicityConfidenceConfig,
+    ToxicityConfig,
     ToxicityEventClusteringConfig,
     ToxicityFiltersConfig,
     ToxicityVisualConfig,
@@ -118,24 +119,12 @@ def report_config_from_mapping(raw: Mapping[str, Any]) -> ReportConfig:
             observation_unit=str(reference_section.get("observation_unit", "trading_day")),
             comparable_keys=tuple(
                 str(value)
-                for value in reference_section.get(
-                    "comparable_keys", ["metric_name", "time_bucket", "group"]
-                )
+                for value in reference_section.get("comparable_keys", ["metric_name", "time_bucket", "group"])
             ),
-            min_samples_for_z_score=int(
-                reference_section.get("min_samples_for_z_score", 30)
-            ),
-            min_samples_for_empirical_percentile=int(
-                reference_section.get("min_samples_for_empirical_percentile", 10)
-            ),
-            default_user_facing_score=str(
-                reference_section.get(
-                    "default_user_facing_score", "empirical_percentile"
-                )
-            ),
-            default_technical_score=str(
-                reference_section.get("default_technical_score", "robust_z_score")
-            ),
+            min_samples_for_z_score=int(reference_section.get("min_samples_for_z_score", 30)),
+            min_samples_for_empirical_percentile=int(reference_section.get("min_samples_for_empirical_percentile", 10)),
+            default_user_facing_score=str(reference_section.get("default_user_facing_score", "empirical_percentile")),
+            default_technical_score=str(reference_section.get("default_technical_score", "robust_z_score")),
         ),
         toxicity=_toxicity_config(toxicity_section),
         kdb=_kdb_config(kdb_section, reference_data_section),
@@ -155,13 +144,8 @@ def report_period_from_mapping(raw: Mapping[str, Any]) -> ReportPeriod:
 
     sessions: list[TradingSession] = []
     for index, session_raw in enumerate(sessions_raw):
-        if (
-            not isinstance(session_raw, list)
-            and not isinstance(session_raw, tuple)
-        ) or len(session_raw) < 2:
-            raise ConfigLoadError(
-                "period.trading_sessions entries must be [start, end] pairs"
-            )
+        if (not isinstance(session_raw, list) and not isinstance(session_raw, tuple)) or len(session_raw) < 2:
+            raise ConfigLoadError("period.trading_sessions entries must be [start, end] pairs")
         sessions.append(
             TradingSession(
                 start=_parse_time(str(session_raw[0]), f"period.trading_sessions[{index}][0]"),
@@ -213,13 +197,9 @@ def _kdb_config(
     section: Mapping[str, Any],
     reference_data_section: Mapping[str, Any] | None = None,
 ) -> KdbExecutionConfig:
-    raw_functions = _mapping(
-        section.get("raw_data_functions", {}), "data.kdb.raw_data_functions"
-    )
+    raw_functions = _mapping(section.get("raw_data_functions", {}), "data.kdb.raw_data_functions")
     reference_data_section = reference_data_section or {}
-    reference_function = raw_functions.get(
-        "reference_data", reference_data_section.get("function", "getRef")
-    )
+    reference_function = raw_functions.get("reference_data", reference_data_section.get("function", "getRef"))
     return KdbExecutionConfig(
         calculation_namespace=str(section.get("calculation_namespace", ".mmsr")),
         raw_data_functions=KdbRawDataFunctionsConfig(
@@ -234,11 +214,7 @@ def _kdb_config(
             venue_quote=_optional_string(raw_functions.get("venue_quote")),
         ),
         enforce_daily_raw_scope=bool(section.get("enforce_daily_raw_scope", True)),
-        symbol_chunk_size=(
-            None
-            if section.get("symbol_chunk_size") is None
-            else int(section["symbol_chunk_size"])
-        ),
+        symbol_chunk_size=(None if section.get("symbol_chunk_size") is None else int(section["symbol_chunk_size"])),
         symbol_chunk_group_by=_string_sequence(
             section.get("symbol_chunk_group_by", ["sym"]),
             "data.kdb.symbol_chunk_group_by",

@@ -12,10 +12,7 @@ from mmsr.report.metric_docs import (
 )
 from mmsr.report.render_html import render_report
 
-
-QUOTED_SPREAD_BPS = next(
-    metric for metric in STARTER_METRICS if metric.name == "quoted_spread_bps"
-)
+QUOTED_SPREAD_BPS = next(metric for metric in STARTER_METRICS if metric.name == "quoted_spread_bps")
 VOLUME = next(metric for metric in STARTER_METRICS if metric.name == "volume")
 
 
@@ -123,9 +120,7 @@ def test_append_metric_definitions_appendix_collects_from_document_pages() -> No
         pages=[
             ReportPage(
                 title="Liquidity",
-                metric_cards=[
-                    MetricCard(metric=QUOTED_SPREAD_BPS, value_text="12.4 bps")
-                ],
+                metric_cards=[MetricCard(metric=QUOTED_SPREAD_BPS, value_text="12.4 bps")],
             )
         ],
     )

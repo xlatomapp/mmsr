@@ -2,44 +2,32 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import re
+from dataclasses import dataclass, field
 from typing import Any
 
-
 _DURATION_RE = re.compile(r"^[1-9][0-9]*(?:ms|s|m|h)$")
-_Q_NAMESPACE_RE = re.compile(
-    r"^\.[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$"
-)
+_Q_NAMESPACE_RE = re.compile(r"^\.[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$")
 _Q_FUNCTION_RE = re.compile(
     r"^(?:\.[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*|"
     r"[A-Za-z_][A-Za-z0-9_]*)$"
 )
-_REVERSION_METRIC_RE = re.compile(
-    r"^primary_quote_reversion_(?:[1-9][0-9]*(?:ms|s|m|h))_bps$"
-)
+_REVERSION_METRIC_RE = re.compile(r"^primary_quote_reversion_(?:[1-9][0-9]*(?:ms|s|m|h))_bps$")
 
 
 def _validate_duration(value: str, field_name: str) -> None:
     if not isinstance(value, str) or _DURATION_RE.fullmatch(value) is None:
-        raise ValueError(
-            f"{field_name} must be a duration such as '10ms', '100ms', or '1s'"
-        )
+        raise ValueError(f"{field_name} must be a duration such as '10ms', '100ms', or '1s'")
 
 
 def _validate_q_namespace(value: str, field_name: str) -> None:
     if not isinstance(value, str) or _Q_NAMESPACE_RE.fullmatch(value) is None:
-        raise ValueError(
-            f"{field_name} must be a q namespace such as '.mmsr' or '.sb.mmsr'"
-        )
+        raise ValueError(f"{field_name} must be a q namespace such as '.mmsr' or '.sb.mmsr'")
 
 
 def _validate_q_function(value: str, field_name: str) -> None:
     if not isinstance(value, str) or _Q_FUNCTION_RE.fullmatch(value) is None:
-        raise ValueError(
-            f"{field_name} must be a q function name such as 'getTrade' "
-            "or '.sb.mmsr.getTrade'"
-        )
+        raise ValueError(f"{field_name} must be a q function name such as 'getTrade' or '.sb.mmsr.getTrade'")
 
 
 def _qualified_q_function(namespace: str, function_name: str, field_name: str) -> str:
@@ -253,12 +241,16 @@ class KdbRawDataFunctionsConfig:
         pts_trade = (
             self.pts_trade
             if self.pts_trade is not None
-            else self.venue_trade if self.venue_trade is not None else self.trade
+            else self.venue_trade
+            if self.venue_trade is not None
+            else self.trade
         )
         pts_quote = (
             self.pts_quote
             if self.pts_quote is not None
-            else self.venue_quote if self.venue_quote is not None else self.quote
+            else self.venue_quote
+            if self.venue_quote is not None
+            else self.quote
         )
         primary_quote = self.quote if self.primary_quote is None else self.primary_quote
         return {
@@ -305,9 +297,7 @@ class KdbExecutionConfig:
     """
 
     calculation_namespace: str = ".mmsr"
-    raw_data_functions: KdbRawDataFunctionsConfig = field(
-        default_factory=KdbRawDataFunctionsConfig
-    )
+    raw_data_functions: KdbRawDataFunctionsConfig = field(default_factory=KdbRawDataFunctionsConfig)
     enforce_daily_raw_scope: bool = True
     symbol_chunk_size: int | None = None
     symbol_chunk_group_by: tuple[str, ...] | list[str] = ("sym",)
@@ -462,13 +452,9 @@ class ToxicityConfig:
     )
     default_visual: ToxicityVisualConfig = field(default_factory=ToxicityVisualConfig)
     side_source: str = "inferred"
-    event_clustering: ToxicityEventClusteringConfig = field(
-        default_factory=ToxicityEventClusteringConfig
-    )
+    event_clustering: ToxicityEventClusteringConfig = field(default_factory=ToxicityEventClusteringConfig)
     filters: ToxicityFiltersConfig = field(default_factory=ToxicityFiltersConfig)
-    confidence: ToxicityConfidenceConfig = field(
-        default_factory=ToxicityConfidenceConfig
-    )
+    confidence: ToxicityConfidenceConfig = field(default_factory=ToxicityConfidenceConfig)
 
     def __post_init__(self) -> None:
         if not self.section_title:
@@ -476,11 +462,7 @@ class ToxicityConfig:
         if not self.primary_venue:
             raise ValueError("primary_venue must be non-empty")
 
-        venues = (
-            None
-            if self.venues is None
-            else _as_non_empty_tuple(self.venues, "venues")
-        )
+        venues = None if self.venues is None else _as_non_empty_tuple(self.venues, "venues")
         horizons = _as_non_empty_tuple(self.reversion_horizons, "reversion_horizons")
         for horizon in horizons:
             _validate_duration(horizon, "reversion_horizons")
@@ -523,10 +505,7 @@ class ToxicityConfig:
     def reversion_metric_names(self) -> tuple[str, ...]:
         """Return configured primary-quote reversion metric names."""
 
-        return tuple(
-            f"primary_quote_reversion_{horizon}_bps"
-            for horizon in self.reversion_horizons
-        )
+        return tuple(f"primary_quote_reversion_{horizon}_bps" for horizon in self.reversion_horizons)
 
 
 @dataclass(frozen=True)
@@ -542,9 +521,7 @@ class ReportConfig:
     symbols: SymbolUniverseConfig = field(default_factory=SymbolUniverseConfig)
     reference_data: ReferenceDataConfig = field(default_factory=ReferenceDataConfig)
     intraday: IntradayConfig = field(default_factory=IntradayConfig)
-    reference: ReferenceComparisonConfig = field(
-        default_factory=ReferenceComparisonConfig
-    )
+    reference: ReferenceComparisonConfig = field(default_factory=ReferenceComparisonConfig)
     toxicity: ToxicityConfig = field(default_factory=ToxicityConfig)
     kdb: KdbExecutionConfig = field(default_factory=KdbExecutionConfig)
 

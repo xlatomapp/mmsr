@@ -14,18 +14,18 @@ mistaken for independent sample size.
 
 from __future__ import annotations
 
+from collections.abc import Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, time
 from math import erf, floor, sqrt
 from statistics import mean, median
-from typing import Any, Hashable, Iterable, Mapping, Sequence
+from typing import Any
 
 from mmsr.metrics.results import (
     MetricComparison,
     MetricObservation,
     MetricTimeSeries,
 )
-
 
 REVERSION_METRIC_PREFIX = "primary_quote_reversion_"
 REVERSION_REFERENCE_COMPARABLE_KEYS: tuple[str, ...] = (
@@ -210,7 +210,11 @@ def standard_reference_stats(
     ref_std = _sample_std(values)
     confidence = "normal" if len(values) >= min_sample_size else "weak" if len(values) >= 2 else "insufficient"
     if value is None or len(values) < min_sample_size or ref_std in (None, 0):
-        message = "insufficient reference history for standard z-score" if len(values) < min_sample_size else "zero reference dispersion"
+        message = (
+            "insufficient reference history for standard z-score"
+            if len(values) < min_sample_size
+            else "zero reference dispersion"
+        )
         return ReferenceStats(
             reference_value=ref_mean,
             z_score=None,
@@ -536,10 +540,7 @@ def _comparison_key(
     policy: ComparisonPolicy,
 ) -> tuple[Hashable, ...]:
     """Return the comparable-history key for one normalized observation."""
-    return tuple(
-        _observation_field(observation, key)
-        for key in policy.reference_observation.comparable_keys
-    )
+    return tuple(_observation_field(observation, key) for key in policy.reference_observation.comparable_keys)
 
 
 def _aggregate_observation_values(
@@ -567,10 +568,7 @@ def _aggregate_observation_values(
         return cleaned[0]
     if aggregation == "last":
         return cleaned[-1]
-    raise ValueError(
-        "reference_observation_aggregation must be one of "
-        "'mean', 'median', 'sum', 'first', or 'last'"
-    )
+    raise ValueError("reference_observation_aggregation must be one of 'mean', 'median', 'sum', 'first', or 'last'")
 
 
 def _sorted_reference_units(
@@ -611,9 +609,7 @@ def compare_metric_timeseries(
     for observation in reference_observations:
         key = _comparison_key(observation, policy)
         unit = _observation_unit_key(observation, policy)
-        reference_index.setdefault(key, {}).setdefault(unit, []).append(
-            observation.value
-        )
+        reference_index.setdefault(key, {}).setdefault(unit, []).append(observation.value)
 
     comparisons: list[MetricComparison] = []
     for observation in current_observations:
@@ -638,12 +634,8 @@ def compare_metric_timeseries(
                 time_bucket=observation.time_bucket,
                 metadata={
                     **observation.metadata,
-                    "reference_observation_unit": (
-                        policy.reference_observation.observation_unit
-                    ),
-                    "reference_observation_aggregation": (
-                        reference_observation_aggregation
-                    ),
+                    "reference_observation_unit": (policy.reference_observation.observation_unit),
+                    "reference_observation_aggregation": (reference_observation_aggregation),
                 },
                 higher_is_better=directions.get(observation.metric_name),
                 policy=policy,
@@ -676,14 +668,9 @@ def compare_reversion_metric_timeseries(
     _validate_reversion_observations(reference_observations)
 
     comparison_policy = policy or ComparisonPolicy(
-        reference_observation=ReferenceObservationSpec(
-            comparable_keys=REVERSION_REFERENCE_COMPARABLE_KEYS
-        )
+        reference_observation=ReferenceObservationSpec(comparable_keys=REVERSION_REFERENCE_COMPARABLE_KEYS)
     )
-    metric_names = {
-        observation.metric_name
-        for observation in (*current_observations, *reference_observations)
-    }
+    metric_names = {observation.metric_name for observation in (*current_observations, *reference_observations)}
 
     return tuple(
         compare_metric_timeseries(
@@ -721,7 +708,4 @@ def _validate_reversion_observations(
         for group_key in ("venue", "horizon"):
             value = observation.group.get(group_key)
             if value is None or not str(value):
-                raise ValueError(
-                    "reversion comparison observations must include "
-                    f"group {group_key!r}"
-                )
+                raise ValueError(f"reversion comparison observations must include group {group_key!r}")

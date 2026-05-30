@@ -9,9 +9,9 @@ report generation should use ``KdbTradingCalendarSource`` or another explicit
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
-import logging
 from typing import Any, Protocol
 
 LOGGER = logging.getLogger(__name__)
@@ -45,11 +45,7 @@ class KdbTradingCalendarSource:
 
         function_name = _q_function_identifier(self.function)
         calculation_namespace = _q_namespace_identifier(self.calculation_namespace)
-        query = (
-            "{[start;end] "
-            f"{calculation_namespace}.callTradingCalendar[{function_name};start;end]"
-            "}"
-        )
+        query = f"{{[start;end] {calculation_namespace}.callTradingCalendar[{function_name};start;end]}}"
         LOGGER.info(
             "Calling kdb trading calendar function %s for %s..%s",
             self.function,

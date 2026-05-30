@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import date, time
-import re
 
 _BUCKET_RE = re.compile(r"^(?P<size>[1-9][0-9]*)(?P<unit>[mhd])$")
 

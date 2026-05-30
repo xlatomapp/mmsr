@@ -8,9 +8,8 @@ metric or comparison data.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import time
-from typing import Mapping
-
 
 _AUCTION_BUCKET_LABELS: dict[str, str] = {
     "AMO": "AM opening auction",
@@ -165,11 +164,7 @@ def format_group_label(
         return None
 
     keys = tuple(sorted(group)) if group_by is None else tuple(group_by)
-    parts = [
-        format_group_item_label(key, group[key])
-        for key in keys
-        if key in group
-    ]
+    parts = [format_group_item_label(key, group[key]) for key in keys if key in group]
     return ", ".join(parts) if parts else None
 
 

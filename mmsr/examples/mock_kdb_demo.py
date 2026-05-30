@@ -28,7 +28,6 @@ from mmsr.report.market_report import (
     build_market_monitor_report,
 )
 
-
 _MOCK_KDB_METRIC_NAMES: tuple[str, ...] = (
     "quoted_spread_bps",
     "volume",
@@ -114,9 +113,7 @@ class MockKdbIntegrationDemoOptions:
             include_daily_trend_page=self.include_daily_trend_page,
             include_intraday_heatmaps=self.include_intraday_heatmaps,
             summary_scope_label="mock kdb integration",
-            include_metric_definitions_appendix=(
-                self.include_metric_definitions_appendix
-            ),
+            include_metric_definitions_appendix=(self.include_metric_definitions_appendix),
             max_metric_cards=self.max_metric_cards,
             max_comments=self.max_comments,
             max_table_rows=self.max_table_rows,
@@ -250,10 +247,7 @@ def _compare_series(
     reference_series: tuple[MetricTimeSeries, ...],
     definitions: dict[str, MetricDefinition],
 ) -> tuple[MetricComparison, ...]:
-    directions = {
-        metric_name: definition.higher_is_better
-        for metric_name, definition in definitions.items()
-    }
+    directions = {metric_name: definition.higher_is_better for metric_name, definition in definitions.items()}
     return tuple(
         compare_metric_timeseries(
             _flatten_observations(current_series),
@@ -265,10 +259,7 @@ def _compare_series(
 
 
 def _metric_definitions(registry: MetricRegistry) -> dict[str, MetricDefinition]:
-    return {
-        metric_name: registry.get(metric_name)
-        for metric_name in _MOCK_KDB_METRIC_NAMES
-    }
+    return {metric_name: registry.get(metric_name) for metric_name in _MOCK_KDB_METRIC_NAMES}
 
 
 def _current_period() -> ReportPeriod:
@@ -306,15 +297,9 @@ def _mock_rows_for_query(query: str) -> list[dict[str, Any]]:
 
 
 def _query_role(query: str) -> str:
-    if (
-        "date within (2026.05.22;2026.05.22)" in query
-        or "2026.05.22;2026.05.22" in query
-    ):
+    if "date within (2026.05.22;2026.05.22)" in query or "2026.05.22;2026.05.22" in query:
         return "current"
-    if (
-        "date within (2026.04.06;2026.05.21)" in query
-        or "2026.04.06;2026.05.21" in query
-    ):
+    if "date within (2026.04.06;2026.05.21)" in query or "2026.04.06;2026.05.21" in query:
         return "reference"
     raise ValueError("mock kdb client received an unknown date range")
 
@@ -445,11 +430,7 @@ def _cycle_value(base: float, index: int, *, amplitude: float) -> float | int:
 def _flatten_observations(
     series_collection: Sequence[MetricTimeSeries],
 ) -> tuple[MetricObservation, ...]:
-    return tuple(
-        observation
-        for series in series_collection
-        for observation in series.observations
-    )
+    return tuple(observation for series in series_collection for observation in series.observations)
 
 
 def _require_non_empty(value: str, field_name: str) -> None:

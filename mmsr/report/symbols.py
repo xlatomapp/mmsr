@@ -8,19 +8,18 @@ facts into deterministic report components.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from hashlib import sha1
 from html import escape
 from math import isfinite
-import re
 
 from mmsr.metrics.base import MetricDefinition
 from mmsr.metrics.results import MetricComparison, MetricObservation, MetricTimeSeries
 from mmsr.presentation.labels import format_comparison_scope_label
 from mmsr.report.components import HtmlBlock, MetricTable, MetricTableRow, ReportPage
 from mmsr.report.sections import build_heatmap, build_intraday_time_bucket_chart
-
 
 DEFAULT_SYMBOL_GROUP_KEYS: tuple[str, ...] = (
     "symbol",
@@ -321,9 +320,7 @@ def build_symbol_detail_index_block(
     _require_metric_definitions_for_comparisons(selected, definitions)
 
     page_by_anchor = {
-        page.anchor_id: page
-        for page in detail_pages
-        if page.anchor_id is not None and page.anchor_id.strip()
+        page.anchor_id: page for page in detail_pages if page.anchor_id is not None and page.anchor_id.strip()
     }
     rows: list[str] = []
     for comparison in selected:
@@ -341,7 +338,7 @@ def build_symbol_detail_index_block(
         rows.append(
             "<tr>"
             f"<td>{escape(symbol)}</td>"
-            f"<td><a href=\"#{escape(anchor_id, quote=True)}\">"
+            f'<td><a href="#{escape(anchor_id, quote=True)}">'
             f"{escape(page.title)}</a></td>"
             f"<td>{escape(comparison.status.replace('_', ' ').title())}</td>"
             f"<td>{escape(definition.label)}</td>"
@@ -363,9 +360,7 @@ def build_symbol_detail_index_block(
         "<th>Driving metric</th>"
         "<th>Scope</th>"
         "</tr></thead>"
-        "<tbody>"
-        + "".join(rows)
-        + "</tbody></table>"
+        "<tbody>" + "".join(rows) + "</tbody></table>"
     )
     return HtmlBlock(
         title=resolved_options.title.strip(),
@@ -395,9 +390,7 @@ def _symbol_metric_table_row_from_comparison(
 ) -> MetricTableRow:
     unit = definition.unit
     reference_text = (
-        None
-        if comparison.reference_value is None
-        else _format_metric_value(comparison.reference_value, unit)
+        None if comparison.reference_value is None else _format_metric_value(comparison.reference_value, unit)
     )
     return MetricTableRow(
         metric=definition,
@@ -506,11 +499,7 @@ def _adverse_tail_score(comparison: MetricComparison) -> float:
         comparison.normal_score_adverse_tail_probability,
         comparison.empirical_adverse_tail_probability,
     )
-    finite_candidates = [
-        float(value)
-        for value in candidates
-        if value is not None and isfinite(float(value))
-    ]
+    finite_candidates = [float(value) for value in candidates if value is not None and isfinite(float(value))]
     if not finite_candidates:
         return 1.0
     return min(finite_candidates)
@@ -534,32 +523,20 @@ def _require_metric_definitions_for_comparisons(
     comparisons: Sequence[MetricComparison],
     definitions: Mapping[str, MetricDefinition],
 ) -> None:
-    missing = sorted(
-        {comparison.metric_name for comparison in comparisons}
-        - set(definitions.keys())
-    )
+    missing = sorted({comparison.metric_name for comparison in comparisons} - set(definitions.keys()))
     if missing:
         missing_text = ", ".join(missing)
-        raise ValueError(
-            "metric definitions are required for symbol anomaly report components: "
-            f"{missing_text}"
-        )
+        raise ValueError(f"metric definitions are required for symbol anomaly report components: {missing_text}")
 
 
 def _require_metric_definitions_for_series(
     series_collection: Sequence[MetricTimeSeries],
     definitions: Mapping[str, MetricDefinition],
 ) -> None:
-    missing = sorted(
-        {series.metric_name for series in series_collection}
-        - set(definitions.keys())
-    )
+    missing = sorted({series.metric_name for series in series_collection} - set(definitions.keys()))
     if missing:
         missing_text = ", ".join(missing)
-        raise ValueError(
-            "metric definitions are required for symbol detail report components: "
-            f"{missing_text}"
-        )
+        raise ValueError(f"metric definitions are required for symbol detail report components: {missing_text}")
 
 
 def _metric_axis_label(definition: MetricDefinition) -> str:
@@ -572,9 +549,7 @@ def _format_symbol_title(title_template: str, symbol: str) -> str:
     try:
         title = title_template.format(symbol=symbol)
     except (KeyError, IndexError) as exc:
-        raise ValueError(
-            "title_template may only use the named {symbol} placeholder"
-        ) from exc
+        raise ValueError("title_template may only use the named {symbol} placeholder") from exc
     if not title.strip():
         raise ValueError("title_template must render a non-empty title")
     return title.strip()

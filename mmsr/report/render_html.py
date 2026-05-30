@@ -60,8 +60,6 @@ def render_time_series_chart(chart: TimeSeriesChart) -> str:
     return template.render(chart=chart)
 
 
-
-
 def render_plotly_chart(chart: PlotlyChart) -> str:
     """Render a compact Plotly chart using the shared partial template."""
     env = build_template_environment()

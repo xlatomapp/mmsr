@@ -4,6 +4,7 @@ import pytest
 
 from mmsr.metrics.results import MetricComparison
 from mmsr.metrics.starter_definitions import STARTER_METRICS
+from mmsr.report.components import ReportDocument
 from mmsr.report.drilldowns import (
     DEFAULT_DRILLDOWN_GROUP_KEYS,
     DrilldownReportPageOptions,
@@ -12,7 +13,6 @@ from mmsr.report.drilldowns import (
     drilldown_scope_key,
     select_drilldown_comparisons,
 )
-from mmsr.report.components import ReportDocument
 from mmsr.report.render_html import render_report
 
 
@@ -174,9 +174,7 @@ def test_drilldown_options_validate_keys_statuses_and_limits() -> None:
         DrilldownSelectionOptions(statuses=("watch", " "))
 
 
-QUOTED_SPREAD_BPS = next(
-    metric for metric in STARTER_METRICS if metric.name == "quoted_spread_bps"
-)
+QUOTED_SPREAD_BPS = next(metric for metric in STARTER_METRICS if metric.name == "quoted_spread_bps")
 TURNOVER = next(metric for metric in STARTER_METRICS if metric.name == "turnover")
 VOLUME = next(metric for metric in STARTER_METRICS if metric.name == "volume")
 
@@ -226,12 +224,10 @@ def test_build_drilldown_report_page_formats_rows_with_metric_help() -> None:
     assert table.rows[0].reference_text == "10 JPY"
     assert table.rows[0].change_text == "change +2 JPY +25.0%"
     assert table.rows[0].group_text == (
-        "Date: 2026-05-25, Intraday bucket: AM opening auction, "
-        "Segment: Prime, Sector: autos"
+        "Date: 2026-05-25, Intraday bucket: AM opening auction, Segment: Prime, Sector: autos"
     )
     assert table.rows[1].group_text == (
-        "Date: 2026-05-25, Intraday bucket: AM opening auction, "
-        "Market cap bucket: Large cap, Sector: technology"
+        "Date: 2026-05-25, Intraday bucket: AM opening auction, Market cap bucket: Large cap, Sector: technology"
     )
     assert "Formula:" in table.rows[0].help_text()
 
@@ -300,8 +296,7 @@ def test_build_drilldown_report_page_supports_custom_selection_options() -> None
     assert table.help_text == "Client-defined group diagnostics."
     assert [row.metric.name for row in table.rows] == ["volume"]
     assert table.rows[0].group_text == (
-        "Date: 2026-05-25, Intraday bucket: AM opening auction, "
-        "Client Segment: retail, Sector: technology"
+        "Date: 2026-05-25, Intraday bucket: AM opening auction, Client Segment: retail, Sector: technology"
     )
 
 

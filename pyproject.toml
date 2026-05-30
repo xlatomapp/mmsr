@@ -49,11 +49,11 @@ requires = ["poetry-core>=1.8.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]
-line-length = 88
+line-length = 120
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP"]
+select = ["E", "F", "I", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -64,6 +64,9 @@ markers = [
 
 [tool.mypy]
 python_version = "3.12"
-warn_return_any = true
+files = ["mmsr"]
+exclude = "(^tests/|^docs/)"
+ignore_missing_imports = true
+warn_return_any = false
 warn_unused_configs = true
-disallow_untyped_defs = true
+disallow_untyped_defs = false

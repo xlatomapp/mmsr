@@ -19,9 +19,7 @@ def test_mock_kdb_demo_executes_q_templates_and_builds_report() -> None:
 
     assert isinstance(result, MockKdbIntegrationDemoResult)
     assert isinstance(result.document, ReportDocument)
-    assert result.document.title == (
-        "Japanese Market Microstructure Monitor — Mock kdb Integration Demo"
-    )
+    assert result.document.title == ("Japanese Market Microstructure Monitor — Mock kdb Integration Demo")
     assert [page.title for page in result.document.pages] == [
         "Market Summary",
         "Activity Distribution",
@@ -44,10 +42,7 @@ def test_mock_kdb_demo_executes_q_templates_and_builds_report() -> None:
     assert len(result.comparisons) == 6
     assert len(result.executed_queries) == 6
     assert all("select" in query for query in result.executed_queries)
-    assert all(
-        "calc" in query or "MMSR reusable q calculation library" in query
-        for query in result.executed_queries
-    )
+    assert all("calc" in query or "MMSR reusable q calculation library" in query for query in result.executed_queries)
     assert any("mock_trade" in query for query in result.executed_queries)
     assert any("mock_quote" in query for query in result.executed_queries)
     assert any("2026.05.22;2026.05.22" in query for query in result.executed_queries)
@@ -135,7 +130,6 @@ def test_mock_kdb_demo_options_can_omit_appendix_and_limit_components() -> None:
     assert document.pages[5].heatmaps == []
 
 
-
 def test_mock_kdb_demo_options_can_disable_drilldown_page() -> None:
     document = build_mock_kdb_integration_demo_report(
         options=MockKdbIntegrationDemoOptions(
@@ -161,11 +155,7 @@ def test_mock_kdb_demo_options_can_limit_drilldown_rows() -> None:
         )
     )
 
-    drilldown_page = next(
-        page
-        for page in document.pages
-        if page.title == "Sector, Segment, and Market-Cap Drilldowns"
-    )
+    drilldown_page = next(page for page in document.pages if page.title == "Sector, Segment, and Market-Cap Drilldowns")
     assert len(drilldown_page.metric_tables[0].rows) == 2
 
 

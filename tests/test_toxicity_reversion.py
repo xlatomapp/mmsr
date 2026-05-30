@@ -2,10 +2,10 @@ from datetime import date
 
 import pytest
 
+from mmsr.analysis.commentary import TemplateCommentaryEngine
 from mmsr.config.models import ToxicityConfidenceConfig
 from mmsr.metrics import MetricTimeSeries, build_default_registry
 from mmsr.metrics.results import MetricObservation
-from mmsr.analysis.commentary import TemplateCommentaryEngine
 from mmsr.visuals.toxicity import (
     ReversionCurveConversionError,
     ReversionCurvePoint,
@@ -101,8 +101,6 @@ def test_reversion_curve_points_from_timeseries_are_ordered_by_horizon() -> None
     assert points[0].horizon_sort_order == 1
     assert points[0].context_sort_order == 9
     assert points[0].low_confidence is False
-
-
 
 
 def test_reversion_curve_points_use_output_horizon_sort_order_when_present() -> None:
@@ -338,10 +336,7 @@ def test_reversion_commentary_facts_surface_low_confidence_caveats() -> None:
     comments = TemplateCommentaryEngine().generate(list(facts), max_comments=5)
 
     assert facts[0].caveats == ["Low confidence: trade_count 20 < 100"]
-    assert any(
-        "Caveats: Low confidence: trade_count 20 < 100" in line
-        for line in comments
-    )
+    assert any("Caveats: Low confidence: trade_count 20 < 100" in line for line in comments)
     assert any("+10ms Reversion sample size" in line for line in comments)
     assert any("missing notional" in line for line in comments)
 

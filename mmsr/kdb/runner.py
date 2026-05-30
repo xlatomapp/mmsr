@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
 import logging
+from collections.abc import Mapping, Sequence
 from datetime import date, datetime, time
 from numbers import Real
 from typing import Any
@@ -24,12 +24,9 @@ from mmsr.kdb.query_plan import (
     RenderedMetricBatchQuery,
     RenderedMetricDayQuery,
     RenderedMetricQuery,
-    group_by_for_metric_result,
-    template_for_metric,
     metric_family_for_metric,
 )
 from mmsr.metrics.results import MetricObservation, MetricTimeSeries
-
 
 KdbMetricRunnerError = KdbMetricQueryPlanError
 
@@ -47,12 +44,8 @@ class KdbMetricRunner:
         cache_hooks: MetricDayCacheHooks | None = None,
     ) -> None:
         self.client = client
-        self.query_planner = (
-            KdbMetricQueryPlanner() if query_planner is None else query_planner
-        )
-        self.cache_hooks = (
-            MetricDayCacheHooks() if cache_hooks is None else cache_hooks
-        )
+        self.query_planner = KdbMetricQueryPlanner() if query_planner is None else query_planner
+        self.cache_hooks = MetricDayCacheHooks() if cache_hooks is None else cache_hooks
         self._installed_calculation_namespaces: set[str] = set()
 
     def install_calculation_functions(
@@ -70,8 +63,6 @@ class KdbMetricRunner:
         self.client.execute(render_calculation_function_bootstrap(calculation_namespace))
         self._installed_calculation_namespaces.add(calculation_namespace)
         LOGGER.info("Installed MMSR q calculations into %s", calculation_namespace)
-
-
 
     def ensure_calculation_functions(
         self,
@@ -152,8 +143,7 @@ class KdbMetricRunner:
             if metric_query.metric_name not in result_by_metric:
                 available = ", ".join(sorted(result_by_metric)) or "none"
                 raise KdbMetricRunnerError(
-                    f"day result is missing metric {metric_query.metric_name!r}; "
-                    f"available metrics: {available}"
+                    f"day result is missing metric {metric_query.metric_name!r}; available metrics: {available}"
                 )
             metric_result = result_by_metric[metric_query.metric_name]
             metric_query.validate_result_schema(metric_result)
@@ -187,8 +177,6 @@ class KdbMetricRunner:
         combined = {**cached_by_metric, **computed_by_metric}
         return tuple(combined[request.metric.name] for request in clean_requests)
 
-
-
     def _load_cached_day_results(
         self,
         requests: Sequence[MetricRunRequest],
@@ -201,17 +189,11 @@ class KdbMetricRunner:
         cache implementations that have not moved to the wide table shape.
         """
 
-        if not (
-            self.cache_hooks.load_stock_metrics is not None
-            or self.cache_hooks.load is not None
-        ):
+        if not (self.cache_hooks.load_stock_metrics is not None or self.cache_hooks.load is not None):
             return {}, tuple(requests)
 
         cached_by_metric: dict[str, MetricTimeSeries] = {}
-        keys_by_metric = {
-            request.metric.name: MetricDayCacheKey.from_request(request)
-            for request in requests
-        }
+        keys_by_metric = {request.metric.name: MetricDayCacheKey.from_request(request) for request in requests}
 
         if self.cache_hooks.load_stock_metrics is not None and requests:
             keys = tuple(keys_by_metric[request.metric.name] for request in requests)
@@ -236,11 +218,7 @@ class KdbMetricRunner:
                     _validate_cached_day_series(key, series)
                     cached_by_metric[metric_name] = _with_cache_status(series, "hit")
 
-        missing_requests = [
-            request
-            for request in requests
-            if request.metric.name not in cached_by_metric
-        ]
+        missing_requests = [request for request in requests if request.metric.name not in cached_by_metric]
 
         if self.cache_hooks.load is not None:
             still_missing: list[MetricRunRequest] = []
@@ -269,10 +247,7 @@ class KdbMetricRunner:
         keys = tuple(MetricDayCacheKey.from_request(request) for request in requests)
         if self.cache_hooks.persist_stock_metrics is not None:
             rows = merge_stock_metrics_rows(
-                [
-                    stock_metrics_rows_from_series(key, series)
-                    for key, series in zip(keys, series_items, strict=True)
-                ]
+                [stock_metrics_rows_from_series(key, series) for key, series in zip(keys, series_items, strict=True)]
             )
             self.cache_hooks.persist_stock_metrics(
                 keys[0].trading_day,
@@ -308,8 +283,7 @@ class KdbMetricRunner:
             if metric_query.metric_name not in result_by_metric:
                 available = ", ".join(sorted(result_by_metric)) or "none"
                 raise KdbMetricRunnerError(
-                    f"batch result is missing metric {metric_query.metric_name!r}; "
-                    f"available metrics: {available}"
+                    f"batch result is missing metric {metric_query.metric_name!r}; available metrics: {available}"
                 )
             metric_result = result_by_metric[metric_query.metric_name]
             metric_query.validate_result_schema(metric_result)
@@ -369,8 +343,6 @@ class KdbMetricRunner:
         )
 
 
-
-
 def _validate_cached_day_series(
     key: MetricDayCacheKey,
     series: MetricTimeSeries,
@@ -379,13 +351,9 @@ def _validate_cached_day_series(
 
     if series.metric_name != key.metric_name:
         raise KdbMetricRunnerError(
-            f"cached metric day result for {key.metric_name!r} returned "
-            f"series {series.metric_name!r}"
+            f"cached metric day result for {key.metric_name!r} returned series {series.metric_name!r}"
         )
-    wrong_dates = sorted(
-        {observation.date for observation in series.observations}
-        - {key.trading_day}
-    )
+    wrong_dates = sorted({observation.date for observation in series.observations} - {key.trading_day})
     if wrong_dates:
         raise KdbMetricRunnerError(
             f"cached metric day result for {key.metric_name!r} contains "
@@ -403,6 +371,7 @@ def _with_cache_status(series: MetricTimeSeries, status: str) -> MetricTimeSerie
         observations=series.observations,
         metadata=metadata,
     )
+
 
 def _coerce_batch_result(
     result: Any,
@@ -455,21 +424,13 @@ def normalize_metric_result(
 
     for row_index, row in enumerate(rows):
         if metric_name not in row:
-            raise KdbMetricRunnerError(
-                f"metric result row {row_index} is missing value column {metric_name!r}"
-            )
+            raise KdbMetricRunnerError(f"metric result row {row_index} is missing value column {metric_name!r}")
         if "date" not in row:
-            raise KdbMetricRunnerError(
-                f"metric result row {row_index} is missing 'date'"
-            )
+            raise KdbMetricRunnerError(f"metric result row {row_index} is missing 'date'")
 
         group = _extract_group(row, group_by, row_index)
         used_columns = {"date", "time_bucket", metric_name, *group_by}
-        row_metadata = {
-            key: value
-            for key, value in row.items()
-            if key not in used_columns
-        }
+        row_metadata = {key: value for key, value in row.items() if key not in used_columns}
 
         observations.append(
             MetricObservation(
@@ -512,17 +473,12 @@ def _coerce_rows(result: Any) -> list[dict[str, Any]]:
         for index, row in enumerate(result):
             if not isinstance(row, Mapping):
                 raise KdbMetricRunnerError(
-                    "list-like metric results must contain row dictionaries; "
-                    f"row {index} has type {type(row).__name__}"
+                    f"list-like metric results must contain row dictionaries; row {index} has type {type(row).__name__}"
                 )
             rows.append(dict(row))
         return rows
 
-    raise KdbMetricRunnerError(
-        "metric result must be a dict of columns or a list of row dictionaries"
-    )
-
-
+    raise KdbMetricRunnerError("metric result must be a dict of columns or a list of row dictionaries")
 
 
 def _unkey_mapping(result: Mapping[Any, Any]) -> dict[str, Any] | None:
@@ -556,9 +512,7 @@ def _rows_from_dataframe_like(result: Any) -> list[dict[str, Any]] | None:
         return None
 
     index = getattr(result, "index", None)
-    index_names = tuple(
-        str(name) for name in getattr(index, "names", ()) if name is not None
-    )
+    index_names = tuple(str(name) for name in getattr(index, "names", ()) if name is not None)
     reset_index = getattr(result, "reset_index", None)
     if index_names and callable(reset_index):
         result = reset_index()
@@ -577,10 +531,7 @@ def _rows_from_column_mapping(columns: Mapping[str, Any]) -> list[dict[str, Any]
     if not columns:
         return []
 
-    column_values = {
-        str(column_name): _as_column_values(raw_values)
-        for column_name, raw_values in columns.items()
-    }
+    column_values = {str(column_name): _as_column_values(raw_values) for column_name, raw_values in columns.items()}
     row_count = max(len(values) for values in column_values.values())
 
     for column_name, values in column_values.items():
@@ -620,9 +571,7 @@ def _extract_group(
     group: dict[str, str] = {}
     for column in group_by:
         if column not in row:
-            raise KdbMetricRunnerError(
-                f"metric result row {row_index} is missing group column {column!r}"
-            )
+            raise KdbMetricRunnerError(f"metric result row {row_index} is missing group column {column!r}")
         value = row[column]
         if value is not None:
             group[column] = str(value)
@@ -641,12 +590,8 @@ def _coerce_date(value: Any, row_index: int) -> date:
                 return date(int(year), int(month), int(day))
             return date.fromisoformat(value)
         except ValueError as exc:
-            raise KdbMetricRunnerError(
-                f"metric result row {row_index} has invalid date value {value!r}"
-            ) from exc
-    raise KdbMetricRunnerError(
-        f"metric result row {row_index} has unsupported date value {value!r}"
-    )
+            raise KdbMetricRunnerError(f"metric result row {row_index} has invalid date value {value!r}") from exc
+    raise KdbMetricRunnerError(f"metric result row {row_index} has unsupported date value {value!r}")
 
 
 def _coerce_time_bucket(value: Any) -> time | str | None:
@@ -676,6 +621,5 @@ def _coerce_numeric_value(
     if isinstance(converted, Real):
         return converted
     raise KdbMetricRunnerError(
-        f"metric result row {row_index} has non-numeric value for "
-        f"{metric_name!r}: {converted!r}"
+        f"metric result row {row_index} has non-numeric value for {metric_name!r}: {converted!r}"
     )

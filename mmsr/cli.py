@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
-from typing import Sequence
-import logging
 
 import typer
 
@@ -16,6 +16,12 @@ from mmsr.analysis.comparison import (
 )
 from mmsr.config import load_report_config_file
 from mmsr.config.models import ReportConfig
+from mmsr.examples import (
+    MockKdbIntegrationDemoOptions,
+    OfflineDemoReportOptions,
+    build_mock_kdb_integration_demo_report,
+    build_offline_demo_report,
+)
 from mmsr.kdb.client import KdbClient, KdbConfig
 from mmsr.kdb.production import (
     KdbProductionExecutor,
@@ -34,12 +40,6 @@ from mmsr.report.market_report import (
     MarketReportInput,
     MarketReportOptions,
     build_market_monitor_report,
-)
-from mmsr.examples import (
-    MockKdbIntegrationDemoOptions,
-    OfflineDemoReportOptions,
-    build_mock_kdb_integration_demo_report,
-    build_offline_demo_report,
 )
 from mmsr.report.render_html import render_report
 
@@ -67,8 +67,6 @@ def build_cli_app() -> typer.Typer:
         "importing PyKX, connecting to kdb+, or calling an LLM."
     ),
 )
-
-
 def _offline_demo_command(
     output: Path = typer.Option(
         Path("mmsr_offline_demo.html"),
@@ -129,10 +127,7 @@ def _offline_demo_command(
     include_intraday_heatmaps: bool = typer.Option(
         False,
         "--include-intraday-heatmaps",
-        help=(
-            "Opt into intraday heatmaps in addition to the default time-bucket "
-            "line charts."
-        ),
+        help=("Opt into intraday heatmaps in addition to the default time-bucket line charts."),
     ),
     no_drilldown_page: bool = typer.Option(
         False,
@@ -169,6 +164,7 @@ def _offline_demo_command(
     typer.echo(f"Rendered mock-data production-format report: {output_path}")
     return 0
 
+
 @app.command(
     "mock-kdb-demo",
     help=(
@@ -177,8 +173,6 @@ def _offline_demo_command(
         "HTML report without importing PyKX or connecting to production kdb+."
     ),
 )
-
-
 def _mock_kdb_demo_command(
     output: Path = typer.Option(
         Path("mmsr_mock_kdb_demo.html"),
@@ -239,10 +233,7 @@ def _mock_kdb_demo_command(
     include_intraday_heatmaps: bool = typer.Option(
         False,
         "--include-intraday-heatmaps",
-        help=(
-            "Opt into intraday heatmaps in addition to the default time-bucket "
-            "line charts."
-        ),
+        help=("Opt into intraday heatmaps in addition to the default time-bucket line charts."),
     ),
     no_drilldown_page: bool = typer.Option(
         False,
@@ -280,7 +271,6 @@ def _mock_kdb_demo_command(
     return 0
 
 
-
 @app.command(
     "plan",
     help=(
@@ -290,8 +280,6 @@ def _mock_kdb_demo_command(
         "schema contracts."
     ),
 )
-
-
 def _plan_command(
     config: Path = typer.Option(
         ...,
@@ -380,6 +368,7 @@ def _plan_command(
         typer.echo(line)
     return 0
 
+
 @app.command(
     "render",
     help=(
@@ -388,8 +377,6 @@ def _plan_command(
         "user-defined raw-data functions, and MMSR-owned calculation templates."
     ),
 )
-
-
 def _render_command(
     config: Path = typer.Option(
         ...,
@@ -490,6 +477,7 @@ def _render_command(
     typer.echo(f"Rendered production kdb-backed report: {output_path}")
     return 0
 
+
 @app.command(
     "preflight",
     help=(
@@ -499,8 +487,6 @@ def _render_command(
         "that single step, and validates the returned schema."
     ),
 )
-
-
 def _preflight_command(
     config: Path = typer.Option(
         ...,
@@ -531,18 +517,12 @@ def _preflight_command(
     symbol: list[str] | None = typer.Option(
         None,
         "--symbol",
-        help=(
-            "Optional symbol filter for the bounded sample step. Repeat the "
-            "option for multiple symbols."
-        ),
+        help=("Optional symbol filter for the bounded sample step. Repeat the option for multiple symbols."),
     ),
     metric: str | None = typer.Option(
         None,
         "--metric",
-        help=(
-            "Optional configured metric name to validate instead of the first "
-            "configured metric."
-        ),
+        help=("Optional configured metric name to validate instead of the first configured metric."),
     ),
     verbose: bool = typer.Option(
         False,
@@ -710,8 +690,7 @@ def _maybe_inject_simulated_source_functions(
         simulated_source_namespace,
     )
     LOGGER.info(
-        "Injecting simulated source functions into remote kdb namespace %s "
-        "with symbol_count=%s",
+        "Injecting simulated source functions into remote kdb namespace %s with symbol_count=%s",
         source_namespace,
         simulated_symbol_count,
     )
@@ -910,10 +889,7 @@ def render_production_report_file(
     )
 
     registry = build_default_registry()
-    definitions = {
-        metric_name: registry.get(metric_name)
-        for metric_name in report_config.metrics
-    }
+    definitions = {metric_name: registry.get(metric_name) for metric_name in report_config.metrics}
     LOGGER.info("Building reference comparisons")
     comparisons = _compare_production_series(
         report_config=report_config,
@@ -958,26 +934,19 @@ def _compare_production_series(
             comparable_keys=tuple(report_config.reference.comparable_keys),
         ),
         min_samples_for_z_score=report_config.reference.min_samples_for_z_score,
-        min_samples_for_empirical_percentile=(
-            report_config.reference.min_samples_for_empirical_percentile
-        ),
+        min_samples_for_empirical_percentile=(report_config.reference.min_samples_for_empirical_percentile),
     )
     metric_directions = {
-        metric_name: registry.get(metric_name).higher_is_better
-        for metric_name in report_config.metrics
+        metric_name: registry.get(metric_name).higher_is_better for metric_name in report_config.metrics
     }
     return tuple(
         compare_metric_timeseries(
             _observations_from_series(current_series),
             _observations_from_series(reference_series),
-            method=_reference_comparison_method(
-                report_config.reference.default_technical_score
-            ),
+            method=_reference_comparison_method(report_config.reference.default_technical_score),
             metric_directions=metric_directions,
             policy=policy,
-            reference_observation_aggregation=_reference_observation_aggregation(
-                report_config.reference.statistic
-            ),
+            reference_observation_aggregation=_reference_observation_aggregation(report_config.reference.statistic),
         )
     )
 
@@ -1169,6 +1138,7 @@ def _default_when_none(value: int | None, default: int | None) -> int | None:
     if value is None:
         return default
     return value
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

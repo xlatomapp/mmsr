@@ -153,9 +153,7 @@ class MarketReportOptions:
     )
     max_toxicity_reversion_charts: int | None = 6
     max_toxicity_reversion_points_per_chart: int | None = None
-    toxicity_reversion_context_ranking: ToxicityContextRanking = (
-        DEFAULT_TOXICITY_CONTEXT_RANKING
-    )
+    toxicity_reversion_context_ranking: ToxicityContextRanking = DEFAULT_TOXICITY_CONTEXT_RANKING
     toxicity_reversion_venue_order: tuple[str, ...] = DEFAULT_REVERSION_VENUE_ORDER
     toxicity_reversion_horizon_order: tuple[str, ...] = DEFAULT_REVERSION_HORIZON_ORDER
     max_toxicity_reversion_comments: int = 5
@@ -400,16 +398,10 @@ def build_market_monitor_report(
         title=resolved_options.title.strip(),
         pages=pages,
         branding=ReportBranding(
-            brand_name=(
-                None
-                if resolved_options.brand_name is None
-                else resolved_options.brand_name.strip()
-            )
+            brand_name=(None if resolved_options.brand_name is None else resolved_options.brand_name.strip())
         ),
         generated_at_text=(
-            None
-            if resolved_options.generated_at_text is None
-            else resolved_options.generated_at_text.strip()
+            None if resolved_options.generated_at_text is None else resolved_options.generated_at_text.strip()
         ),
     )
     if not resolved_options.include_metric_definitions_appendix:
@@ -465,10 +457,7 @@ def _build_activity_distribution_page(
     *,
     options: MarketReportOptions,
 ) -> ReportPage | None:
-    if (
-        not options.include_activity_distribution_page
-        or not report_input.reference_series
-    ):
+    if not options.include_activity_distribution_page or not report_input.reference_series:
         return None
 
     current_by_metric = {
@@ -517,10 +506,7 @@ def _build_displayed_liquidity_page(
     *,
     options: MarketReportOptions,
 ) -> ReportPage | None:
-    if (
-        not options.include_displayed_liquidity_page
-        or not report_input.reference_series
-    ):
+    if not options.include_displayed_liquidity_page or not report_input.reference_series:
         return None
 
     current_by_metric = {
@@ -551,10 +537,7 @@ def _build_displayed_liquidity_page(
                 help_text=options.displayed_liquidity_help_text,
             )
         )
-        if (
-            options.max_displayed_liquidity_charts is not None
-            and len(charts) >= options.max_displayed_liquidity_charts
-        ):
+        if options.max_displayed_liquidity_charts is not None and len(charts) >= options.max_displayed_liquidity_charts:
             break
 
     if not charts:
@@ -574,9 +557,7 @@ def _build_daily_trend_page(
     if not options.include_daily_trend_page or not report_input.reference_series:
         return None
 
-    reference_by_metric = {
-        series.metric_name: series for series in report_input.reference_series
-    }
+    reference_by_metric = {series.metric_name: series for series in report_input.reference_series}
     charts = []
     for target_series in report_input.current_series:
         if _is_toxicity_reversion_metric(target_series.metric_name):
@@ -733,16 +714,9 @@ def _detail_current_series(
     options: MarketReportOptions,
     toxicity_reversion_page_present: bool,
 ) -> tuple[MetricTimeSeries, ...]:
-    if (
-        not toxicity_reversion_page_present
-        or options.include_toxicity_reversion_metrics_in_detail_page
-    ):
+    if not toxicity_reversion_page_present or options.include_toxicity_reversion_metrics_in_detail_page:
         return current_series
-    return tuple(
-        series
-        for series in current_series
-        if not _is_toxicity_reversion_metric(series.metric_name)
-    )
+    return tuple(series for series in current_series if not _is_toxicity_reversion_metric(series.metric_name))
 
 
 def _build_detail_page(
@@ -798,10 +772,7 @@ def _series_has_symbol_scope(
 
 
 def _is_toxicity_reversion_metric(metric_name: str) -> bool:
-    return (
-        metric_name.startswith("primary_quote_reversion_")
-        and metric_name.endswith("_bps")
-    )
+    return metric_name.startswith("primary_quote_reversion_") and metric_name.endswith("_bps")
 
 
 def _require_definition(
@@ -811,10 +782,7 @@ def _require_definition(
     try:
         return definitions[metric_name]
     except KeyError as exc:
-        raise ValueError(
-            "metric definition is required for market report metric: "
-            f"{metric_name}"
-        ) from exc
+        raise ValueError(f"metric definition is required for market report metric: {metric_name}") from exc
 
 
 def _metric_axis_label(definition: MetricDefinition) -> str:
@@ -853,10 +821,7 @@ def _require_symbol_group_keys(symbol_group_keys: tuple[str, ...]) -> None:
 
 def _require_toxicity_context_ranking(value: str, field_name: str) -> None:
     if value not in TOXICITY_CONTEXT_RANKINGS:
-        raise ValueError(
-            f"{field_name} must be one of: "
-            + ", ".join(TOXICITY_CONTEXT_RANKINGS)
-        )
+        raise ValueError(f"{field_name} must be one of: " + ", ".join(TOXICITY_CONTEXT_RANKINGS))
 
 
 def _require_reversion_order(values: tuple[str, ...], field_name: str) -> None:

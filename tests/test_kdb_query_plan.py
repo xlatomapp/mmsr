@@ -1,5 +1,5 @@
-from datetime import date, time
 import re
+from datetime import date, time
 
 import pytest
 
@@ -8,8 +8,6 @@ from mmsr.kdb.query_plan import (
     KdbMetricQueryPlanError,
     KdbMetricQueryPlanner,
     MetricRunRequest,
-    group_by_for_metric_result,
-    template_for_metric,
 )
 from mmsr.kdb.runner import KdbMetricRunner
 from mmsr.metrics import build_default_registry
@@ -135,8 +133,6 @@ def test_query_planner_exposes_liquidity_quote_contracts() -> None:
     assert "calcLiquidity[rawQuotes;refs;" in plan.query
 
 
-
-
 def test_query_planner_exposes_reversion_optional_metadata_contract() -> None:
     registry = build_default_registry()
     metric_name = "primary_quote_reversion_100ms_bps"
@@ -256,7 +252,6 @@ def test_runner_uses_query_plan_metadata_in_normalized_series() -> None:
     assert client.queries == [series.metadata["query"]]
 
 
-
 def test_query_planner_can_call_user_defined_trade_source_function() -> None:
     registry = build_default_registry()
     planner = KdbMetricQueryPlanner()
@@ -323,8 +318,6 @@ def test_query_planner_can_call_user_defined_quote_source_function() -> None:
     assert "rawQuotes: (.sb.mmsr.getQuote[2026.05.01;0!refs]);" in plan.query
 
 
-
-
 def test_reversion_planner_uses_user_defined_trade_and_quote_source_functions() -> None:
     registry = build_default_registry()
     metric_name = "primary_quote_reversion_100ms_bps"
@@ -388,6 +381,7 @@ def test_query_planner_rejects_invalid_source_function_and_namespace() -> None:
                 calculation_namespace="global",
             )
         )
+
 
 def test_query_planner_rejects_invalid_group_identifier_before_execution() -> None:
     registry = build_default_registry()
@@ -465,11 +459,14 @@ def test_query_planner_renders_day_query_with_explicit_syms_and_q_rollup() -> No
     assert ".sb.mmsr.getQuote" in plan.query
     assert ".sb.mmsr.getRef" in plan.query
     assert "enlist[`symbols]!" in plan.query
-    assert 'rollupMetricResult[raze {x[$"quoted_spread_bps"]} each chunkResults;requestedAggregationLevels]' not in plan.query
+    assert (
+        'rollupMetricResult[raze {x[$"quoted_spread_bps"]} each chunkResults;requestedAggregationLevels]'
+        not in plan.query
+    )
     assert 'rollupMetricResult[raze {x[$"quoted_spread_bps"]} each chunkResults;$"quoted_spread_bps";' not in plan.query
     assert "`market`market_bucket`symbol" in plan.query
 
-    assert '`reference_data' in plan.query
+    assert "`reference_data" in plan.query
     assert '`$"quoted_spread_bps"' in plan.query
     assert '`$"7203"' in plan.query
     assert re.search(r'(?<!`)\\$"reference_data"', plan.query) is None
@@ -477,23 +474,26 @@ def test_query_planner_renders_day_query_with_explicit_syms_and_q_rollup() -> No
     assert re.search(r'(?<!`)\\$"7203"', plan.query) is None
 
 
-
 def test_query_planner_quote_contracts_do_not_require_tick_state() -> None:
-    contract = KdbMetricQueryPlanner().render(
-        MetricRunRequest(
-            metric=build_default_registry().get("quoted_spread_bps"),
-            period=ReportPeriod(
-                start_date=date(2026, 5, 1),
-                end_date=date(2026, 5, 1),
-                bucket=IntradayBucketSpec("5m"),
-            ),
-            group_by=["topixCapGrp"],
-            source_functions={
-                "quotes": ".sb.mmsr.getQuote",
-                "reference_data": ".sb.mmsr.getRef",
-            },
+    contract = (
+        KdbMetricQueryPlanner()
+        .render(
+            MetricRunRequest(
+                metric=build_default_registry().get("quoted_spread_bps"),
+                period=ReportPeriod(
+                    start_date=date(2026, 5, 1),
+                    end_date=date(2026, 5, 1),
+                    bucket=IntradayBucketSpec("5m"),
+                ),
+                group_by=["topixCapGrp"],
+                source_functions={
+                    "quotes": ".sb.mmsr.getQuote",
+                    "reference_data": ".sb.mmsr.getRef",
+                },
+            )
         )
-    ).input_contracts[0]
+        .input_contracts[0]
+    )
 
     assert "session" not in contract.required_columns
     assert "auction" not in contract.required_columns
@@ -534,6 +534,7 @@ def test_render_day_uses_canonical_q_library_blocks_not_removed_template_files()
     assert "query_templates" not in plan.query
     assert "liquidity.j2" not in plan.query
 
+
 def test_render_day_singleton_metric_dictionaries_enlist_keys_before_bang() -> None:
     registry = build_default_registry()
     planner = KdbMetricQueryPlanner()
@@ -566,7 +567,7 @@ def test_render_day_singleton_metric_dictionaries_enlist_keys_before_bang() -> N
 
     assert "enlist[`quoted_spread_bps]!enlist ((`bucket;`start_date;`end_date)!" in plan.query
     assert "enlist `quoted_spread_bps!" not in plan.query
-    assert "enlist[`symbols]!enlist (enlist `$\"7203\")" in plan.query
+    assert 'enlist[`symbols]!enlist (enlist `$"7203")' in plan.query
     assert "enlist `symbols!" not in plan.query
-    assert "enlist `$\"reference_data\"!" not in plan.query
+    assert 'enlist `$"reference_data"!' not in plan.query
     assert re.search(r"enlist\s+`[^\[\s]+!", plan.query) is None

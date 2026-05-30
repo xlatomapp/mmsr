@@ -7,10 +7,7 @@ from mmsr.report.components import ReportDocument
 from mmsr.report.render_html import render_report
 from mmsr.report.sections import ComparisonSectionOptions, build_comparison_report_page
 
-
-QUOTED_SPREAD_BPS = next(
-    metric for metric in STARTER_METRICS if metric.name == "quoted_spread_bps"
-)
+QUOTED_SPREAD_BPS = next(metric for metric in STARTER_METRICS if metric.name == "quoted_spread_bps")
 VOLUME = next(metric for metric in STARTER_METRICS if metric.name == "volume")
 
 
@@ -49,9 +46,7 @@ def test_build_comparison_report_page_creates_cards_and_commentary() -> None:
         "volume",
     ]
     assert page.metric_cards[0].value_text == "42.1000 bps"
-    assert page.metric_cards[0].reference_text == (
-        "31.4000 bps (change +10.7000 bps +34.1%)"
-    )
+    assert page.metric_cards[0].reference_text == ("31.4000 bps (change +10.7000 bps +34.1%)")
     assert "Formula:" in page.metric_cards[0].help_text()
     assert len(page.commentary_blocks) == 1
     assert page.commentary_blocks[0].title == "Commentary"
@@ -153,9 +148,7 @@ def test_build_comparison_report_page_can_disable_section_summary() -> None:
         options=ComparisonSectionOptions(include_section_summary=False),
     )
 
-    assert page.commentary_blocks[0].comments == [
-        "Volume was within the normal range for the selected universe."
-    ]
+    assert page.commentary_blocks[0].comments == ["Volume was within the normal range for the selected universe."]
 
 
 def test_comparison_section_options_validate_summary_scope() -> None:

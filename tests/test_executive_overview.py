@@ -9,9 +9,7 @@ from mmsr.report.overview import (
     build_executive_market_overview_block,
 )
 
-QUOTED_SPREAD_BPS = next(
-    metric for metric in STARTER_METRICS if metric.name == "quoted_spread_bps"
-)
+QUOTED_SPREAD_BPS = next(metric for metric in STARTER_METRICS if metric.name == "quoted_spread_bps")
 VOLUME = next(metric for metric in STARTER_METRICS if metric.name == "volume")
 
 

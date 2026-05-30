@@ -5,8 +5,8 @@ PyKX is imported lazily so unit tests and docs can run without installing PyKX.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 LOGGER = logging.getLogger(__name__)
@@ -36,8 +36,7 @@ class KdbClient:
             import pykx as kx  # type: ignore[import-not-found]
         except ImportError as exc:
             raise RuntimeError(
-                "PyKX is required for kdb connectivity. Install with: "
-                "poetry install --extras kdb"
+                "PyKX is required for kdb connectivity. Install with: poetry install --extras kdb"
             ) from exc
 
         self._connection = kx.QConnection(

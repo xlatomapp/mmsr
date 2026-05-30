@@ -3,16 +3,13 @@ from __future__ import annotations
 import logging
 
 import pytest
-from typer.testing import CliRunner
 
 from mmsr.cli import build_cli_app
 from mmsr.logging import configure_logging
 
 
 def _command_options(command: str) -> set[str]:
-    click_command = __import__("typer.main", fromlist=["get_command"]).get_command(
-        build_cli_app()
-    ).commands[command]
+    click_command = __import__("typer.main", fromlist=["get_command"]).get_command(build_cli_app()).commands[command]
     option_names: set[str] = set()
     for param in click_command.params:
         option_names.update(param.opts)

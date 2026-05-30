@@ -13,7 +13,6 @@ from mmsr.metrics.results import MetricComparison
 from mmsr.presentation.labels import format_comparison_scope_label
 from mmsr.report.components import HtmlBlock
 
-
 _STATUS_PRIORITY: dict[str, int] = {
     "alert": 0,
     "watch": 1,
@@ -139,9 +138,7 @@ def _overview_html(
 
     status_text = _status_count_sentence(status_counts)
     family_html = _metric_family_overview_html(comparisons, tuple(selected_summaries))
-    summary_items = "\n".join(
-        _metric_overview_item(summary) for summary in selected_summaries
-    )
+    summary_items = "\n".join(_metric_overview_item(summary) for summary in selected_summaries)
     omitted_html = (
         ""
         if omitted_count == 0
@@ -221,15 +218,9 @@ def _metric_overview(
         normal_count=status_counts.get("normal", 0),
         comparison_only_count=status_counts.get("comparison_only", 0),
         average_value=_average_numeric(comparison.value for comparison in comparisons),
-        average_reference_value=_average_numeric(
-            comparison.reference_value for comparison in comparisons
-        ),
-        average_change_abs=_average_numeric(
-            comparison.change_abs for comparison in comparisons
-        ),
-        average_change_pct=_average_numeric(
-            comparison.change_pct for comparison in comparisons
-        ),
+        average_reference_value=_average_numeric(comparison.reference_value for comparison in comparisons),
+        average_change_abs=_average_numeric(comparison.change_abs for comparison in comparisons),
+        average_change_pct=_average_numeric(comparison.change_pct for comparison in comparisons),
         most_severe_scope=_format_scope(most_severe),
         unit=definition.unit,
     )
@@ -243,9 +234,7 @@ def _metric_family_overview_html(
     if not family_summaries:
         return ""
 
-    items = "\n".join(
-        _metric_family_overview_item(summary) for summary in family_summaries
-    )
+    items = "\n".join(_metric_family_overview_item(summary) for summary in family_summaries)
     return (
         '  <div class="executive-overview__families" '
         'aria-label="Market activity and displayed liquidity summary">\n'
@@ -258,28 +247,21 @@ def _metric_family_overviews(
     comparisons: tuple[MetricComparison, ...],
     metric_summaries: tuple[_MetricOverview, ...],
 ) -> tuple[_MetricFamilyOverview, ...]:
-    metric_summary_by_name = {
-        summary.metric_name: summary for summary in metric_summaries
-    }
+    metric_summary_by_name = {summary.metric_name: summary for summary in metric_summaries}
     selected_metric_names = set(metric_summary_by_name)
     family_overviews: list[_MetricFamilyOverview] = []
     for family_label, metric_names in _MARKET_SUMMARY_FAMILIES:
         family_comparisons = tuple(
             comparison
             for comparison in comparisons
-            if comparison.metric_name in metric_names
-            and comparison.metric_name in selected_metric_names
+            if comparison.metric_name in metric_names and comparison.metric_name in selected_metric_names
         )
         if not family_comparisons:
             continue
 
-        status_counts = Counter(
-            comparison.status for comparison in family_comparisons
-        )
+        status_counts = Counter(comparison.status for comparison in family_comparisons)
         observed_summaries = tuple(
-            metric_summary_by_name[metric_name]
-            for metric_name in metric_names
-            if metric_name in metric_summary_by_name
+            metric_summary_by_name[metric_name] for metric_name in metric_names if metric_name in metric_summary_by_name
         )
         leading_metric = min(
             observed_summaries,
@@ -295,9 +277,7 @@ def _metric_family_overviews(
                 family_label=family_label,
                 status=_overall_status(status_counts),
                 comparison_count=len(family_comparisons),
-                observed_metric_labels=tuple(
-                    summary.metric_label for summary in observed_summaries
-                ),
+                observed_metric_labels=tuple(summary.metric_label for summary in observed_summaries),
                 alert_count=status_counts.get("alert", 0),
                 watch_count=status_counts.get("watch", 0),
                 normal_count=status_counts.get("normal", 0),
@@ -355,15 +335,11 @@ def _metric_overview_item(summary: _MetricOverview) -> str:
         summary.unit,
     )
     scope_text = summary.most_severe_scope or "selected universe"
-    abnormal_text = (
-        f"{abnormal_count} alert/watch observations"
-        if abnormal_count != 1
-        else "1 alert/watch observation"
-    )
+    abnormal_text = f"{abnormal_count} alert/watch observations" if abnormal_count != 1 else "1 alert/watch observation"
 
     return (
         "    <li>"
-        f'<strong>{escape(summary.metric_label)}</strong>: '
+        f"<strong>{escape(summary.metric_label)}</strong>: "
         f"{_status_label(summary.status).lower()} status across "
         f"{summary.comparison_count} comparisons; {abnormal_text}; "
         f"average current {escape(current_text)} versus reference "
@@ -438,11 +414,7 @@ def _format_signed_metric_value(value: float, unit: str) -> str:
 
 
 def _average_numeric(values: Iterable[float | int | None]) -> float | None:
-    numeric_values = [
-        float(value)
-        for value in values
-        if value is not None and isfinite(float(value))
-    ]
+    numeric_values = [float(value) for value in values if value is not None and isfinite(float(value))]
     if not numeric_values:
         return None
     return sum(numeric_values) / len(numeric_values)
@@ -483,16 +455,10 @@ def _require_metric_definitions(
     comparisons: Sequence[MetricComparison],
     definitions: Mapping[str, MetricDefinition],
 ) -> None:
-    missing = sorted(
-        {comparison.metric_name for comparison in comparisons}
-        - set(definitions.keys())
-    )
+    missing = sorted({comparison.metric_name for comparison in comparisons} - set(definitions.keys()))
     if missing:
         missing_text = ", ".join(missing)
-        raise ValueError(
-            "metric definitions are required for executive overview metrics: "
-            f"{missing_text}"
-        )
+        raise ValueError(f"metric definitions are required for executive overview metrics: {missing_text}")
 
 
 __all__ = [

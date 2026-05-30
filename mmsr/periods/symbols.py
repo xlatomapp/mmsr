@@ -7,10 +7,10 @@ symbol attributes used for grouping and raw-source filtering.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import date
 import logging
 import re
+from dataclasses import dataclass
+from datetime import date
 from typing import Any, Protocol
 
 LOGGER = logging.getLogger(__name__)

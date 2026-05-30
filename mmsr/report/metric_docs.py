@@ -17,8 +17,7 @@ class MetricDefinitionsAppendixOptions:
     title: str = "Metric Definitions Appendix"
     block_title: str = "Metric documentation"
     help_text: str = (
-        "Definitions, formulas, units, aggregation rules, and caveats for the "
-        "metrics shown in this report."
+        "Definitions, formulas, units, aggregation rules, and caveats for the metrics shown in this report."
     )
 
     def __post_init__(self) -> None:
@@ -110,9 +109,7 @@ def build_metric_definitions_appendix_page(
 def append_metric_definitions_appendix(
     document: ReportDocument,
     *,
-    metric_definitions: (
-        Mapping[str, MetricDefinition] | Iterable[MetricDefinition] | None
-    ) = None,
+    metric_definitions: (Mapping[str, MetricDefinition] | Iterable[MetricDefinition] | None) = None,
     options: MetricDefinitionsAppendixOptions | None = None,
 ) -> ReportDocument:
     """Return a copy of ``document`` with a metric definitions appendix appended.
@@ -145,10 +142,7 @@ def _register_definition(
 ) -> None:
     existing = definitions.get(metric.name)
     if existing is not None and existing != metric:
-        raise ValueError(
-            "conflicting metric definitions for appendix metric: "
-            f"{metric.name}"
-        )
+        raise ValueError(f"conflicting metric definitions for appendix metric: {metric.name}")
     definitions[metric.name] = metric
 
 
@@ -177,11 +171,7 @@ def _sorted_metric_definitions(
 
 def _metric_definitions_html(metrics: Sequence[MetricDefinition]) -> str:
     if not metrics:
-        return (
-            '<p class="metric-definitions__empty">'
-            "No metric definitions were supplied for this report."
-            "</p>"
-        )
+        return '<p class="metric-definitions__empty">No metric definitions were supplied for this report.</p>'
 
     rows = "\n".join(_metric_definition_details(metric) for metric in metrics)
     return f'<div class="metric-definitions">\n{rows}\n</div>'
@@ -201,7 +191,7 @@ def _metric_definition_details(metric: MetricDefinition) -> str:
     )
     return (
         '<details class="metric-definition" open>\n'
-        f'  <summary><strong>{escape(metric.label)}</strong> '
+        f"  <summary><strong>{escape(metric.label)}</strong> "
         f'<span class="metric-definition__category">({escape(metric.category)})</span>'
         "</summary>\n"
         '  <dl class="metric-definition__fields">\n'

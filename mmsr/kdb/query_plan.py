@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from datetime import date, time
 from typing import Any
 
+from mmsr.kdb.query_loader import render_template, template_parameters
 from mmsr.kdb.schema_contracts import (
     QTemplateInputTableSchemaContract,
     QTemplateOutputSchemaContract,
@@ -26,12 +27,9 @@ from mmsr.kdb.schema_contracts import (
 from mmsr.metrics.base import MetricDefinition
 from mmsr.periods.models import IntradayBucketSpec, ReportPeriod
 
-
 _ACTIVITY_METRICS = frozenset({"turnover", "volume", "trade_count"})
 _LIQUIDITY_METRICS = frozenset({"quoted_spread_bps", "top_of_book_depth"})
-_REVERSION_METRIC_PATTERN = re.compile(
-    r"^primary_quote_reversion_(?P<horizon>10ms|100ms|500ms|1s|5s|10s)_bps$"
-)
+_REVERSION_METRIC_PATTERN = re.compile(r"^primary_quote_reversion_(?P<horizon>10ms|100ms|500ms|1s|5s|10s)_bps$")
 _REVERSION_GROUP_COLUMNS = ("venue", "horizon")
 _REVERSION_HORIZON_SORT_ORDER = {
     "10ms": 1,
@@ -43,8 +41,7 @@ _REVERSION_HORIZON_SORT_ORDER = {
 }
 _REVERSION_TEMPLATE = "toxicity_reversion"
 _REVERSION_METRICS = frozenset(
-    f"primary_quote_reversion_{horizon}_bps"
-    for horizon in ("10ms", "100ms", "500ms", "1s", "5s", "10s")
+    f"primary_quote_reversion_{horizon}_bps" for horizon in ("10ms", "100ms", "500ms", "1s", "5s", "10s")
 )
 
 _METRIC_TEMPLATE_MAP = {
@@ -131,7 +128,6 @@ class RenderedMetricQuery:
         self.output_contract.validate_result(result)
 
 
-
 @dataclass(frozen=True)
 class RenderedMetricBatchQuery:
     """Rendered q query that loads one day/chunk once and returns metric tables.
@@ -176,9 +172,7 @@ class RenderedMetricDayQuery:
         """Required columns for a single-metric day query."""
 
         if len(self.metric_queries) != 1:
-            raise KdbMetricQueryPlanError(
-                "required_output_columns is only defined for single-metric day queries"
-            )
+            raise KdbMetricQueryPlanError("required_output_columns is only defined for single-metric day queries")
         return self.metric_queries[0].required_output_columns
 
     @property
@@ -186,9 +180,7 @@ class RenderedMetricDayQuery:
         """Legacy single-metric family identifier for older callers."""
 
         if len(self.metric_queries) != 1:
-            raise KdbMetricQueryPlanError(
-                "template_name is only defined for single-metric day queries"
-            )
+            raise KdbMetricQueryPlanError("template_name is only defined for single-metric day queries")
         return self.metric_queries[0].template_name
 
 
@@ -205,10 +197,6 @@ class KdbMetricQueryPlanner:
             request.group_by,
         )
 
-        calculation_namespace = _q_namespace(
-            request.calculation_namespace,
-            "calculation_namespace",
-        )
         params = _template_parameters_for_request(request)
 
         query = _single_metric_execution_block(
@@ -285,9 +273,7 @@ class KdbMetricQueryPlanner:
             ],
             [
                 source_functions,
-                _q_symbol_vector_from_strings(
-                    [metric_query.metric_name for metric_query in metric_queries]
-                ),
+                _q_symbol_vector_from_strings([metric_query.metric_name for metric_query in metric_queries]),
                 metric_params,
                 universe_filters,
                 _q_symbol_vector(aggregation_levels, "aggregation_levels"),
@@ -305,7 +291,6 @@ class KdbMetricQueryPlanner:
             metric_queries=metric_queries,
             chunk_size=chunk_size,
         )
-
 
     def render_batch(
         self,
@@ -340,22 +325,15 @@ class KdbMetricQueryPlanner:
             zip(clean_requests, metric_queries, strict=True),
             start=1,
         ):
-            params = _template_parameters_for_request(request)
             result_variable = f"metricResult{index}"
             body_lines.append("")
             body_lines.append(
-                f"    {result_variable}: {_metric_call_expression(metric_query.metric_name, metric_query.template_name, metric_query.calculation_namespace, _metric_params_expression(request))};"
+                f"    {result_variable}: {_metric_call_expression(metric_query.metric_name, metric_query.template_name, metric_query.calculation_namespace, _metric_params_expression(request))};"  # noqa: E501
             )
             result_symbols.append(_q_symbol_from_string(metric_query.metric_name))
             result_variables.append(result_variable)
 
-        body_lines.append(
-            "    "
-            + _q_symbol_list(result_symbols)
-            + "!("
-            + ";".join(result_variables)
-            + ")"
-        )
+        body_lines.append("    " + _q_symbol_list(result_symbols) + "!(" + ";".join(result_variables) + ")")
         body_lines.append("    }[]")
         return RenderedMetricBatchQuery(
             query="\n".join(body_lines),
@@ -371,11 +349,8 @@ def template_for_metric(metric_name: str) -> str:
     except KeyError as exc:
         supported = ", ".join(sorted(_METRIC_TEMPLATE_MAP))
         raise NotImplementedError(
-            f"metric {metric_name!r} is not yet supported by KdbMetricRunner; "
-            f"supported metrics: {supported}"
+            f"metric {metric_name!r} is not yet supported by KdbMetricRunner; supported metrics: {supported}"
         ) from exc
-
-
 
 
 def metric_family_for_metric(metric_name: str) -> str:
@@ -493,7 +468,6 @@ def _reference_extra_columns(query_group_by: Sequence[str]) -> tuple[str, ...]:
     return tuple(_dedupe(list(query_group_by)))
 
 
-
 def _render_template_with_used_params(
     template: str,
     params: Mapping[str, str],
@@ -594,9 +568,7 @@ def _metric_call_expression(
     try:
         return calls[template_name]
     except KeyError as exc:
-        raise KdbMetricQueryPlanError(
-            f"unsupported q template for metric call: {template_name!r}"
-        ) from exc
+        raise KdbMetricQueryPlanError(f"unsupported q template for metric call: {template_name!r}") from exc
 
 
 def _metric_function_expression(
@@ -608,9 +580,15 @@ def _metric_function_expression(
     """Return an anonymous q function that runs one metric against loaded sources."""
 
     metric_params = _metric_params_expression(request)
+    activity_call = (
+        f"{{[rawSources] {calculation_namespace}.calcActivity[rawSources`trades;rawSources`refs;{metric_params}]}}"
+    )
+    liquidity_call = (
+        f"{{[rawSources] {calculation_namespace}.calcLiquidity[rawSources`quotes;rawSources`refs;{metric_params}]}}"
+    )
     calls = {
-        "activity": f"{{[rawSources] {calculation_namespace}.calcActivity[rawSources`trades;rawSources`refs;{metric_params}]}}",
-        "liquidity": f"{{[rawSources] {calculation_namespace}.calcLiquidity[rawSources`quotes;rawSources`refs;{metric_params}]}}",
+        "activity": activity_call,
+        "liquidity": liquidity_call,
         _REVERSION_TEMPLATE: (
             f"{{[rawSources] {calculation_namespace}.calcToxicityReversion["
             f"rawSources`pts_trades;rawSources`pts_quotes;rawSources`primary_quotes;rawSources`refs;{metric_params}]}}"
@@ -619,9 +597,7 @@ def _metric_function_expression(
     try:
         return calls[template_name]
     except KeyError as exc:
-        raise KdbMetricQueryPlanError(
-            f"unsupported q template for metric function: {template_name!r}"
-        ) from exc
+        raise KdbMetricQueryPlanError(f"unsupported q template for metric function: {template_name!r}") from exc
 
 
 def _metric_params_expression(request: MetricRunRequest) -> str:
@@ -630,7 +606,11 @@ def _metric_params_expression(request: MetricRunRequest) -> str:
     template_name = template_for_metric(request.metric.name)
     bucket = _bucket_duration(request.period.bucket)
     keys = ["bucket", "start_date", "end_date"]
-    values = [bucket, _q_date(request.period.start_date), _q_date(request.period.end_date)]
+    values = [
+        bucket,
+        _q_date(request.period.start_date),
+        _q_date(request.period.end_date),
+    ]
 
     if template_name == _REVERSION_TEMPLATE:
         extra = _reversion_template_parameters(request)
@@ -696,12 +676,7 @@ def _q_singleton_dictionary_expression(rendered_single_key_list: str, value: str
 
 def _q_singleton_dictionary_value(value: str) -> str:
     stripped = value.strip()
-    if (
-        "!" in stripped
-        or stripped.startswith("enlist ")
-        or stripped.startswith("enlist[")
-        or ";" in stripped
-    ):
+    if "!" in stripped or stripped.startswith("enlist ") or stripped.startswith("enlist[") or ";" in stripped:
         return f"({stripped})"
     return stripped
 
@@ -729,18 +704,9 @@ def _q_source_loader_expression(
         return f"{{[runDate;refs] select from {table_name}}}"
 
     if source_key == "reference_data":
-        return (
-            "{[runDate;refs] "
-            "([]date:0#0Nd;"
-            "sym:`symbol$();"
-            "ric:`symbol$();"
-            "topixCapGrp:`symbol$();"
-            "lotSize:0#0N)}"
-        )
+        return "{[runDate;refs] ([]date:0#0Nd;sym:`symbol$();ric:`symbol$();topixCapGrp:`symbol$();lotSize:0#0N)}"
 
-    raise KdbMetricQueryPlanError(
-        f"missing source_functions or table_names entry {source_key!r}"
-    )
+    raise KdbMetricQueryPlanError(f"missing source_functions or table_names entry {source_key!r}")
 
 
 def _q_function_dictionary(
@@ -764,9 +730,6 @@ def _q_function_dictionary(
     if len(values) == 1:
         return _q_singleton_dictionary_expression(rendered_keys, values[0])
     return f"{rendered_keys}!({';'.join(values)})"
-
-
-
 
 
 def _source_function_dictionary(
@@ -861,9 +824,7 @@ def _batch_source_parameters(requests: Sequence[MetricRunRequest]) -> dict[str, 
             if key.endswith("_table") or key == "ref_filter":
                 existing = merged.get(key)
                 if existing is not None and existing != value:
-                    raise KdbMetricQueryPlanError(
-                        f"batch request has conflicting q source parameter {key!r}"
-                    )
+                    raise KdbMetricQueryPlanError(f"batch request has conflicting q source parameter {key!r}")
                 merged[key] = value
     if "ref_table" not in merged:
         raise KdbMetricQueryPlanError("batch query requires reference-data source")
@@ -882,9 +843,7 @@ def _batch_source_load_lines(
         local_name = _source_local_name(role)
         param_name = _source_param_name(role)
         if param_name not in params:
-            raise KdbMetricQueryPlanError(
-                f"batch query missing source parameter {param_name!r}"
-            )
+            raise KdbMetricQueryPlanError(f"batch query missing source parameter {param_name!r}")
         source_expr = params[param_name]
         lines.append(f"    {local_name}: {source_expr};")
         if role == "trades":
@@ -929,10 +888,7 @@ def _day_source_parameters(
     """Replace the rendered day literal in source calls with the runDate arg."""
 
     day_literal = _q_date(trading_day)
-    return {
-        key: value.replace(day_literal, "runDate")
-        for key, value in params.items()
-    }
+    return {key: value.replace(day_literal, "runDate") for key, value in params.items()}
 
 
 def _representative_metric_requests(
@@ -990,14 +946,10 @@ def _aggregation_level_values(parameters: Mapping[str, Any]) -> tuple[str, ...]:
         ),
     )
     if isinstance(raw, str) or not isinstance(raw, Sequence):
-        raise KdbMetricQueryPlanError(
-            "parameter 'aggregation_levels' must be a sequence of strings"
-        )
+        raise KdbMetricQueryPlanError("parameter 'aggregation_levels' must be a sequence of strings")
     levels = tuple(value for value in raw if isinstance(value, str) and value)
     if len(levels) != len(raw) or not levels:
-        raise KdbMetricQueryPlanError(
-            "parameter 'aggregation_levels' must contain only non-empty strings"
-        )
+        raise KdbMetricQueryPlanError("parameter 'aggregation_levels' must contain only non-empty strings")
     return levels
 
 
@@ -1015,15 +967,11 @@ def _validate_day_request_compatibility(
         if request.period.start_date != first_day or request.period.end_date != first_day:
             raise KdbMetricQueryPlanError("day query requests must be single-day")
         if dict(request.source_functions) != first_source_functions:
-            raise KdbMetricQueryPlanError(
-                "day query requests must share source_functions"
-            )
+            raise KdbMetricQueryPlanError("day query requests must share source_functions")
         if dict(request.table_names) != first_table_names:
             raise KdbMetricQueryPlanError("day query requests must share table_names")
         if request.calculation_namespace != first_namespace:
-            raise KdbMetricQueryPlanError(
-                "day query requests must share calculation_namespace"
-            )
+            raise KdbMetricQueryPlanError("day query requests must share calculation_namespace")
 
 
 def _validate_batch_request_compatibility(
@@ -1037,21 +985,15 @@ def _validate_batch_request_compatibility(
     first_namespace = first.calculation_namespace
     for request in requests[1:]:
         if request.period != first_period:
-            raise KdbMetricQueryPlanError(
-                "batch requests must share one trading-day period"
-            )
+            raise KdbMetricQueryPlanError("batch requests must share one trading-day period")
         if _symbol_filter_values(request.parameters) != first_symbols:
             raise KdbMetricQueryPlanError("batch requests must share one symbol chunk")
         if dict(request.source_functions) != first_source_functions:
-            raise KdbMetricQueryPlanError(
-                "batch requests must share source_functions"
-            )
+            raise KdbMetricQueryPlanError("batch requests must share source_functions")
         if dict(request.table_names) != first_table_names:
             raise KdbMetricQueryPlanError("batch requests must share table_names")
         if request.calculation_namespace != first_namespace:
-            raise KdbMetricQueryPlanError(
-                "batch requests must share calculation_namespace"
-            )
+            raise KdbMetricQueryPlanError("batch requests must share calculation_namespace")
 
 
 def _source_parameters(
@@ -1093,17 +1035,10 @@ def _q_source_expression(
         return _q_identifier(table_names[resolved_source_key], "table name")
 
     if source_key == "reference_data":
-        return (
-            "([]date:0#0Nd;"
-            "sym:`symbol$();"
-            "ric:`symbol$();"
-            "topixCapGrp:`symbol$();"
-            "lotSize:0#0N)"
-        )
+        return "([]date:0#0Nd;sym:`symbol$();ric:`symbol$();topixCapGrp:`symbol$();lotSize:0#0N)"
 
     raise KdbMetricQueryPlanError(
-        f"missing source_functions or table_names entry {source_key!r} "
-        f"for metric {request.metric.name!r}"
+        f"missing source_functions or table_names entry {source_key!r} for metric {request.metric.name!r}"
     )
 
 
@@ -1163,13 +1098,9 @@ def _reversion_template_parameters(request: MetricRunRequest) -> dict[str, str]:
         request.parameters.get("max_venue_quote_age", max_primary_quote_age),
     )
     if not isinstance(max_primary_quote_age, str):
-        raise KdbMetricQueryPlanError(
-            "parameter 'max_primary_quote_age' must be a string"
-        )
+        raise KdbMetricQueryPlanError("parameter 'max_primary_quote_age' must be a string")
     if not isinstance(max_pts_quote_age, str):
-        raise KdbMetricQueryPlanError(
-            "parameter 'max_pts_quote_age' must be a string"
-        )
+        raise KdbMetricQueryPlanError("parameter 'max_pts_quote_age' must be a string")
 
     exclude_auction = bool(request.parameters.get("exclude_auction", False))
 
@@ -1203,9 +1134,7 @@ def _reversion_horizon_sort_order(horizon: str) -> int:
     try:
         return _REVERSION_HORIZON_SORT_ORDER[horizon]
     except KeyError as exc:
-        raise KdbMetricQueryPlanError(
-            f"unsupported primary quote reversion horizon: {horizon!r}"
-        ) from exc
+        raise KdbMetricQueryPlanError(f"unsupported primary quote reversion horizon: {horizon!r}") from exc
 
 
 def _query_group_by_for_template(
@@ -1221,22 +1150,16 @@ def _query_group_by_for_template(
 def _reversion_horizon_from_metric(metric_name: str) -> str:
     match = _REVERSION_METRIC_PATTERN.fullmatch(metric_name)
     if match is None:
-        raise KdbMetricQueryPlanError(
-            f"invalid primary quote reversion metric: {metric_name!r}"
-        )
+        raise KdbMetricQueryPlanError(f"invalid primary quote reversion metric: {metric_name!r}")
     return match.group("horizon")
 
 
 def _required_string_parameter(request: MetricRunRequest, name: str) -> str:
     if name not in request.parameters:
-        raise KdbMetricQueryPlanError(
-            f"missing parameter {name!r} for metric {request.metric.name!r}"
-        )
+        raise KdbMetricQueryPlanError(f"missing parameter {name!r} for metric {request.metric.name!r}")
     value = request.parameters[name]
     if not isinstance(value, str) or not value:
-        raise KdbMetricQueryPlanError(
-            f"parameter {name!r} must be a non-empty string"
-        )
+        raise KdbMetricQueryPlanError(f"parameter {name!r} must be a non-empty string")
     return value
 
 
@@ -1245,9 +1168,7 @@ def _required_string_sequence_parameter(
     name: str,
 ) -> tuple[str, ...]:
     if name not in request.parameters:
-        raise KdbMetricQueryPlanError(
-            f"missing parameter {name!r} for metric {request.metric.name!r}"
-        )
+        raise KdbMetricQueryPlanError(f"missing parameter {name!r} for metric {request.metric.name!r}")
 
     value = request.parameters[name]
     return _string_sequence_parameter(value, name)
@@ -1265,15 +1186,11 @@ def _optional_string_sequence_parameter(
 
 def _string_sequence_parameter(value: Any, name: str) -> tuple[str, ...]:
     if isinstance(value, (str, bytes, bytearray)) or not isinstance(value, Sequence):
-        raise KdbMetricQueryPlanError(
-            f"parameter {name!r} must be a sequence of strings"
-        )
+        raise KdbMetricQueryPlanError(f"parameter {name!r} must be a sequence of strings")
 
     strings = tuple(item for item in value if isinstance(item, str) and item)
     if len(strings) != len(value) or not strings:
-        raise KdbMetricQueryPlanError(
-            f"parameter {name!r} must contain only non-empty strings"
-        )
+        raise KdbMetricQueryPlanError(f"parameter {name!r} must contain only non-empty strings")
     return strings
 
 
@@ -1305,28 +1222,18 @@ def _symbol_filter_values(parameters: Mapping[str, Any]) -> tuple[str, ...]:
 
     if symbols_value not in (None, ""):
         if isinstance(symbols_value, str) or not isinstance(symbols_value, Sequence):
-            raise KdbMetricQueryPlanError(
-                "parameter 'symbols' must be a sequence of strings when provided"
-            )
-        symbols = tuple(
-            value for value in symbols_value if isinstance(value, str) and value
-        )
+            raise KdbMetricQueryPlanError("parameter 'symbols' must be a sequence of strings when provided")
+        symbols = tuple(value for value in symbols_value if isinstance(value, str) and value)
         if len(symbols) != len(symbols_value):
-            raise KdbMetricQueryPlanError(
-                "parameter 'symbols' must contain only non-empty strings"
-            )
+            raise KdbMetricQueryPlanError("parameter 'symbols' must contain only non-empty strings")
         if symbol_value not in (None, "") and tuple(symbols) != (symbol_value,):
-            raise KdbMetricQueryPlanError(
-                "parameters 'symbol' and 'symbols' conflict"
-            )
+            raise KdbMetricQueryPlanError("parameters 'symbol' and 'symbols' conflict")
         return symbols
 
     if symbol_value in (None, ""):
         return ()
     if not isinstance(symbol_value, str):
-        raise KdbMetricQueryPlanError(
-            "parameter 'symbol' must be a string when provided"
-        )
+        raise KdbMetricQueryPlanError("parameter 'symbol' must be a string when provided")
     return (symbol_value,)
 
 
@@ -1366,9 +1273,7 @@ def _q_symbol_vector_or_empty(value: Any) -> str:
     if isinstance(value, str):
         return f"enlist {_q_symbol(value, 'venues')}"
     if not isinstance(value, Sequence) or isinstance(value, (bytes, bytearray)):
-        raise KdbMetricQueryPlanError(
-            "parameter 'venues' must be a sequence of strings when provided"
-        )
+        raise KdbMetricQueryPlanError("parameter 'venues' must be a sequence of strings when provided")
     return _q_symbol_vector(value, "venues")
 
 
@@ -1425,10 +1330,7 @@ def _q_date(value: date) -> str:
 
 
 def _q_time(value: time) -> str:
-    return (
-        f"{value.hour:02d}:{value.minute:02d}:{value.second:02d}."
-        f"{value.microsecond // 1000:03d}"
-    )
+    return f"{value.hour:02d}:{value.minute:02d}:{value.second:02d}.{value.microsecond // 1000:03d}"
 
 
 def _q_identifier(value: str, label: str) -> str:
@@ -1503,9 +1405,7 @@ _DURATION_RE = re.compile(r"^(?P<size>[1-9][0-9]*)(?P<unit>ms|s|m|h)$")
 def _q_duration(value: str, label: str) -> str:
     match = _DURATION_RE.fullmatch(value)
     if match is None:
-        raise KdbMetricQueryPlanError(
-            f"invalid {label}: {value!r}; expected durations such as '10ms' or '1s'"
-        )
+        raise KdbMetricQueryPlanError(f"invalid {label}: {value!r}; expected durations such as '10ms' or '1s'")
 
     size = int(match.group("size"))
     unit = match.group("unit")

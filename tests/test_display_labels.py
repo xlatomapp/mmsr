@@ -25,13 +25,9 @@ def test_group_labels_replace_internal_key_equals_text() -> None:
     assert format_group_key_label("market_cap_bucket") == "Market cap bucket"
     assert format_group_key_label("topixCapGrp") == "TOPIX cap group"
     assert format_group_value_label("market_cap_bucket", "Small") == "Small cap"
+    assert format_group_item_label("market_cap_bucket", "Small") == "Market cap bucket: Small cap"
     assert (
-        format_group_item_label("market_cap_bucket", "Small")
-        == "Market cap bucket: Small cap"
-    )
-    assert (
-        format_group_label({"market_cap_bucket": "Small", "venue": "TSE"})
-        == "Market cap bucket: Small cap, Venue: TSE"
+        format_group_label({"market_cap_bucket": "Small", "venue": "TSE"}) == "Market cap bucket: Small cap, Venue: TSE"
     )
 
 
@@ -46,7 +42,4 @@ def test_comparison_scope_label_orders_date_bucket_and_group() -> None:
         observation_date="2026-05-22",
         time_bucket="AMO",
         group={"market_cap_bucket": "Small"},
-    ) == (
-        "Date: 2026-05-22, Intraday bucket: AM opening auction, "
-        "Market cap bucket: Small cap"
-    )
+    ) == ("Date: 2026-05-22, Intraday bucket: AM opening auction, Market cap bucket: Small cap")

@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, time
 from html import escape
-import re
 from typing import Any
 
 from mmsr.analysis.commentary import CommentaryFact
 from mmsr.config.models import ToxicityConfidenceConfig
 from mmsr.metrics.results import MetricObservation, MetricTimeSeries
-
 
 _DURATION_RE = re.compile(r"^(?P<size>[1-9][0-9]*)(?P<unit>ms|s|m|h)$")
 _DURATION_MULTIPLIER_MS = {
@@ -158,10 +157,7 @@ def reversion_commentary_facts_from_curve_points(
         for point in sorted(points, key=_low_confidence_commentary_sort_key)
         if point.low_confidence and _point_identity(point) not in headline_ids
     )[:max_low_confidence_warnings]
-    facts.extend(
-        _low_confidence_commentary_fact(point)
-        for point in low_confidence_points
-    )
+    facts.extend(_low_confidence_commentary_fact(point) for point in low_confidence_points)
 
     return tuple(facts)
 
@@ -176,7 +172,7 @@ def render_reversion_curve_placeholder(points: Sequence[ReversionCurvePoint]) ->
     """
     rows = "".join(_render_reversion_curve_row(point) for point in points)
     return (
-        "<table class=\"reversion-curve\">"
+        '<table class="reversion-curve">'
         "<thead><tr><th>Venue</th><th>Horizon</th>"
         "<th>Reversion (bps)</th><th>Confidence</th></tr></thead>"
         f"<tbody>{rows}</tbody>"
@@ -185,7 +181,7 @@ def render_reversion_curve_placeholder(points: Sequence[ReversionCurvePoint]) ->
 
 
 def _render_reversion_curve_row(point: ReversionCurvePoint) -> str:
-    row_class = " class=\"low-confidence\"" if point.low_confidence else ""
+    row_class = ' class="low-confidence"' if point.low_confidence else ""
     confidence_text = _confidence_text(point)
     return (
         f"<tr{row_class}>"
@@ -331,9 +327,7 @@ def _point_with_confidence_flag(
     if point.trade_count is None:
         reasons.append("missing trade_count")
     elif point.trade_count < confidence.min_trade_count:
-        reasons.append(
-            f"trade_count {point.trade_count} < {confidence.min_trade_count}"
-        )
+        reasons.append(f"trade_count {point.trade_count} < {confidence.min_trade_count}")
 
     if point.notional is None:
         reasons.append("missing notional")
@@ -356,16 +350,13 @@ def _point_from_observation(observation: MetricObservation) -> ReversionCurvePoi
     venue = _required_group_value(observation, "venue")
     horizon = _required_group_value(observation, "horizon")
     if observation.value is None:
-        raise ReversionCurveConversionError(
-            f"observation for venue {venue!r} and horizon {horizon!r} has no value"
-        )
+        raise ReversionCurveConversionError(f"observation for venue {venue!r} and horizon {horizon!r} has no value")
 
     try:
         reversion_bps = float(observation.value)
     except (TypeError, ValueError) as exc:
         raise ReversionCurveConversionError(
-            f"observation for venue {venue!r} and horizon {horizon!r} "
-            "has a non-numeric value"
+            f"observation for venue {venue!r} and horizon {horizon!r} has a non-numeric value"
         ) from exc
 
     return ReversionCurvePoint(
@@ -374,11 +365,7 @@ def _point_from_observation(observation: MetricObservation) -> ReversionCurvePoi
         reversion_bps=reversion_bps,
         date=observation.date,
         time_bucket=observation.time_bucket,
-        group={
-            key: value
-            for key, value in observation.group.items()
-            if key not in {"venue", "horizon"}
-        },
+        group={key: value for key, value in observation.group.items() if key not in {"venue", "horizon"}},
         trade_count=_optional_int_metadata(observation.metadata, "trade_count"),
         notional=_optional_float_metadata(observation.metadata, "notional"),
         horizon_sort_order=_optional_int_metadata(
@@ -422,9 +409,7 @@ def _ordered_points(
 def _required_group_value(observation: MetricObservation, key: str) -> str:
     value = observation.group.get(key)
     if value is None or not str(value):
-        raise ReversionCurveConversionError(
-            f"observation for {observation.metric_name!r} is missing group {key!r}"
-        )
+        raise ReversionCurveConversionError(f"observation for {observation.metric_name!r} is missing group {key!r}")
     return str(value)
 
 
@@ -448,9 +433,7 @@ def _horizon_sort_key(
     if match is None:
         return (3, 0, horizon)
 
-    duration_ms = (
-        int(match.group("size")) * _DURATION_MULTIPLIER_MS[match.group("unit")]
-    )
+    duration_ms = int(match.group("size")) * _DURATION_MULTIPLIER_MS[match.group("unit")]
     return (2, duration_ms, horizon)
 
 
@@ -474,10 +457,7 @@ def _time_bucket_sort_key(value: time | str | None) -> tuple[int, int, str]:
         return (0, 0, "")
     if isinstance(value, time):
         micros_since_midnight = (
-            value.hour * 3_600_000_000
-            + value.minute * 60_000_000
-            + value.second * 1_000_000
-            + value.microsecond
+            value.hour * 3_600_000_000 + value.minute * 60_000_000 + value.second * 1_000_000 + value.microsecond
         )
         return (1, micros_since_midnight, "")
     return (2, 0, str(value))
@@ -489,9 +469,7 @@ def _optional_int_metadata(metadata: Mapping[str, Any], key: str) -> int | None:
     try:
         return int(metadata[key])
     except (TypeError, ValueError) as exc:
-        raise ReversionCurveConversionError(
-            f"metadata field {key!r} must be an integer when present"
-        ) from exc
+        raise ReversionCurveConversionError(f"metadata field {key!r} must be an integer when present") from exc
 
 
 def _optional_float_metadata(metadata: Mapping[str, Any], key: str) -> float | None:
@@ -500,9 +478,7 @@ def _optional_float_metadata(metadata: Mapping[str, Any], key: str) -> float | N
     try:
         return float(metadata[key])
     except (TypeError, ValueError) as exc:
-        raise ReversionCurveConversionError(
-            f"metadata field {key!r} must be numeric when present"
-        ) from exc
+        raise ReversionCurveConversionError(f"metadata field {key!r} must be numeric when present") from exc
 
 
 def _optional_bool_metadata(metadata: Mapping[str, Any], key: str) -> bool | None:
@@ -511,6 +487,4 @@ def _optional_bool_metadata(metadata: Mapping[str, Any], key: str) -> bool | Non
     value = metadata[key]
     if isinstance(value, bool):
         return value
-    raise ReversionCurveConversionError(
-        f"metadata field {key!r} must be a boolean when present"
-    )
+    raise ReversionCurveConversionError(f"metadata field {key!r} must be a boolean when present")

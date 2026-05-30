@@ -28,10 +28,7 @@ from mmsr.report.sections import (
     build_time_series_chart,
 )
 
-
-QUOTED_SPREAD_BPS = next(
-    metric for metric in STARTER_METRICS if metric.name == "quoted_spread_bps"
-)
+QUOTED_SPREAD_BPS = next(metric for metric in STARTER_METRICS if metric.name == "quoted_spread_bps")
 VOLUME = next(metric for metric in STARTER_METRICS if metric.name == "volume")
 
 
@@ -212,9 +209,7 @@ def test_build_reference_target_trend_chart_spans_reference_and_target_dates() -
         "AM opening auction",
         "AM opening auction",
     ]
-    assert chart.points[0].series_text == (
-        "Market cap bucket: Large cap, Intraday bucket: AM opening auction"
-    )
+    assert chart.points[0].series_text == ("Market cap bucket: Large cap, Intraday bucket: AM opening auction")
     assert "Period: reference" in chart.points[0].metadata_text
     assert "Period: target" in chart.points[1].metadata_text
 
@@ -388,15 +383,11 @@ def test_activity_distribution_chart_embeds_compact_plotly_statistics() -> None:
     assert traces[1]["mode"] == "lines+markers"
     assert traces[1]["marker"]["symbol"] == "circle"
     assert traces[1]["y"] == [25.0, 100.0]
-    assert any(
-        trace.get("type") == "bar" and trace.get("orientation") == "h"
-        for trace in traces
-    )
+    assert any(trace.get("type") == "bar" and trace.get("orientation") == "h" for trace in traces)
     assert "Raw observation rows" in chart.compact_data_summary()
     html = render_plotly_chart(chart)
     assert "Compact plot data" in html
     assert "<table" not in html
-
 
 
 def test_activity_distribution_current_line_uses_period_mean_and_skips_nulls() -> None:

@@ -219,8 +219,6 @@ def test_market_report_symbol_page_can_be_disabled() -> None:
     ]
 
 
-
-
 def test_build_symbol_detail_pages_renders_existing_symbol_series_only() -> None:
     definitions = build_default_registry()
     comparisons = (
@@ -260,10 +258,7 @@ def test_build_symbol_detail_pages_renders_existing_symbol_series_only() -> None
     page = pages[0]
     assert len(page.time_series_charts) == 1
     assert len(page.heatmaps) == 0
-    assert (
-        page.time_series_charts[0].title
-        == "Quoted Spread intraday time-bucket trend for symbol 7203"
-    )
+    assert page.time_series_charts[0].title == "Quoted Spread intraday time-bucket trend for symbol 7203"
     assert page.time_series_charts[0].metric.name == "quoted_spread_bps"
     assert page.time_series_charts[0].x_axis_label == "Intraday time bucket"
     assert [point.time_bucket_text for point in page.time_series_charts[0].points] == [
@@ -304,10 +299,7 @@ def test_build_symbol_detail_pages_can_opt_into_heatmaps() -> None:
     assert [page.title for page in pages] == ["Symbol 7203 Detail"]
     assert len(pages[0].time_series_charts) == 1
     assert len(pages[0].heatmaps) == 1
-    assert all(
-        "symbol 7203" in component.title
-        for component in (*pages[0].time_series_charts, *pages[0].heatmaps)
-    )
+    assert all("symbol 7203" in component.title for component in (*pages[0].time_series_charts, *pages[0].heatmaps))
 
 
 def test_build_symbol_detail_pages_can_limit_and_disable_rows() -> None:
@@ -418,9 +410,7 @@ def test_build_symbol_detail_index_block_can_be_disabled_by_row_limit() -> None:
 
 def test_build_symbol_detail_pages_returns_empty_without_symbol_series() -> None:
     definitions = build_default_registry()
-    comparisons = (
-        _comparison("quoted_spread_bps", "7203", status="alert", z_score=2.9),
-    )
+    comparisons = (_comparison("quoted_spread_bps", "7203", status="alert", z_score=2.9),)
 
     pages = build_symbol_detail_pages(
         comparisons,
@@ -676,9 +666,7 @@ def test_market_report_uses_custom_symbol_group_keys_for_summary_and_details() -
         "Symbol ABC123 Detail",
         "Intraday Detail",
     ]
-    assert "Client Symbol: ABC123" in (
-        with_custom_keys.pages[1].metric_tables[0].rows[0].group_text
-    )
+    assert "Client Symbol: ABC123" in (with_custom_keys.pages[1].metric_tables[0].rows[0].group_text)
 
 
 def test_symbol_anomaly_options_validate_inputs() -> None:
@@ -696,8 +684,6 @@ def test_symbol_anomaly_options_validate_inputs() -> None:
 
     with pytest.raises(ValueError, match="max_chart_points must be non-negative"):
         SymbolDetailPageOptions(max_chart_points=-1)
-
-
 
 
 def _observation(

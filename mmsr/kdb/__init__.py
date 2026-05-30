@@ -1,9 +1,9 @@
 """kdb client, query loading, and metric runner APIs."""
 
 from mmsr.kdb.cache import (
+    STOCK_METRICS_DIMENSION_COLUMNS,
     MetricDayCacheHooks,
     MetricDayCacheKey,
-    STOCK_METRICS_DIMENSION_COLUMNS,
     merge_stock_metrics_rows,
     metric_series_from_stock_metrics_rows,
     stock_metrics_rows_from_series,
@@ -18,11 +18,10 @@ from mmsr.kdb.production import (
     KdbProductionPreflight,
     KdbProductionPreflightCheck,
     KdbProductionPreflightResult,
-    KdbProductionRunPlan,
     KdbProductionReferenceWindow,
+    KdbProductionRunPlan,
     ProductionMetricRunStep,
 )
-
 from mmsr.kdb.query_loader import (
     QueryTemplateError,
     load_q_template,
@@ -30,6 +29,19 @@ from mmsr.kdb.query_loader import (
     render_simulated_source_function_bootstrap,
     render_template,
     template_parameters,
+)
+from mmsr.kdb.query_plan import (
+    KdbMetricQueryPlanError,
+    KdbMetricQueryPlanner,
+    RenderedMetricQuery,
+    group_by_for_metric_result,
+)
+from mmsr.kdb.runner import (
+    KdbMetricRunner,
+    KdbMetricRunnerError,
+    MetricRunRequest,
+    normalize_metric_result,
+    template_for_metric,
 )
 from mmsr.kdb.schema_contracts import (
     OutputSchemaContractError,
@@ -46,20 +58,6 @@ from mmsr.kdb.schema_contracts import (
     validate_output_schema_for_template,
     validate_toxicity_reversion_input_schemas,
     validate_toxicity_reversion_output_schema,
-)
-from mmsr.kdb.query_plan import (
-    KdbMetricQueryPlanError,
-    KdbMetricQueryPlanner,
-    RenderedMetricQuery,
-    group_by_for_metric_result,
-)
-
-from mmsr.kdb.runner import (
-    KdbMetricRunner,
-    KdbMetricRunnerError,
-    MetricRunRequest,
-    normalize_metric_result,
-    template_for_metric,
 )
 
 __all__ = [

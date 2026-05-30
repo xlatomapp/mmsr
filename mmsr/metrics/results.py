@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from datetime import date, time
-from typing import Any, Iterable, Iterator
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -41,9 +42,7 @@ class MetricTimeSeries:
         observations = tuple(self.observations)
         for observation in observations:
             if observation.metric_name != metric_name:
-                raise ValueError(
-                    "all observations in a MetricTimeSeries must have the same metric_name"
-                )
+                raise ValueError("all observations in a MetricTimeSeries must have the same metric_name")
 
         object.__setattr__(self, "metric_name", metric_name)
         object.__setattr__(self, "observations", observations)
@@ -55,7 +54,7 @@ class MetricTimeSeries:
         *,
         metric_name: str | None = None,
         metadata: dict[str, Any] | None = None,
-    ) -> "MetricTimeSeries":
+    ) -> MetricTimeSeries:
         """Build a time series and infer the metric name when omitted."""
 
         observation_tuple = tuple(observations)

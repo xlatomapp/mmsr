@@ -33,11 +33,7 @@ def _reversion_series(
                 metadata={
                     "trade_count": 250,
                     "notional": 500_000_000.0,
-                    **(
-                        {}
-                        if context_sort_order is None
-                        else {"context_sort_order": context_sort_order}
-                    ),
+                    **({} if context_sort_order is None else {"context_sort_order": context_sort_order}),
                 },
             )
             for venue, value in values.items()
@@ -392,9 +388,7 @@ def test_market_report_inserts_toxicity_reversion_page_from_current_series() -> 
     ]
     assert document.pages[1].plotly_charts[0].x_axis_label == "Horizon"
     assert len(document.pages[1].metric_tables) == 0
-    assert document.pages[1].plotly_charts[-1].title == (
-        "Reversion current-minus-reference diagnostics"
-    )
+    assert document.pages[1].plotly_charts[-1].title == ("Reversion current-minus-reference diagnostics")
     assert document.pages[2].time_series_charts == []
     assert document.pages[2].heatmaps == []
 
@@ -428,10 +422,7 @@ def test_market_report_can_keep_toxicity_reversion_metrics_in_detail_page() -> N
     assert document.pages[1].title == "Cross-Venue Toxicity"
     assert document.pages[2].title == "Intraday Detail"
     assert len(document.pages[2].time_series_charts) == 1
-    assert (
-        document.pages[2].time_series_charts[0].metric.name
-        == "primary_quote_reversion_10ms_bps"
-    )
+    assert document.pages[2].time_series_charts[0].metric.name == "primary_quote_reversion_10ms_bps"
 
 
 def test_market_report_passes_toxicity_context_ranking_option() -> None:
@@ -537,7 +528,4 @@ def test_market_report_toxicity_reversion_page_can_be_disabled() -> None:
 
     assert "Cross-Venue Toxicity" not in [page.title for page in document.pages]
     assert len(document.pages[-1].time_series_charts) == 1
-    assert (
-        document.pages[-1].time_series_charts[0].metric.name
-        == "primary_quote_reversion_10ms_bps"
-    )
+    assert document.pages[-1].time_series_charts[0].metric.name == "primary_quote_reversion_10ms_bps"

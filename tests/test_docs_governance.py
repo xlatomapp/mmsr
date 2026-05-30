@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -72,9 +71,7 @@ def test_roadmap_tracks_packaging_and_cli_backlog() -> None:
 
 
 def test_docs_document_live_kdb_integration_boundary() -> None:
-    doc = (ROOT / "docs" / "kdb_integration_testing.md").read_text(
-        encoding="utf-8"
-    )
+    doc = (ROOT / "docs" / "kdb_integration_testing.md").read_text(encoding="utf-8")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     roadmap = (ROOT / "_docs" / "ROADMAP.md").read_text(encoding="utf-8")
     status = (ROOT / "_docs" / "MILESTONE_STATUS.md").read_text(encoding="utf-8")
@@ -110,16 +107,12 @@ def test_docs_document_live_kdb_integration_boundary() -> None:
 
 
 def test_docs_document_production_readiness_checklist() -> None:
-    doc = (ROOT / "docs" / "production_readiness.md").read_text(
-        encoding="utf-8"
-    )
+    doc = (ROOT / "docs" / "production_readiness.md").read_text(encoding="utf-8")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     index = (ROOT / "docs" / "index.md").read_text(encoding="utf-8")
     mkdocs = (ROOT / "mkdocs.yml").read_text(encoding="utf-8")
     roadmap = (ROOT / "_docs" / "ROADMAP.md").read_text(encoding="utf-8")
-    status = (ROOT / "_docs" / "MILESTONE_STATUS.md").read_text(
-        encoding="utf-8"
-    )
+    status = (ROOT / "_docs" / "MILESTONE_STATUS.md").read_text(encoding="utf-8")
 
     required_terms = [
         "Production readiness checklist",
@@ -154,16 +147,10 @@ def test_docs_define_report_scope_guardrails() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     index = (ROOT / "docs" / "index.md").read_text(encoding="utf-8")
     agents = (ROOT / "_docs" / "AGENTS.md").read_text(encoding="utf-8")
-    custom = (ROOT / "_docs" / "CUSTOM_GPT_INSTRUCTIONS.md").read_text(
-        encoding="utf-8"
-    )
+    custom = (ROOT / "_docs" / "CUSTOM_GPT_INSTRUCTIONS.md").read_text(encoding="utf-8")
     roadmap = (ROOT / "_docs" / "ROADMAP.md").read_text(encoding="utf-8")
-    status = (ROOT / "_docs" / "MILESTONE_STATUS.md").read_text(
-        encoding="utf-8"
-    )
-    production = (ROOT / "docs" / "production_readiness.md").read_text(
-        encoding="utf-8"
-    )
+    status = (ROOT / "_docs" / "MILESTONE_STATUS.md").read_text(encoding="utf-8")
+    production = (ROOT / "docs" / "production_readiness.md").read_text(encoding="utf-8")
     mkdocs = (ROOT / "mkdocs.yml").read_text(encoding="utf-8")
 
     required_scope_terms = [

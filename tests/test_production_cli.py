@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import date
-from pathlib import Path
 
 from mmsr.cli import (
     main,
@@ -64,6 +63,7 @@ MULTI_METRIC_CONFIG_YAML = CONFIG_YAML.replace(
     "metrics:\n  - volume\n",
     "metrics:\n  - volume\n  - quoted_spread_bps\n",
 )
+
 
 class FakeProductionKdbClient:
     queries: list[str] = []
@@ -132,9 +132,8 @@ class FakeProductionKdbClient:
             }
         ]
 
-def test_render_production_report_file_uses_live_execution_path(
-    tmp_path, monkeypatch
-) -> None:
+
+def test_render_production_report_file_uses_live_execution_path(tmp_path, monkeypatch) -> None:
     config_path = tmp_path / "report.yaml"
     config_path.write_text(CONFIG_YAML, encoding="utf-8")
     output_path = tmp_path / "production.html"
@@ -162,15 +161,14 @@ def test_render_production_report_file_uses_live_execution_path(
     assert "Reference observation unit: trading day" in html
     assert any("getTradingCalendar" in query for query in FakeProductionKdbClient.queries)
     metric_queries = [
-        query
-        for query in FakeProductionKdbClient.queries
-        if query.strip().startswith(".desk.mmsr.runReportDay")
+        query for query in FakeProductionKdbClient.queries if query.strip().startswith(".desk.mmsr.runReportDay")
     ]
     assert len(metric_queries) == 3  # one q-side day/chunk/rollup call for target and each reference day
     assert ".sb.mmsr.getTrade" in "\n".join(FakeProductionKdbClient.queries)
     assert ".desk.mmsr.runReportDay[" in "\n".join(metric_queries)
     assert "2026.04.29" in "\n".join(metric_queries)
     assert "2026.04.30" in "\n".join(metric_queries)
+
 
 def test_summarize_production_report_plan_queries_calendar_not_metrics(
     tmp_path,
@@ -206,6 +204,7 @@ def test_summarize_production_report_plan_queries_calendar_not_metrics(
     assert "Reference-data universe function: .sb.mmsr.getRef" in "\n".join(summary.summary_lines())
     assert ".sb.mmsr.getTrade" in "\n".join(summary.summary_lines())
 
+
 def test_summarize_production_report_plan_can_inject_simulated_sources(
     tmp_path,
     monkeypatch,
@@ -229,10 +228,7 @@ def test_summarize_production_report_plan_can_inject_simulated_sources(
     assert ".dev.mmsr.symbolCount:11;" in FakeProductionKdbClient.queries[0]
     assert ".dev.mmsr.getTrade" in FakeProductionKdbClient.queries[0]
     assert "callTradingCalendar" in FakeProductionKdbClient.queries[1]
-    assert all(
-        ".dev.mmsr.getTradingCalendar" in query
-        for query in FakeProductionKdbClient.queries[2:]
-    )
+    assert all(".dev.mmsr.getTradingCalendar" in query for query in FakeProductionKdbClient.queries[2:])
     lines = "\n".join(summary.summary_lines())
     assert "Reference-data universe function: .dev.mmsr.getRef" in lines
     assert ".dev.mmsr.getTrade" in lines
@@ -295,6 +291,7 @@ def test_preflight_production_report_executes_one_bounded_metric_step(
     assert "getTradingCalendar" in FakeProductionKdbClient.queries[1]
     assert ".sb.mmsr.getTrade" in FakeProductionKdbClient.queries[2]
 
+
 def test_preflight_production_report_can_select_metric(
     tmp_path,
     monkeypatch,
@@ -319,6 +316,7 @@ def test_preflight_production_report_can_select_metric(
     assert "quoted_spread_bps" in result.rendered_query.required_output_columns
     assert ".sb.mmsr.getQuote" in FakeProductionKdbClient.queries[2]
     assert "quoted_spread_bps" in FakeProductionKdbClient.queries[2]
+
 
 def test_main_render_command_writes_report(tmp_path, monkeypatch, capsys) -> None:
     config_path = tmp_path / "report.yaml"
@@ -350,6 +348,7 @@ def test_main_render_command_writes_report(tmp_path, monkeypatch, capsys) -> Non
     assert output_path.exists()
     assert "Rendered production kdb-backed report:" in capsys.readouterr().out
 
+
 def test_main_preflight_command_prints_diagnostics(tmp_path, monkeypatch, capsys) -> None:
     config_path = tmp_path / "report.yaml"
     config_path.write_text(CONFIG_YAML, encoding="utf-8")
@@ -376,6 +375,7 @@ def test_main_preflight_command_prints_diagnostics(tmp_path, monkeypatch, capsys
     assert "Preflight status: passed" in output
     assert "Sample metric: volume" in output
     assert "Required output columns:" in output
+
 
 def test_main_preflight_command_can_inject_simulated_sources(
     tmp_path,
@@ -448,6 +448,7 @@ def test_main_preflight_command_accepts_metric_selection(
     assert "Sample metric family: liquidity" in output
     assert "quoted_spread_bps" in FakeProductionKdbClient.queries[2]
 
+
 def test_main_plan_command_prints_summary_without_metric_execution(
     tmp_path,
     monkeypatch,
@@ -487,6 +488,7 @@ def test_main_plan_command_prints_summary_without_metric_execution(
     assert ".sb.mmsr.getTrade" in output
     assert "callTradingCalendar" in FakeProductionKdbClient.queries[0]
     assert all("getTradingCalendar" in query for query in FakeProductionKdbClient.queries[1:])
+
 
 def test_main_help_lists_production_render_command(capsys) -> None:
     assert main([]) == 0

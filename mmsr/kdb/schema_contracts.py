@@ -67,7 +67,6 @@ LIQUIDITY_OUTPUT_AGGREGATE_COLUMNS: tuple[str, ...] = (
 )
 
 
-
 STARTER_OUTPUT_BASE_COLUMNS: tuple[str, ...] = ("date", "time_bucket")
 
 REVERSION_OUTPUT_METADATA_COLUMNS: tuple[str, ...] = (
@@ -77,9 +76,7 @@ REVERSION_OUTPUT_METADATA_COLUMNS: tuple[str, ...] = (
     "positive_reversion_ratio",
     "valid_primary_quote_ratio",
 )
-REVERSION_OPTIONAL_OUTPUT_METADATA_COLUMNS: tuple[str, ...] = (
-    "context_sort_order",
-)
+REVERSION_OPTIONAL_OUTPUT_METADATA_COLUMNS: tuple[str, ...] = ("context_sort_order",)
 REVERSION_REQUIRED_GROUP_COLUMNS: tuple[str, ...] = ("venue", "horizon")
 REVERSION_OUTPUT_BASE_COLUMNS: tuple[str, ...] = (
     "date",
@@ -160,14 +157,11 @@ class QTemplateInputTableSchemaContract:
         """Validate that a raw source exposes every required column."""
 
         available = _column_name_set(columns)
-        missing = [
-            column for column in self.required_columns if column not in available
-        ]
+        missing = [column for column in self.required_columns if column not in available]
         if missing:
             raise OutputSchemaContractError(
                 f"{self.template_name} input source {self.table_name!r} "
-                f"for role {self.table_role!r} is missing required column(s): "
-                + ", ".join(missing)
+                f"for role {self.table_role!r} is missing required column(s): " + ", ".join(missing)
             )
 
     def validate_result_schema(self, result: Any) -> None:
@@ -223,13 +217,10 @@ class QTemplateOutputSchemaContract:
         """
 
         available = _column_name_set(columns)
-        missing = [
-            column for column in self.required_columns if column not in available
-        ]
+        missing = [column for column in self.required_columns if column not in available]
         if missing:
             raise OutputSchemaContractError(
-                f"{self.template_name} output is missing required column(s): "
-                + ", ".join(missing)
+                f"{self.template_name} output is missing required column(s): " + ", ".join(missing)
             )
 
     def validate_result(self, result: Any) -> None:
@@ -250,9 +241,7 @@ def reference_data_input_schema_contract(
         template_name=template_name,
         table_role="reference_data",
         table_name=reference_table,
-        required_columns=_dedupe(
-            (*REFERENCE_DATA_REQUIRED_COLUMNS, *extra_required_columns)
-        ),
+        required_columns=_dedupe((*REFERENCE_DATA_REQUIRED_COLUMNS, *extra_required_columns)),
         assumptions=REFERENCE_DATA_ASSUMPTIONS,
     )
 
@@ -272,9 +261,7 @@ def activity_input_schema_contract(
         template_name="activity",
         table_role="trades",
         table_name=trades_table,
-        required_columns=_dedupe(
-            (*ACTIVITY_TRADES_REQUIRED_COLUMNS, *extra_required_columns)
-        ),
+        required_columns=_dedupe((*ACTIVITY_TRADES_REQUIRED_COLUMNS, *extra_required_columns)),
         assumptions=ACTIVITY_TRADES_ASSUMPTIONS,
     )
 
@@ -290,9 +277,7 @@ def liquidity_input_schema_contract(
         template_name="liquidity",
         table_role="quotes",
         table_name=quotes_table,
-        required_columns=_dedupe(
-            (*LIQUIDITY_QUOTES_REQUIRED_COLUMNS, *extra_required_columns)
-        ),
+        required_columns=_dedupe((*LIQUIDITY_QUOTES_REQUIRED_COLUMNS, *extra_required_columns)),
         assumptions=LIQUIDITY_QUOTES_ASSUMPTIONS,
     )
 
@@ -312,19 +297,14 @@ def activity_output_schema_contract(
 
     if metric_name not in ACTIVITY_OUTPUT_AGGREGATE_COLUMNS:
         raise OutputSchemaContractError(
-            "activity schema contracts only apply to activity metrics: "
-            + ", ".join(ACTIVITY_OUTPUT_AGGREGATE_COLUMNS)
+            "activity schema contracts only apply to activity metrics: " + ", ".join(ACTIVITY_OUTPUT_AGGREGATE_COLUMNS)
         )
 
     return QTemplateOutputSchemaContract(
         template_name="activity",
         metric_value_column=metric_name,
         base_columns=STARTER_OUTPUT_BASE_COLUMNS,
-        metadata_columns=tuple(
-            column
-            for column in ACTIVITY_OUTPUT_AGGREGATE_COLUMNS
-            if column != metric_name
-        ),
+        metadata_columns=tuple(column for column in ACTIVITY_OUTPUT_AGGREGATE_COLUMNS if column != metric_name),
         group_columns=tuple(group_by),
     )
 
@@ -351,11 +331,7 @@ def liquidity_output_schema_contract(
         template_name="liquidity",
         metric_value_column=metric_name,
         base_columns=STARTER_OUTPUT_BASE_COLUMNS,
-        metadata_columns=tuple(
-            column
-            for column in LIQUIDITY_OUTPUT_AGGREGATE_COLUMNS
-            if column != metric_name
-        ),
+        metadata_columns=tuple(column for column in LIQUIDITY_OUTPUT_AGGREGATE_COLUMNS if column != metric_name),
         group_columns=tuple(group_by),
     )
 
@@ -368,9 +344,7 @@ def validate_activity_output_schema(
 ) -> None:
     """Validate an ``activity`` result object against its schema contract."""
 
-    activity_output_schema_contract(metric_name, group_by=group_by).validate_result(
-        result
-    )
+    activity_output_schema_contract(metric_name, group_by=group_by).validate_result(result)
 
 
 def validate_liquidity_output_schema(
@@ -381,9 +355,7 @@ def validate_liquidity_output_schema(
 ) -> None:
     """Validate a ``liquidity`` result object against its schema contract."""
 
-    liquidity_output_schema_contract(metric_name, group_by=group_by).validate_result(
-        result
-    )
+    liquidity_output_schema_contract(metric_name, group_by=group_by).validate_result(result)
 
 
 def toxicity_reversion_input_schema_contracts(
@@ -411,9 +383,7 @@ def toxicity_reversion_input_schema_contracts(
             template_name="toxicity_reversion",
             table_role="pts_trades",
             table_name=pts_trades_table,
-            required_columns=_dedupe(
-                (*REVERSION_PTS_TRADES_REQUIRED_COLUMNS, *extra_required_columns)
-            ),
+            required_columns=_dedupe((*REVERSION_PTS_TRADES_REQUIRED_COLUMNS, *extra_required_columns)),
             assumptions=REVERSION_PTS_TRADES_ASSUMPTIONS,
         ),
         QTemplateInputTableSchemaContract(
@@ -479,8 +449,7 @@ def toxicity_reversion_output_schema_contract(
 
     if not metric_name.startswith("primary_quote_reversion_"):
         raise OutputSchemaContractError(
-            "toxicity_reversion schema contracts only apply to "
-            "primary_quote_reversion_* metrics"
+            "toxicity_reversion schema contracts only apply to primary_quote_reversion_* metrics"
         )
 
     return QTemplateOutputSchemaContract(
@@ -524,9 +493,7 @@ def output_schema_contract_for_template(
             metric_name,
             group_by=group_by,
         )
-    raise OutputSchemaContractError(
-        f"no output schema contract is registered for q template {template_name!r}"
-    )
+    raise OutputSchemaContractError(f"no output schema contract is registered for q template {template_name!r}")
 
 
 def validate_output_schema_for_template(
@@ -575,25 +542,20 @@ def extract_result_columns(result: Any) -> tuple[str, ...]:
         (str, bytes, bytearray),
     ):
         if not converted:
-            raise OutputSchemaContractError(
-                "cannot validate output schema from an empty row list"
-            )
+            raise OutputSchemaContractError("cannot validate output schema from an empty row list")
         first_row = converted[0]
         if not isinstance(first_row, Mapping):
-            raise OutputSchemaContractError(
-                "list-like results must contain row dictionaries for schema validation"
-            )
+            raise OutputSchemaContractError("list-like results must contain row dictionaries for schema validation")
         return tuple(str(column) for column in first_row)
 
     raise OutputSchemaContractError(
-        "result must be a dict of columns, one row dict, a list of row dicts, "
-        "or a PyKX-like object with .py()"
+        "result must be a dict of columns, one row dict, a list of row dicts, or a PyKX-like object with .py()"
     )
 
 
-
-
-def _columns_from_keyed_table_mapping(result: Mapping[Any, Any]) -> tuple[str, ...] | None:
+def _columns_from_keyed_table_mapping(
+    result: Mapping[Any, Any],
+) -> tuple[str, ...] | None:
     """Return columns for common keyed-table Python representations.
 
     Some PyKX keyed table conversions preserve key/value parts separately.

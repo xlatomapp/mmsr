@@ -22,7 +22,6 @@ from mmsr.presentation.labels import (
 from mmsr.report.components import MetricTable, MetricTableRow, ReportPage
 from mmsr.report.symbols import DEFAULT_SYMBOL_GROUP_KEYS
 
-
 DEFAULT_DRILLDOWN_GROUP_KEYS: tuple[str, ...] = (
     "market_cap_bucket",
     "market_segment",
@@ -175,9 +174,7 @@ def _drilldown_metric_table_row_from_comparison(
 ) -> MetricTableRow:
     unit = definition.unit
     reference_text = (
-        None
-        if comparison.reference_value is None
-        else _format_metric_value(comparison.reference_value, unit)
+        None if comparison.reference_value is None else _format_metric_value(comparison.reference_value, unit)
     )
     return MetricTableRow(
         metric=definition,
@@ -244,16 +241,10 @@ def _require_metric_definitions_for_comparisons(
     comparisons: Sequence[MetricComparison],
     definitions: Mapping[str, MetricDefinition],
 ) -> None:
-    missing = sorted(
-        {comparison.metric_name for comparison in comparisons}
-        - set(definitions.keys())
-    )
+    missing = sorted({comparison.metric_name for comparison in comparisons} - set(definitions.keys()))
     if missing:
         missing_text = ", ".join(missing)
-        raise ValueError(
-            "metric definitions are required for drilldown report components: "
-            f"{missing_text}"
-        )
+        raise ValueError(f"metric definitions are required for drilldown report components: {missing_text}")
 
 
 def _format_metric_value(value: float | int | None, unit: str) -> str:
@@ -307,9 +298,7 @@ def _drilldown_sort_key(
     scope = drilldown_scope_key(comparison, group_keys=options.group_keys)
     first_scope_key, first_scope_value = scope[0] if scope else ("", "")
     dimension_index = (
-        options.group_keys.index(first_scope_key)
-        if first_scope_key in options.group_keys
-        else len(options.group_keys)
+        options.group_keys.index(first_scope_key) if first_scope_key in options.group_keys else len(options.group_keys)
     )
     date_key = "" if comparison.date is None else comparison.date.isoformat()
     bucket_key = "" if comparison.time_bucket is None else str(comparison.time_bucket)
@@ -332,11 +321,7 @@ def _severity_magnitude(comparison: MetricComparison) -> float:
         comparison.change_pct,
         comparison.change_abs,
     )
-    finite_values = [
-        abs(float(value))
-        for value in candidates
-        if value is not None and isfinite(float(value))
-    ]
+    finite_values = [abs(float(value)) for value in candidates if value is not None and isfinite(float(value))]
     if not finite_values:
         return 0.0
     return max(finite_values)
@@ -346,10 +331,7 @@ def _has_any_group_value(
     comparison: MetricComparison,
     keys: tuple[str, ...],
 ) -> bool:
-    return any(
-        key in comparison.group and comparison.group[key].strip()
-        for key in keys
-    )
+    return any(key in comparison.group and comparison.group[key].strip() for key in keys)
 
 
 def _validate_non_empty_text(value: str, field_name: str) -> None:

@@ -194,12 +194,7 @@ class TimeSeriesChart:
         """Return a compact summary of the data embedded in the chart JSON."""
 
         numeric_points = self._numeric_points()
-        series_count = len(
-            _ordered_unique(
-                point.series_text or self.metric.label
-                for _, point, _ in numeric_points
-            )
-        )
+        series_count = len(_ordered_unique(point.series_text or self.metric.label for _, point, _ in numeric_points))
         x_count = len(_ordered_unique(point.x_text for _, point, _ in numeric_points))
         skipped = len(self.points) - len(numeric_points)
         parts = [
@@ -217,9 +212,7 @@ class TimeSeriesChart:
             return []
 
         traces: list[dict[str, Any]] = []
-        series_names = _ordered_unique(
-            point.series_text or self.metric.label for _, point, _ in numeric_points
-        )
+        series_names = _ordered_unique(point.series_text or self.metric.label for _, point, _ in numeric_points)
         for series_name in series_names:
             series_points = [
                 (point, value)
@@ -233,14 +226,8 @@ class TimeSeriesChart:
                     "name": series_name,
                     "x": [point.x_text for point, _ in series_points],
                     "y": [value for _, value in series_points],
-                    "text": [
-                        _plotly_hover_text(point)
-                        for point, _ in series_points
-                    ],
-                    "hovertemplate": (
-                        "%{text}<br><b>%{y}</b>"
-                        "<extra>%{fullData.name}</extra>"
-                    ),
+                    "text": [_plotly_hover_text(point) for point, _ in series_points],
+                    "hovertemplate": ("%{text}<br><b>%{y}</b><extra>%{fullData.name}</extra>"),
                 }
             )
         return traces
@@ -264,9 +251,7 @@ class TimeSeriesChart:
 
         value_min, value_max = self._svg_value_range()
         x_positions = self._svg_x_positions()
-        series_names = _ordered_unique(
-            point.series_text or self.metric.label for _, point, _ in numeric_points
-        )
+        series_names = _ordered_unique(point.series_text or self.metric.label for _, point, _ in numeric_points)
 
         rendered_series: list[TimeSeriesSvgSeries] = []
         for series_index, series_name in enumerate(series_names):
@@ -282,9 +267,7 @@ class TimeSeriesChart:
                     TimeSeriesSvgMarker(
                         cx=_svg_number(x),
                         cy=_svg_number(y),
-                        title=(
-                            f"{series_name}: {point.x_text} = {point.value_text}"
-                        ),
+                        title=(f"{series_name}: {point.x_text} = {point.value_text}"),
                     )
                 )
             rendered_series.append(
@@ -375,8 +358,7 @@ class TimeSeriesChart:
             }
 
         return {
-            label: _SVG_LEFT_PADDING
-            + (index / (len(labels) - 1)) * _SVG_PLOT_WIDTH
+            label: _SVG_LEFT_PADDING + (index / (len(labels) - 1)) * _SVG_PLOT_WIDTH
             for index, label in enumerate(labels)
         }
 
@@ -430,10 +412,7 @@ def _sample_axis_indices(item_count: int, max_ticks: int) -> tuple[int, ...]:
     if item_count <= max_ticks:
         return tuple(range(item_count))
 
-    sampled = {
-        round(index * (item_count - 1) / (max_ticks - 1))
-        for index in range(max_ticks)
-    }
+    sampled = {round(index * (item_count - 1) / (max_ticks - 1)) for index in range(max_ticks)}
     return tuple(sorted(sampled))
 
 
@@ -545,11 +524,7 @@ class Heatmap:
     def svg_view_box(self) -> str:
         """Return the dynamic SVG view box for deterministic heatmap rendering."""
 
-        return (
-            "0 0 "
-            f"{_svg_number(self._heatmap_svg_width())} "
-            f"{_svg_number(self._heatmap_svg_height())}"
-        )
+        return f"0 0 {_svg_number(self._heatmap_svg_width())} {_svg_number(self._heatmap_svg_height())}"
 
     def svg_cells(self) -> tuple[HeatmapSvgCell, ...]:
         """Return deterministic SVG heatmap cells in report order."""
@@ -571,9 +546,7 @@ class Heatmap:
                 opacity = "1.00"
                 css_class = "heatmap__cell heatmap__cell--missing"
             else:
-                opacity = _svg_number(
-                    _heatmap_cell_opacity(value, value_min, value_max)
-                )
+                opacity = _svg_number(_heatmap_cell_opacity(value, value_min, value_max))
             rendered_cells.append(
                 HeatmapSvgCell(
                     x=_svg_number(x),
@@ -583,9 +556,7 @@ class Heatmap:
                     label_x=_svg_number(x + _HEATMAP_CELL_WIDTH / 2),
                     label_y=_svg_number(y + _HEATMAP_CELL_HEIGHT / 2 + 4),
                     opacity=opacity,
-                    title=(
-                        f"{cell.y_text}, {cell.x_text}: {cell.value_text}"
-                    ),
+                    title=(f"{cell.y_text}, {cell.x_text}: {cell.value_text}"),
                     label=_heatmap_cell_label(cell.value_text),
                     css_class=css_class,
                 )
@@ -636,34 +607,22 @@ class Heatmap:
     def _heatmap_x_positions(self) -> dict[str, float]:
         return {
             label: _HEATMAP_LEFT_PADDING + index * _HEATMAP_CELL_WIDTH
-            for index, label in enumerate(
-                _ordered_unique(cell.x_text for cell in self.cells)
-            )
+            for index, label in enumerate(_ordered_unique(cell.x_text for cell in self.cells))
         }
 
     def _heatmap_y_positions(self) -> dict[str, float]:
         return {
             label: _HEATMAP_TOP_PADDING + index * _HEATMAP_CELL_HEIGHT
-            for index, label in enumerate(
-                _ordered_unique(cell.y_text for cell in self.cells)
-            )
+            for index, label in enumerate(_ordered_unique(cell.y_text for cell in self.cells))
         }
 
     def _heatmap_svg_width(self) -> float:
         x_count = len(_ordered_unique(cell.x_text for cell in self.cells))
-        return (
-            _HEATMAP_LEFT_PADDING
-            + max(x_count, 1) * _HEATMAP_CELL_WIDTH
-            + _HEATMAP_RIGHT_PADDING
-        )
+        return _HEATMAP_LEFT_PADDING + max(x_count, 1) * _HEATMAP_CELL_WIDTH + _HEATMAP_RIGHT_PADDING
 
     def _heatmap_svg_height(self) -> float:
         y_count = len(_ordered_unique(cell.y_text for cell in self.cells))
-        return (
-            _HEATMAP_TOP_PADDING
-            + max(y_count, 1) * _HEATMAP_CELL_HEIGHT
-            + _HEATMAP_BOTTOM_PADDING
-        )
+        return _HEATMAP_TOP_PADDING + max(y_count, 1) * _HEATMAP_CELL_HEIGHT + _HEATMAP_BOTTOM_PADDING
 
 
 _HEATMAP_LEFT_PADDING = 118.0
@@ -693,7 +652,6 @@ def _heatmap_cell_label(value_text: str) -> str:
     return _format_svg_tick_label(parsed)
 
 
-
 def _safe_json_dumps(value: Mapping[str, Any]) -> str:
     """Serialize JSON for embedding inside a script tag."""
 
@@ -714,7 +672,6 @@ def _plotly_hover_text(point: TimeSeriesChartPoint) -> str:
     if point.metadata_text:
         parts.append(point.metadata_text)
     return "<br>".join(parts)
-
 
 
 @dataclass(frozen=True)
@@ -774,7 +731,6 @@ class PlotlyChart:
         return "Plotly figure embedded; raw rows omitted."
 
 
-
 @dataclass(frozen=True)
 class CommentaryBlock:
     """A block of deterministic commentary lines."""
@@ -825,8 +781,7 @@ class ReportPage:
                 raise ValueError("anchor_id must not be empty when supplied")
             if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", self.anchor_id):
                 raise ValueError(
-                    "anchor_id must start with a letter and contain only "
-                    "letters, digits, underscores, or hyphens"
+                    "anchor_id must start with a letter and contain only letters, digits, underscores, or hyphens"
                 )
 
 

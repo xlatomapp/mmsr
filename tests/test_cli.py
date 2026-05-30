@@ -94,9 +94,7 @@ def test_main_offline_demo_can_omit_metric_definitions_appendix(tmp_path) -> Non
 def test_main_offline_demo_can_include_intraday_heatmaps(tmp_path) -> None:
     output_path = tmp_path / "demo-with-heatmaps.html"
 
-    exit_code = main(
-        ["offline-demo", "--output", str(output_path), "--include-intraday-heatmaps"]
-    )
+    exit_code = main(["offline-demo", "--output", str(output_path), "--include-intraday-heatmaps"])
 
     assert exit_code == 0
     html = output_path.read_text(encoding="utf-8")
@@ -108,9 +106,7 @@ def test_main_offline_demo_can_include_intraday_heatmaps(tmp_path) -> None:
 def test_main_offline_demo_can_omit_drilldown_page(tmp_path) -> None:
     output_path = tmp_path / "demo-no-drilldown.html"
 
-    exit_code = main(
-        ["offline-demo", "--output", str(output_path), "--no-drilldown-page"]
-    )
+    exit_code = main(["offline-demo", "--output", str(output_path), "--no-drilldown-page"])
 
     assert exit_code == 0
     html = output_path.read_text(encoding="utf-8")
@@ -136,10 +132,6 @@ def test_render_mock_kdb_demo_report_file_writes_deterministic_html(tmp_path) ->
     assert "time-series-chart__placeholder" not in html
     assert "heatmap__placeholder" not in html
     assert "pykx" not in sys.modules
-
-
-
-
 
 
 def test_main_mock_kdb_demo_renders_to_requested_path(tmp_path, capsys) -> None:
@@ -196,9 +188,7 @@ def test_main_mock_kdb_demo_can_omit_metric_definitions_appendix(tmp_path) -> No
 def test_main_mock_kdb_demo_can_include_intraday_heatmaps(tmp_path) -> None:
     output_path = tmp_path / "mock-kdb-with-heatmaps.html"
 
-    exit_code = main(
-        ["mock-kdb-demo", "--output", str(output_path), "--include-intraday-heatmaps"]
-    )
+    exit_code = main(["mock-kdb-demo", "--output", str(output_path), "--include-intraday-heatmaps"])
 
     assert exit_code == 0
     html = output_path.read_text(encoding="utf-8")
@@ -210,9 +200,7 @@ def test_main_mock_kdb_demo_can_include_intraday_heatmaps(tmp_path) -> None:
 def test_main_mock_kdb_demo_can_omit_drilldown_page(tmp_path) -> None:
     output_path = tmp_path / "mock-kdb-no-drilldown.html"
 
-    exit_code = main(
-        ["mock-kdb-demo", "--output", str(output_path), "--no-drilldown-page"]
-    )
+    exit_code = main(["mock-kdb-demo", "--output", str(output_path), "--no-drilldown-page"])
 
     assert exit_code == 0
     html = output_path.read_text(encoding="utf-8")

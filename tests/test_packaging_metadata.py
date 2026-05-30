@@ -1,6 +1,5 @@
-from pathlib import Path
 import tomllib
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -33,9 +32,7 @@ def test_dev_and_doc_dependency_groups_are_explicit() -> None:
     dev_dependencies = set(groups["dev"]["dependencies"])
     doc_dependencies = set(groups["doc"]["dependencies"])
 
-    assert {"pytest", "black", "isort", "flake8", "mypy", "tox", "pre-commit"} <= (
-        dev_dependencies
-    )
+    assert {"pytest", "black", "isort", "flake8", "mypy", "tox", "pre-commit"} <= (dev_dependencies)
     assert {"mkdocs", "mkdocs-material", "mkdocstrings"} <= doc_dependencies
 
 

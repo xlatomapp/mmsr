@@ -16,6 +16,11 @@ from mmsr.analysis.commentary import (
 )
 from mmsr.metrics.base import MetricDefinition
 from mmsr.metrics.results import MetricComparison, MetricObservation, MetricTimeSeries
+from mmsr.presentation.labels import (
+    format_comparison_scope_label,
+    format_group_label,
+    format_intraday_bucket_label,
+)
 from mmsr.report.components import (
     CommentaryBlock,
     Heatmap,
@@ -27,11 +32,6 @@ from mmsr.report.components import (
     ReportPage,
     TimeSeriesChart,
     TimeSeriesChartPoint,
-)
-from mmsr.presentation.labels import (
-    format_comparison_scope_label,
-    format_group_label,
-    format_intraday_bucket_label,
 )
 
 
@@ -107,9 +107,7 @@ def build_comparison_report_page(
     comments = engine.generate(list(facts), max_comments=resolved_options.max_comments)
 
     commentary_blocks = (
-        [CommentaryBlock(title=resolved_options.commentary_title, comments=comments)]
-        if comments
-        else []
+        [CommentaryBlock(title=resolved_options.commentary_title, comments=comments)] if comments else []
     )
     return ReportPage(
         title=page_title,
@@ -150,9 +148,7 @@ def build_comparison_metric_table(
     )
     _require_metric_definitions(ordered_comparisons, definitions)
 
-    selected_comparisons = (
-        ordered_comparisons if max_rows is None else ordered_comparisons[:max_rows]
-    )
+    selected_comparisons = ordered_comparisons if max_rows is None else ordered_comparisons[:max_rows]
     return MetricTable(
         title=table_title,
         rows=[
@@ -190,8 +186,7 @@ def build_time_series_chart(
         raise ValueError("title must not be empty")
     if series.metric_name != metric_definition.name:
         raise ValueError(
-            "metric_definition.name must match series.metric_name: "
-            f"{metric_definition.name} != {series.metric_name}"
+            f"metric_definition.name must match series.metric_name: {metric_definition.name} != {series.metric_name}"
         )
     if max_points is not None and max_points < 0:
         raise ValueError("max_points must be non-negative")
@@ -202,9 +197,7 @@ def build_time_series_chart(
     if help_text is not None and not help_text.strip():
         raise ValueError("help_text must not be empty when supplied")
 
-    observations = (
-        series.observations if max_points is None else series.observations[:max_points]
-    )
+    observations = series.observations if max_points is None else series.observations[:max_points]
     return TimeSeriesChart(
         title=chart_title,
         metric=metric_definition,
@@ -247,8 +240,7 @@ def build_intraday_time_bucket_chart(
         raise ValueError("title must not be empty")
     if series.metric_name != metric_definition.name:
         raise ValueError(
-            "metric_definition.name must match series.metric_name: "
-            f"{metric_definition.name} != {series.metric_name}"
+            f"metric_definition.name must match series.metric_name: {metric_definition.name} != {series.metric_name}"
         )
     if max_points is not None and max_points < 0:
         raise ValueError("max_points must be non-negative")
@@ -259,9 +251,7 @@ def build_intraday_time_bucket_chart(
     if help_text is not None and not help_text.strip():
         raise ValueError("help_text must not be empty when supplied")
 
-    observations = (
-        series.observations if max_points is None else series.observations[:max_points]
-    )
+    observations = series.observations if max_points is None else series.observations[:max_points]
     return TimeSeriesChart(
         title=chart_title,
         metric=metric_definition,
@@ -307,10 +297,7 @@ def build_reference_target_trend_chart(
             "metric_definition.name must match target_series.metric_name: "
             f"{metric_definition.name} != {target_series.metric_name}"
         )
-    if (
-        reference_series is not None
-        and reference_series.metric_name != metric_definition.name
-    ):
+    if reference_series is not None and reference_series.metric_name != metric_definition.name:
         raise ValueError(
             "metric_definition.name must match reference_series.metric_name: "
             f"{metric_definition.name} != {reference_series.metric_name}"
@@ -326,13 +313,8 @@ def build_reference_target_trend_chart(
 
     period_observations: list[tuple[MetricObservation, str]] = []
     if reference_series is not None:
-        period_observations.extend(
-            (observation, "reference")
-            for observation in reference_series.observations
-        )
-    period_observations.extend(
-        (observation, "target") for observation in target_series.observations
-    )
+        period_observations.extend((observation, "reference") for observation in reference_series.observations)
+    period_observations.extend((observation, "target") for observation in target_series.observations)
     if max_points is not None:
         period_observations = period_observations[:max_points]
 
@@ -422,21 +404,13 @@ def _prepare_activity_distribution_inputs(
     target_series: MetricTimeSeries,
     reference_series: MetricTimeSeries,
 ) -> _ActivityDistributionInputs:
-    current_values_by_date_bucket = _sum_observation_values_by_date_bucket(
-        target_series.observations
-    )
-    reference_values_by_date_bucket = _sum_observation_values_by_date_bucket(
-        reference_series.observations
-    )
+    current_values_by_date_bucket = _sum_observation_values_by_date_bucket(target_series.observations)
+    reference_values_by_date_bucket = _sum_observation_values_by_date_bucket(reference_series.observations)
     current_bucket_values = _mean_values_by_bucket(current_values_by_date_bucket)
 
     bucket_labels = _ordered_activity_buckets(
         [*current_bucket_values.keys()]
-        + [
-            bucket
-            for values_by_bucket in reference_values_by_date_bucket.values()
-            for bucket in values_by_bucket
-        ]
+        + [bucket for values_by_bucket in reference_values_by_date_bucket.values() for bucket in values_by_bucket]
     )
     current_cumulative_pct = _cumulative_bucket_percentages(
         current_bucket_values,
@@ -451,12 +425,8 @@ def _prepare_activity_distribution_inputs(
         bucket_labels=bucket_labels,
         current_cumulative_pct=current_cumulative_pct,
         reference_cumulative_pct_by_bucket=reference_cumulative_pct_by_bucket,
-        current_session_pct=_mean_daily_session_share_percentages(
-            target_series.observations
-        ),
-        reference_session_pct=_mean_daily_session_share_percentages(
-            reference_series.observations
-        ),
+        current_session_pct=_mean_daily_session_share_percentages(target_series.observations),
+        reference_session_pct=_mean_daily_session_share_percentages(reference_series.observations),
         reference_date_count=len(reference_values_by_date_bucket),
     )
 
@@ -501,8 +471,7 @@ def _activity_distribution_figure(
             "xaxis": "x",
             "yaxis": "y",
             "hovertemplate": (
-                "%{x}<br>Q1 %{q1:.2f}%<br>Median %{median:.2f}%"
-                "<br>Q3 %{q3:.2f}%<extra>Reference</extra>"
+                "%{x}<br>Q1 %{q1:.2f}%<br>Median %{median:.2f}%<br>Q3 %{q3:.2f}%<extra>Reference</extra>"
             ),
         },
         {
@@ -534,9 +503,7 @@ def _activity_distribution_figure(
                 "y": period_labels,
                 "xaxis": "x2",
                 "yaxis": "y2",
-                "hovertemplate": (
-                    "%{y}<br>" + session + ": %{x:.2f}%<extra></extra>"
-                ),
+                "hovertemplate": ("%{y}<br>" + session + ": %{x:.2f}%<extra></extra>"),
             }
         )
 
@@ -696,19 +663,11 @@ def _prepare_intraday_profile_inputs(
     group_by: Sequence[str] | None,
     max_groups: int | None,
 ) -> _IntradayProfileInputs:
-    current_bucket_values = _mean_observation_values_by_bucket(
-        target_series.observations
-    )
-    reference_values_by_date_bucket = _mean_observation_values_by_date_bucket(
-        reference_series.observations
-    )
+    current_bucket_values = _mean_observation_values_by_bucket(target_series.observations)
+    reference_values_by_date_bucket = _mean_observation_values_by_date_bucket(reference_series.observations)
     bucket_labels = _ordered_activity_buckets(
         [*current_bucket_values.keys()]
-        + [
-            bucket
-            for values_by_bucket in reference_values_by_date_bucket.values()
-            for bucket in values_by_bucket
-        ]
+        + [bucket for values_by_bucket in reference_values_by_date_bucket.values() for bucket in values_by_bucket]
     )
     reference_values_by_bucket = _reference_profile_values_by_bucket(
         reference_values_by_date_bucket,
@@ -772,10 +731,7 @@ def _intraday_profile_figure(
             "boxpoints": False,
             "xaxis": "x",
             "yaxis": "y",
-            "hovertemplate": (
-                "%{x}<br>Q1 %{q1:.4f}<br>Median %{median:.4f}"
-                "<br>Q3 %{q3:.4f}<extra>Reference</extra>"
-            ),
+            "hovertemplate": ("%{x}<br>Q1 %{q1:.4f}<br>Median %{median:.4f}<br>Q3 %{q3:.4f}<extra>Reference</extra>"),
         },
         {
             "type": "scatter",
@@ -911,11 +867,7 @@ def _mean_observation_values_by_bucket(
             continue
         bucket = _format_bucket_text(observation.time_bucket) or "Full day"
         values_by_bucket.setdefault(bucket, []).append(value)
-    return {
-        bucket: sum(values) / len(values)
-        for bucket, values in values_by_bucket.items()
-        if values
-    }
+    return {bucket: sum(values) / len(values) for bucket, values in values_by_bucket.items() if values}
 
 
 def _mean_observation_values_by_date_bucket(
@@ -948,11 +900,7 @@ def _reference_profile_values_by_bucket(
             value = bucket_values.get(bucket)
             if value is not None:
                 values_by_bucket[bucket].append(value)
-    return {
-        bucket: tuple(values)
-        for bucket, values in values_by_bucket.items()
-        if values
-    }
+    return {bucket: tuple(values) for bucket, values in values_by_bucket.items() if values}
 
 
 def _profile_group_delta_rows(
@@ -994,11 +942,7 @@ def _mean_observation_values_by_group(
             continue
         group = _profile_group_label(observation.group, group_by)
         values_by_group.setdefault(group, []).append(value)
-    return {
-        group: sum(values) / len(values)
-        for group, values in values_by_group.items()
-        if values
-    }
+    return {group: sum(values) / len(values) for group, values in values_by_group.items() if values}
 
 
 def _mean_reference_values_by_group(
@@ -1018,19 +962,11 @@ def _mean_reference_values_by_group(
         if not values:
             continue
         daily_group_means.setdefault(group, []).append(sum(values) / len(values))
-    return {
-        group: sum(values) / len(values)
-        for group, values in daily_group_means.items()
-        if values
-    }
+    return {group: sum(values) / len(values) for group, values in daily_group_means.items() if values}
 
 
 def _profile_group_label(group: Mapping[str, str], group_by: Sequence[str]) -> str:
-    selected = {
-        key: group[key]
-        for key in group_by
-        if key in group and str(group[key]).strip()
-    }
+    selected = {key: group[key] for key in group_by if key in group and str(group[key]).strip()}
     if selected:
         return format_group_label(selected)
     return "Report aggregate"
@@ -1066,11 +1002,7 @@ def _mean_values_by_bucket(
     for values_by_bucket_for_date in values_by_date_bucket.values():
         for bucket, value in values_by_bucket_for_date.items():
             values_by_bucket.setdefault(bucket, []).append(value)
-    return {
-        bucket: sum(values) / len(values)
-        for bucket, values in values_by_bucket.items()
-        if values
-    }
+    return {bucket: sum(values) / len(values) for bucket, values in values_by_bucket.items() if values}
 
 
 def _mean_daily_session_share_percentages(
@@ -1086,8 +1018,7 @@ def _mean_daily_session_share_percentages(
         date_values[session] = date_values.get(session, 0.0) + value
 
     daily_shares = [
-        _session_share_percentages(values_by_session)
-        for values_by_session in values_by_date_session.values()
+        _session_share_percentages(values_by_session) for values_by_session in values_by_date_session.values()
     ]
     if not daily_shares:
         return {session: 0.0 for session in _ACTIVITY_SESSION_ORDER}
@@ -1135,11 +1066,7 @@ def _reference_cumulative_percentages_by_bucket(
         cumulative = _cumulative_bucket_percentages(values_by_bucket, bucket_labels)
         for bucket, value in zip(bucket_labels, cumulative, strict=True):
             bucket_values[bucket].append(value)
-    return {
-        bucket: tuple(values)
-        for bucket, values in bucket_values.items()
-        if values
-    }
+    return {bucket: tuple(values) for bucket, values in bucket_values.items() if values}
 
 
 def _session_share_percentages(
@@ -1148,10 +1075,7 @@ def _session_share_percentages(
     total = sum(values_by_session.values())
     if total <= 0:
         return {session: 0.0 for session in _ACTIVITY_SESSION_ORDER}
-    return {
-        session: values_by_session.get(session, 0.0) / total * 100
-        for session in _ACTIVITY_SESSION_ORDER
-    }
+    return {session: values_by_session.get(session, 0.0) / total * 100 for session in _ACTIVITY_SESSION_ORDER}
 
 
 _ACTIVITY_SESSION_ORDER = (
@@ -1227,9 +1151,7 @@ def _percentile(values: Sequence[float | None], percentile: float) -> float:
     lower_index = int(position)
     upper_index = min(lower_index + 1, len(ordered) - 1)
     fraction = position - lower_index
-    return ordered[lower_index] + (
-        ordered[upper_index] - ordered[lower_index]
-    ) * fraction
+    return ordered[lower_index] + (ordered[upper_index] - ordered[lower_index]) * fraction
 
 
 def _clean_finite_values(values: Sequence[float | None]) -> tuple[float, ...]:
@@ -1267,8 +1189,7 @@ def build_heatmap(
         raise ValueError("title must not be empty")
     if series.metric_name != metric_definition.name:
         raise ValueError(
-            "metric_definition.name must match series.metric_name: "
-            f"{metric_definition.name} != {series.metric_name}"
+            f"metric_definition.name must match series.metric_name: {metric_definition.name} != {series.metric_name}"
         )
     if max_cells is not None and max_cells < 0:
         raise ValueError("max_cells must be non-negative")
@@ -1279,9 +1200,7 @@ def build_heatmap(
     if help_text is not None and not help_text.strip():
         raise ValueError("help_text must not be empty when supplied")
 
-    observations = (
-        series.observations if max_cells is None else series.observations[:max_cells]
-    )
+    observations = series.observations if max_cells is None else series.observations[:max_cells]
     return Heatmap(
         title=heatmap_title,
         metric=metric_definition,
@@ -1347,9 +1266,7 @@ def _metric_table_row_from_comparison(
 ) -> MetricTableRow:
     unit = definition.unit
     reference_text = (
-        None
-        if comparison.reference_value is None
-        else _format_metric_value(comparison.reference_value, unit)
+        None if comparison.reference_value is None else _format_metric_value(comparison.reference_value, unit)
     )
     return MetricTableRow(
         metric=definition,
@@ -1509,16 +1426,10 @@ def _require_metric_definitions(
     comparisons: Sequence[MetricComparison],
     definitions: Mapping[str, MetricDefinition],
 ) -> None:
-    missing = sorted(
-        {comparison.metric_name for comparison in comparisons}
-        - set(definitions.keys())
-    )
+    missing = sorted({comparison.metric_name for comparison in comparisons} - set(definitions.keys()))
     if missing:
         missing_text = ", ".join(missing)
-        raise ValueError(
-            "metric definitions are required for report components: "
-            f"{missing_text}"
-        )
+        raise ValueError(f"metric definitions are required for report components: {missing_text}")
 
 
 def _comparison_sort_key(

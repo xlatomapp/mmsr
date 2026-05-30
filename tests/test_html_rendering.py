@@ -1,6 +1,4 @@
 from mmsr.metrics.starter_definitions import STARTER_METRICS
-
-QUOTED_SPREAD_BPS = next(m for m in STARTER_METRICS if m.name == "quoted_spread_bps")
 from mmsr.report.components import (
     CommentaryBlock,
     MetricCard,
@@ -9,6 +7,8 @@ from mmsr.report.components import (
     ReportPage,
 )
 from mmsr.report.render_html import render_metric_card, render_report
+
+QUOTED_SPREAD_BPS = next(m for m in STARTER_METRICS if m.name == "quoted_spread_bps")
 
 
 def test_metric_card_renders_info_button() -> None:

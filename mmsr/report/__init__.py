@@ -48,17 +48,6 @@ from mmsr.report.sections import (
     build_reference_target_intraday_profile_chart,
     build_time_series_chart,
 )
-
-from mmsr.report.toxicity import (
-    DEFAULT_REVERSION_HORIZON_ORDER,
-    DEFAULT_REVERSION_VENUE_ORDER,
-    DEFAULT_TOXICITY_CONTEXT_RANKING,
-    TOXICITY_CONTEXT_RANKINGS,
-    ToxicityContextRanking,
-    ToxicityReversionPageOptions,
-    build_toxicity_reversion_page,
-)
-
 from mmsr.report.symbols import (
     DEFAULT_SYMBOL_GROUP_KEYS,
     SymbolAnomalyPageOptions,
@@ -69,6 +58,15 @@ from mmsr.report.symbols import (
     build_symbol_detail_pages,
     select_symbol_anomalies,
     symbol_detail_anchor_id,
+)
+from mmsr.report.toxicity import (
+    DEFAULT_REVERSION_HORIZON_ORDER,
+    DEFAULT_REVERSION_VENUE_ORDER,
+    DEFAULT_TOXICITY_CONTEXT_RANKING,
+    TOXICITY_CONTEXT_RANKINGS,
+    ToxicityContextRanking,
+    ToxicityReversionPageOptions,
+    build_toxicity_reversion_page,
 )
 
 __all__ = [

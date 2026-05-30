@@ -58,25 +58,20 @@ def test_offline_metric_comparisons_are_precomputed_and_comparable() -> None:
     assert len(comparisons) == 9
     assert all(isinstance(comparison, MetricComparison) for comparison in comparisons)
     assert {comparison.reference_sample_size for comparison in comparisons} == {30}
-    assert {comparison.comparison_confidence for comparison in comparisons} == {
-        "normal"
-    }
+    assert {comparison.comparison_confidence for comparison in comparisons} == {"normal"}
     assert all(comparison.z_score is not None for comparison in comparisons)
-    assert all(
-        comparison.metadata["reference_observation_unit"] == "trading_day"
-        for comparison in comparisons
-    )
+    assert all(comparison.metadata["reference_observation_unit"] == "trading_day" for comparison in comparisons)
     assert any(
         comparison.metric_name == "quoted_spread_bps"
         and comparison.time_bucket == "09:00-09:05"
         and comparison.status == "alert"
         for comparison in comparisons
     )
-    assert {
-        comparison.group["symbol"]
-        for comparison in comparisons
-        if "symbol" in comparison.group
-    } == {"7203", "6758", "8306"}
+    assert {comparison.group["symbol"] for comparison in comparisons if "symbol" in comparison.group} == {
+        "7203",
+        "6758",
+        "8306",
+    }
 
 
 def test_offline_symbol_metric_comparisons_are_demo_anomalies() -> None:
@@ -84,21 +79,15 @@ def test_offline_symbol_metric_comparisons_are_demo_anomalies() -> None:
 
     assert len(comparisons) == 3
     assert {comparison.reference_sample_size for comparison in comparisons} == {30}
-    assert {comparison.comparison_confidence for comparison in comparisons} == {
-        "normal"
-    }
+    assert {comparison.comparison_confidence for comparison in comparisons} == {"normal"}
     assert {comparison.status for comparison in comparisons} == {"alert"}
-    assert {comparison.metadata["fixture_slice"] for comparison in comparisons} == {
-        "symbol_anomaly_sample"
-    }
+    assert {comparison.metadata["fixture_slice"] for comparison in comparisons} == {"symbol_anomaly_sample"}
     assert [comparison.group["symbol"] for comparison in comparisons] == [
         "7203",
         "8306",
         "6758",
     ]
     assert all(comparison.z_score is not None for comparison in comparisons)
-
-
 
 
 def test_offline_symbol_metric_time_series_are_detail_page_diagnostics() -> None:
@@ -109,25 +98,17 @@ def test_offline_symbol_metric_time_series_are_detail_page_diagnostics() -> None
         "volume",
         "top_of_book_depth",
     ]
-    assert all(
-        item.metadata["fixture_slice"] == "symbol_detail_sample"
-        for item in series
-    )
+    assert all(item.metadata["fixture_slice"] == "symbol_detail_sample" for item in series)
     assert all(len(item.observations) == 3 for item in series)
-    assert [
-        item.observations[0].group["symbol"]
-        for item in series
-    ] == ["7203", "8306", "6758"]
-    assert {
-        observation.metadata["fixture_slice"]
-        for item in series
-        for observation in item.observations
-    } == {"symbol_detail_sample"}
-    assert "09:05-09:10" in {
-        str(observation.time_bucket)
-        for item in series
-        for observation in item.observations
+    assert [item.observations[0].group["symbol"] for item in series] == [
+        "7203",
+        "8306",
+        "6758",
+    ]
+    assert {observation.metadata["fixture_slice"] for item in series for observation in item.observations} == {
+        "symbol_detail_sample"
     }
+    assert "09:05-09:10" in {str(observation.time_bucket) for item in series for observation in item.observations}
 
 
 def test_offline_sample_metrics_bundles_definitions_series_and_comparisons() -> None:
@@ -139,16 +120,9 @@ def test_offline_sample_metrics_bundles_definitions_series_and_comparisons() -> 
         "volume",
         "top_of_book_depth",
     )
-    assert tuple(series.metric_name for series in sample.current_series) == tuple(
-        sample.metric_definitions
-    )
-    assert tuple(series.metric_name for series in sample.reference_series) == tuple(
-        sample.metric_definitions
-    )
+    assert tuple(series.metric_name for series in sample.current_series) == tuple(sample.metric_definitions)
+    assert tuple(series.metric_name for series in sample.reference_series) == tuple(sample.metric_definitions)
     assert len(sample.comparisons) == 9
     assert len(sample.symbol_current_series) == 3
-    assert (
-        sample.symbol_current_series[0].metadata["fixture_slice"]
-        == "symbol_detail_sample"
-    )
+    assert sample.symbol_current_series[0].metadata["fixture_slice"] == "symbol_detail_sample"
     assert sample.metric_definitions["quoted_spread_bps"].label == "Quoted Spread"

@@ -1,5 +1,5 @@
-from datetime import date, time
 import re
+from datetime import date, time
 
 import pytest
 
@@ -17,7 +17,6 @@ from mmsr.kdb.runner import (
     KdbMetricRunnerError,
     MetricRunRequest,
     normalize_metric_result,
-    template_for_metric,
 )
 from mmsr.metrics import build_default_registry
 from mmsr.metrics.base import MetricDefinition
@@ -47,8 +46,6 @@ def _period() -> ReportPeriod:
     )
 
 
-
-
 def test_calculation_function_bootstrap_contains_bucket_amend_once() -> None:
     bootstrap = render_calculation_function_bootstrap(".mmsr")
     assert "MMSR reusable q calculation library" in bootstrap
@@ -69,7 +66,6 @@ def test_calculation_function_bootstrap_avoids_reserved_cols_assignment() -> Non
     assert "mmsrColumnNames: cols facts;" in bootstrap
 
 
-
 def test_calculation_bootstrap_batches_reversion_horizons_inside_day_runner() -> None:
     bootstrap = render_calculation_function_bootstrap(".desk.mmsr")
     assert ".desk.mmsr.calcToxicityReversionFamily" in bootstrap
@@ -82,7 +78,7 @@ def test_calculation_bootstrap_prepares_reversion_common_joins_once() -> None:
     bootstrap = render_calculation_function_bootstrap(".desk.mmsr")
     prepare_start = bootstrap.index(".desk.mmsr.prepareToxicityReversion:{")
     family_start = bootstrap.index(".desk.mmsr.calcToxicityReversionFamily:{")
-    family_body = bootstrap[family_start:bootstrap.index(".desk.mmsr.applyUniverseFilters:{")]
+    family_body = bootstrap[family_start : bootstrap.index(".desk.mmsr.applyUniverseFilters:{")]
     assert "prepared: .desk.mmsr.prepareToxicityReversion[" in family_body
     assert family_body.count("prepareToxicityReversion[") == 1
     assert "calcToxicityReversionPrepared[" in family_body
@@ -106,7 +102,6 @@ def test_calculation_bootstrap_partitions_sym_before_reversion_aj_inputs() -> No
     assert ".desk.mmsr.partedSym[`date`sym`venue`time xasc ptsQuotes]" in reversion_body
     assert "aj[\n            `date`sym`venue`time;\n            `date`sym`venue`time xasc" not in reversion_body
     assert "aj[`date`sym`horizonTime; `date`sym`horizonTime xasc" not in reversion_body
-
 
 
 def test_kdb_metric_runner_renders_activity_query_and_normalizes_column_result() -> None:
@@ -146,7 +141,10 @@ def test_kdb_metric_runner_renders_activity_query_and_normalizes_column_result()
 
     query = client.queries[0]
     assert "rawTrades: trade;" in query
-    assert ".mmsr.calcActivity[rawTrades;refs;(`bucket;`start_date;`end_date)!(0D00:05:00.000;2026.05.01;2026.05.02)]" in query
+    assert (
+        ".mmsr.calcActivity[rawTrades;refs;(`bucket;`start_date;`end_date)!(0D00:05:00.000;2026.05.01;2026.05.02)]"
+        in query
+    )
     assert "(`bucket;`start_date;`end_date)!(0D00:05:00.000;2026.05.01;2026.05.02)" in query
     assert "labels:@[labels;where" not in query
     assert "labels[where" not in query
@@ -206,7 +204,10 @@ def test_kdb_metric_runner_renders_liquidity_query_without_group_columns() -> No
     assert series.observations[0].group == {}
     query = client.queries[0]
     assert "rawQuotes: quote;" in query
-    assert ".mmsr.calcLiquidity[rawQuotes;refs;(`bucket;`start_date;`end_date)!(0D00:05:00.000;2026.05.01;2026.05.02)]" in query
+    assert (
+        ".mmsr.calcLiquidity[rawQuotes;refs;(`bucket;`start_date;`end_date)!(0D00:05:00.000;2026.05.01;2026.05.02)]"
+        in query
+    )
     assert "(`bucket;`start_date;`end_date)!(0D00:05:00.000;2026.05.01;2026.05.02)" in query
     assert ".mmsr.timeBucketContinuous[time; session;" not in query
     assert ".calcLiquidity" in query
@@ -257,11 +258,9 @@ def test_kdb_metric_runner_batch_loads_sources_once_and_returns_metric_tables() 
     query = client.queries[0]
     assert query.count("rawTrades: trade;") == 1
     assert query.count("rawQuotes: quote;") == 1
-    assert "refs: `sym xkey select from rawRefs where sym = `$\"7203\";" in query
+    assert 'refs: `sym xkey select from rawRefs where sym = `$"7203";' in query
     assert re.search(r'(?<!`)\\$"turnover"', query) is None
     assert '(`$"turnover";`$"quoted_spread_bps")!(metricResult1;metricResult2)' in query
-
-
 
 
 def test_kdb_metric_runner_renders_reversion_query_and_normalizes_venue_horizon() -> None:
@@ -334,16 +333,14 @@ def test_kdb_metric_runner_renders_reversion_query_and_normalizes_venue_horizon(
     assert "`venues" in query and "`TSE`SBIJ" in query
     assert "`primary_venue" in query and "`TSE" in query
     assert "0D00:00:00.100" in query
-    assert "$\"100ms\"" in query
+    assert '$"100ms"' in query
     assert "`horizon_sort_order" in query and ";2;" in query
     assert "0D00:00:00.500" in query
     assert "0D00:00:00.500" in query
     assert ".mmsr.calcToxicityReversion" in query
     assert ".mmsr.calcToxicityReversion" in query
-    assert "$\"primary_quote_reversion_100ms_bps\"" in query
+    assert '$"primary_quote_reversion_100ms_bps"' in query
     assert ".mmsr.calcToxicityReversion" in query
-
-
 
 
 def test_activity_runner_validates_output_schema_before_normalization() -> None:
@@ -433,6 +430,7 @@ def test_reversion_runner_validates_output_schema_before_normalization() -> None
                 parameters=config.metric_parameters_for(metric_name),
             )
         )
+
 
 def test_reversion_runner_requires_venue_parameters_before_execution() -> None:
     registry = build_default_registry()
@@ -581,8 +579,6 @@ def test_normalize_metric_result_rejects_mismatched_column_lengths() -> None:
         )
 
 
-
-
 def test_kdb_metric_runner_installs_calculation_functions() -> None:
     client = FakeKdbClient({})
     runner = KdbMetricRunner(client)
@@ -592,7 +588,6 @@ def test_kdb_metric_runner_installs_calculation_functions() -> None:
     assert len(client.queries) == 1
     assert ".desk.mmsr.sumNotional" in client.queries[0]
     assert ".desk.mmsr.medianTopOfBookDepth" in client.queries[0]
-
 
 
 def test_day_runner_normalizes_keyed_table_mapping_metric_result() -> None:
@@ -711,11 +706,13 @@ def test_day_runner_uses_cached_metric_day_result_without_kdb_execution() -> Non
         ]
     )
 
-    assert series == (cached_series.__class__(
-        metric_name="quoted_spread_bps",
-        observations=cached_series.observations,
-        metadata={"storage": "user-cache", "cache_status": "hit"},
-    ),)
+    assert series == (
+        cached_series.__class__(
+            metric_name="quoted_spread_bps",
+            observations=cached_series.observations,
+            metadata={"storage": "user-cache", "cache_status": "hit"},
+        ),
+    )
     assert client.queries == []
     assert load_calls[0].trading_day == date(2026, 5, 1)
     assert load_calls[0].metric_name == "quoted_spread_bps"
@@ -862,9 +859,8 @@ def test_day_runner_runs_only_uncached_metrics_and_preserves_request_order() -> 
     assert series[1].metadata["cache_status"] == "miss"
     assert persisted == ["quoted_spread_bps"]
     assert len(client.queries) == 1
-    assert "`$\"turnover\"" not in client.queries[0]
-    assert "`$\"quoted_spread_bps\"" in client.queries[0]
-
+    assert '`$"turnover"' not in client.queries[0]
+    assert '`$"quoted_spread_bps"' in client.queries[0]
 
 
 def test_day_runner_loads_stock_metrics_once_and_computes_only_missing_metrics() -> None:
@@ -956,14 +952,12 @@ def test_day_runner_loads_stock_metrics_once_and_computes_only_missing_metrics()
     assert series[0].metadata == {"storage": "stockMetrics", "cache_status": "hit"}
     assert series[0].values == (1000.0,)
     assert series[1].metadata["cache_status"] == "miss"
-    assert stock_load_calls == [
-        (date(2026, 5, 1), ("turnover", "quoted_spread_bps"))
-    ]
+    assert stock_load_calls == [(date(2026, 5, 1), ("turnover", "quoted_spread_bps"))]
     assert per_metric_load_calls == ["quoted_spread_bps"]
     assert persisted == ["quoted_spread_bps"]
     assert len(client.queries) == 1
-    assert "`$\"turnover\"" not in client.queries[0]
-    assert "`$\"quoted_spread_bps\"" in client.queries[0]
+    assert '`$"turnover"' not in client.queries[0]
+    assert '`$"quoted_spread_bps"' in client.queries[0]
 
 
 def test_day_runner_persists_computed_misses_as_one_stock_metrics_batch() -> None:

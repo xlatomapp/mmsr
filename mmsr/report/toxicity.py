@@ -31,7 +31,6 @@ from mmsr.visuals.toxicity import (
     reversion_curve_points_from_timeseries_collection,
 )
 
-
 REVERSION_METRIC_PREFIX = "primary_quote_reversion_"
 REVERSION_METRIC_SUFFIX = "_bps"
 DEFAULT_REVERSION_VENUE_ORDER: tuple[str, ...] = ("TSE", "SBIJ", "ODX")
@@ -82,9 +81,7 @@ class ToxicityReversionPageOptions:
     context_ranking: ToxicityContextRanking = DEFAULT_TOXICITY_CONTEXT_RANKING
     venue_order: tuple[str, ...] = DEFAULT_REVERSION_VENUE_ORDER
     horizon_order: tuple[str, ...] = DEFAULT_REVERSION_HORIZON_ORDER
-    confidence: ToxicityConfidenceConfig | None = field(
-        default_factory=ToxicityConfidenceConfig
-    )
+    confidence: ToxicityConfidenceConfig | None = field(default_factory=ToxicityConfidenceConfig)
     comparison_table_title: str = "Reversion current versus reference"
     comparison_table_help_text: str = (
         "Precomputed normalized comparison rows for the reversion metric family. "
@@ -163,9 +160,7 @@ def build_toxicity_reversion_page(
 
     resolved_options = options or ToxicityReversionPageOptions()
     definitions = _metric_definition_map(metric_definitions)
-    reversion_series = tuple(
-        series for series in current_series if _is_reversion_metric(series.metric_name)
-    )
+    reversion_series = tuple(series for series in current_series if _is_reversion_metric(series.metric_name))
     if not reversion_series:
         return None
 
@@ -222,11 +217,7 @@ def build_toxicity_reversion_page(
             *charts,
             *([] if comparison_diagnostic_chart is None else [comparison_diagnostic_chart]),
         ],
-        commentary_blocks=(
-            [CommentaryBlock(title="Toxicity commentary", comments=comments)]
-            if comments
-            else []
-        ),
+        commentary_blocks=([CommentaryBlock(title="Toxicity commentary", comments=comments)] if comments else []),
     )
 
 
@@ -237,9 +228,7 @@ def _build_reversion_comparison_table(
     options: ToxicityReversionPageOptions,
 ) -> MetricTable | None:
     reversion_comparisons = tuple(
-        comparison
-        for comparison in comparisons
-        if _is_reversion_metric(comparison.metric_name)
+        comparison for comparison in comparisons if _is_reversion_metric(comparison.metric_name)
     )
     if not reversion_comparisons or options.max_comparison_rows == 0:
         return None
@@ -262,10 +251,7 @@ def _selected_context_points(
     for point in points:
         grouped[_context_key(point)].append(point)
 
-    context_groups = tuple(
-        (key, tuple(grouped[key]))
-        for key in sorted(grouped, key=_context_sort_key)
-    )
+    context_groups = tuple((key, tuple(grouped[key])) for key in sorted(grouped, key=_context_sort_key))
     ordered_groups = tuple(
         context_points
         for _, context_points in sorted(
@@ -341,10 +327,7 @@ def _context_ranking_sort_key(
             -_context_max_absolute_reversion(points),
             *chronological_key,
         )
-    raise ValueError(
-        "context_ranking must be one of: "
-        + ", ".join(TOXICITY_CONTEXT_RANKINGS)
-    )
+    raise ValueError("context_ranking must be one of: " + ", ".join(TOXICITY_CONTEXT_RANKINGS))
 
 
 def _context_max_positive_reversion(points: Sequence[ReversionCurvePoint]) -> float:
@@ -366,11 +349,7 @@ def _context_low_confidence_ratio(points: Sequence[ReversionCurvePoint]) -> floa
 
 
 def _context_sort_order_rank(points: Sequence[ReversionCurvePoint]) -> tuple[int, int]:
-    orders = [
-        point.context_sort_order
-        for point in points
-        if point.context_sort_order is not None
-    ]
+    orders = [point.context_sort_order for point in points if point.context_sort_order is not None]
     if not orders:
         return (1, 0)
     return (0, min(orders))
@@ -380,12 +359,7 @@ def _time_bucket_rank(value: time | str | None) -> int:
     if value is None:
         return 0
     if isinstance(value, time):
-        return (
-            value.hour * 3_600_000_000
-            + value.minute * 60_000_000
-            + value.second * 1_000_000
-            + value.microsecond
-        )
+        return value.hour * 3_600_000_000 + value.minute * 60_000_000 + value.second * 1_000_000 + value.microsecond
     return 0
 
 
@@ -397,9 +371,7 @@ def _plotly_chart_from_context_points(
 ) -> PlotlyChart:
     context = _context_label(points[0])
     selected_points = (
-        tuple(points)
-        if options.max_points_per_chart is None
-        else tuple(points)[: options.max_points_per_chart]
+        tuple(points) if options.max_points_per_chart is None else tuple(points)[: options.max_points_per_chart]
     )
     return PlotlyChart(
         title=f"{context} reversion horizon curve",
@@ -446,16 +418,8 @@ def _reversion_curve_traces(
                 "x": [point.horizon for point in venue_points],
                 "y": [point.reversion_bps for point in venue_points],
                 "text": [_point_hover_text(point) for point in venue_points],
-                "marker": {
-                    "symbol": [
-                        "circle-open" if point.low_confidence else "circle"
-                        for point in venue_points
-                    ]
-                },
-                "hovertemplate": (
-                    "%{text}<br><b>%{y:+.4f} bps</b>"
-                    "<extra>%{fullData.name}</extra>"
-                ),
+                "marker": {"symbol": ["circle-open" if point.low_confidence else "circle" for point in venue_points]},
+                "hovertemplate": ("%{text}<br><b>%{y:+.4f} bps</b><extra>%{fullData.name}</extra>"),
             }
         )
     return traces
@@ -486,10 +450,7 @@ def _reversion_curve_data_summary(points: Sequence[ReversionCurvePoint]) -> str:
     ]
     if low_confidence_count:
         parts.append(f"{low_confidence_count:,} low-confidence markers")
-    return (
-        "; ".join(parts)
-        + ". Compact Plotly arrays only; raw trade or quote rows are not embedded."
-    )
+    return "; ".join(parts) + ". Compact Plotly arrays only; raw trade or quote rows are not embedded."
 
 
 def _build_reversion_comparison_diagnostic_chart(
@@ -517,10 +478,7 @@ def _build_reversion_comparison_diagnostic_chart(
                     "x": [_comparison_delta_bps(comparison) for comparison in rows],
                     "y": [_comparison_diagnostic_label(comparison) for comparison in rows],
                     "text": [_comparison_hover_text(comparison) for comparison in rows],
-                    "hovertemplate": (
-                        "%{text}<br><b>%{x:+.4f} bps</b>"
-                        "<extra>Current − reference</extra>"
-                    ),
+                    "hovertemplate": ("%{text}<br><b>%{x:+.4f} bps</b><extra>Current − reference</extra>"),
                 }
             ],
             "layout": {
@@ -722,30 +680,18 @@ def _require_metric_definitions(
     series: Sequence[MetricTimeSeries],
     definitions: Mapping[str, MetricDefinition],
 ) -> None:
-    missing = sorted(
-        {item.metric_name for item in series}
-        - set(definitions.keys())
-    )
+    missing = sorted({item.metric_name for item in series} - set(definitions.keys()))
     if missing:
-        raise ValueError(
-            "metric definitions are required for toxicity reversion charts: "
-            + ", ".join(missing)
-        )
+        raise ValueError("metric definitions are required for toxicity reversion charts: " + ", ".join(missing))
 
 
 def _is_reversion_metric(metric_name: str) -> bool:
-    return (
-        metric_name.startswith(REVERSION_METRIC_PREFIX)
-        and metric_name.endswith(REVERSION_METRIC_SUFFIX)
-    )
+    return metric_name.startswith(REVERSION_METRIC_PREFIX) and metric_name.endswith(REVERSION_METRIC_SUFFIX)
 
 
 def _require_context_ranking(value: str) -> None:
     if value not in TOXICITY_CONTEXT_RANKINGS:
-        raise ValueError(
-            "context_ranking must be one of: "
-            + ", ".join(TOXICITY_CONTEXT_RANKINGS)
-        )
+        raise ValueError("context_ranking must be one of: " + ", ".join(TOXICITY_CONTEXT_RANKINGS))
 
 
 def _require_non_empty(value: str, field_name: str) -> None:

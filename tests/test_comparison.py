@@ -12,7 +12,6 @@ from mmsr.analysis.comparison import (
     robust_reference_stats,
     standard_reference_stats,
 )
-
 from mmsr.metrics.results import MetricObservation, MetricTimeSeries
 
 
@@ -79,9 +78,7 @@ def test_reference_distribution_reports_normal_score_percentile_when_policy_mini
     assert stats.z_score is not None
     assert stats.normal_score_percentile is not None
     assert 0.0 <= stats.normal_score_percentile <= 1.0
-    assert stats.normal_score_adverse_tail_probability == pytest.approx(
-        1.0 - stats.normal_score_percentile
-    )
+    assert stats.normal_score_adverse_tail_probability == pytest.approx(1.0 - stats.normal_score_percentile)
 
 
 def test_higher_is_better_direction_uses_lower_tail_as_adverse_tail() -> None:

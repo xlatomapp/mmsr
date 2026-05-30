@@ -6,7 +6,6 @@ import re
 from importlib import resources
 from pathlib import PurePath
 
-
 _PLACEHOLDER_RE = re.compile(r"{{\s*([A-Za-z_][A-Za-z0-9_]*)\s*}}")
 _PLACEHOLDER_BLOCK_RE = re.compile(r"{{(?P<body>.*?)}}", re.DOTALL)
 
@@ -22,10 +21,7 @@ def load_q_template(name: str) -> str:
     functions are installed from ``q_lib/mmsr_calculations.q.j2``.
     """
 
-    raise FileNotFoundError(
-        f"metric q template files were removed; use installed q functions instead: {name}"
-    )
-
+    raise FileNotFoundError(f"metric q template files were removed; use installed q functions instead: {name}")
 
 
 def load_q_library_template(name: str) -> str:
@@ -43,7 +39,6 @@ def load_q_library_template(name: str) -> str:
     if not template_path.is_file():
         raise FileNotFoundError(f"q library template not found: {name}")
     return template_path.read_text(encoding="utf-8")
-
 
 
 def load_metric_calculation_block(name: str) -> str:
@@ -68,9 +63,7 @@ def template_parameters(template: str) -> frozenset[str]:
         body = match.group("body").strip()
         placeholder = _PLACEHOLDER_RE.fullmatch(block)
         if placeholder is None:
-            raise QueryTemplateError(
-                f"invalid q template placeholder {block!r}; expected {{{{ name }}}}"
-            )
+            raise QueryTemplateError(f"invalid q template placeholder {block!r}; expected {{{{ name }}}}")
         parameters.add(body)
     return frozenset(parameters)
 
@@ -93,28 +86,19 @@ def render_template(template: str, params: dict[str, str]) -> str:
 
     invalid_keys = sorted(key for key in supplied if not _is_valid_parameter_name(key))
     if invalid_keys:
-        raise QueryTemplateError(
-            "invalid q template parameter name(s): " + ", ".join(invalid_keys)
-        )
+        raise QueryTemplateError("invalid q template parameter name(s): " + ", ".join(invalid_keys))
 
     missing = sorted(required - supplied)
     if missing:
-        raise QueryTemplateError(
-            "missing q template parameter(s): " + ", ".join(missing)
-        )
+        raise QueryTemplateError("missing q template parameter(s): " + ", ".join(missing))
 
     unused = sorted(supplied - required)
     if unused:
         raise QueryTemplateError("unused q template parameter(s): " + ", ".join(unused))
 
-    non_string_keys = sorted(
-        key for key, value in params.items() if not isinstance(value, str)
-    )
+    non_string_keys = sorted(key for key, value in params.items() if not isinstance(value, str))
     if non_string_keys:
-        raise TypeError(
-            "q template parameter value(s) must be strings: "
-            + ", ".join(non_string_keys)
-        )
+        raise TypeError("q template parameter value(s) must be strings: " + ", ".join(non_string_keys))
 
     return _PLACEHOLDER_RE.sub(lambda match: params[match.group(1)], template)
 
@@ -124,8 +108,6 @@ def _is_valid_parameter_name(name: str) -> bool:
     return bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name))
 
 
-
-
 def _validate_q_namespace(value: str, field_name: str) -> str:
     """Validate and return a q namespace used for rendered q bootstraps."""
 
@@ -133,13 +115,15 @@ def _validate_q_namespace(value: str, field_name: str) -> str:
         raise ValueError(f"{field_name} must be a non-empty string")
     if not value.startswith("."):
         raise ValueError(f"{field_name} must start with '.'")
-    if re.fullmatch(
-        r"\.[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*",
-        value,
-    ) is None:
+    if (
+        re.fullmatch(
+            r"\.[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*",
+            value,
+        )
+        is None
+    ):
         raise ValueError(f"invalid {field_name}: {value!r}")
     return value
-
 
 
 def _validate_positive_int(value: int, field_name: str) -> int:
@@ -156,6 +140,7 @@ def _shared_q_library_template() -> str:
     """Return the single canonical q library template."""
 
     return load_q_library_template("mmsr_calculations.q.j2")
+
 
 def render_calculation_function_bootstrap(calculation_namespace: str) -> str:
     """Render MMSR-owned reusable q helper functions for a calculation namespace.

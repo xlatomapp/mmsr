@@ -54,20 +54,13 @@ def test_market_monitor_report_is_canonical_production_format() -> None:
     assert summary_page.html_blocks[0].title == "Executive Market Overview"
     assert "Overall status:</strong>" in summary_page.html_blocks[0].body_html
     assert "<strong>Market activity:</strong>" in summary_page.html_blocks[0].body_html
-    assert (
-        "<strong>Displayed liquidity:</strong>"
-        in summary_page.html_blocks[0].body_html
-    )
+    assert "<strong>Displayed liquidity:</strong>" in summary_page.html_blocks[0].body_html
     assert len(summary_page.metric_cards) == 6
     assert len(summary_page.metric_tables) == 1
     assert len(summary_page.commentary_blocks) == 1
-    assert summary_page.commentary_blocks[0].comments[0].startswith(
-        "Market Summary headline:"
-    )
+    assert summary_page.commentary_blocks[0].comments[0].startswith("Market Summary headline:")
     assert len(activity_page.plotly_charts) == 1
-    assert activity_page.plotly_charts[0].title == (
-        "Volume cumulative intraday distribution"
-    )
+    assert activity_page.plotly_charts[0].title == ("Volume cumulative intraday distribution")
     assert len(liquidity_page.plotly_charts) == 2
     assert liquidity_page.plotly_charts[0].title == "Quoted Spread intraday profile"
     assert liquidity_page.plotly_charts[1].title == "Top-of-Book Depth intraday profile"
@@ -108,12 +101,8 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert "Sector, Segment, and Market-Cap Drilldowns" in html
     assert "Top group-level drilldowns" in html
     assert "Executive Market Overview" in html
-    assert html.index('<section class="html-block">') < html.index(
-        '<div class="metric-grid">'
-    )
-    assert html.index("Executive Market Overview") < html.index(
-        "Current versus reference"
-    )
+    assert html.index('<section class="html-block">') < html.index('<div class="metric-grid">')
+    assert html.index("Executive Market Overview") < html.index("Current versus reference")
     assert "Overall status:" in html
     assert "Market activity:" in html
     assert "Displayed liquidity:" in html
@@ -231,25 +220,18 @@ def test_market_monitor_report_can_opt_into_intraday_heatmaps() -> None:
         ),
     )
 
-    detail_page = next(
-        page for page in document.pages if page.title == "Intraday Detail"
-    )
+    detail_page = next(page for page in document.pages if page.title == "Intraday Detail")
     symbol_detail_pages = [
-        page
-        for page in document.pages
-        if page.title.startswith("Symbol ") and page.title.endswith(" Detail")
+        page for page in document.pages if page.title.startswith("Symbol ") and page.title.endswith(" Detail")
     ]
     assert len(detail_page.heatmaps) == 3
     assert symbol_detail_pages == []
 
+
 def test_market_monitor_report_requires_metric_definitions_for_current_series() -> None:
     sample = build_offline_sample_metrics()
     broken_input = MarketReportInput(
-        metric_definitions={
-            key: value
-            for key, value in sample.metric_definitions.items()
-            if key != "volume"
-        },
+        metric_definitions={key: value for key, value in sample.metric_definitions.items() if key != "volume"},
         current_series=sample.current_series,
         comparisons=sample.comparisons,
     )

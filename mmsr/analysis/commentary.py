@@ -49,42 +49,21 @@ class TemplateCommentaryEngine:
             group = format_group_label(fact.group) or "the selected universe"
             caveat_text = _format_caveats(fact.caveats)
             if fact.fact_type == "section_summary":
-                comments.append(
-                    f"{fact.metric_label} headline: {fact.value_text}.{caveat_text}"
-                )
+                comments.append(f"{fact.metric_label} headline: {fact.value_text}.{caveat_text}")
             elif fact.status == "normal":
-                comments.append(
-                    f"{fact.metric_label} was within the normal range for {group}."
-                    f"{caveat_text}"
-                )
+                comments.append(f"{fact.metric_label} was within the normal range for {group}.{caveat_text}")
             elif fact.status == "comparison_only":
-                ref_text = (
-                    ""
-                    if fact.reference_text is None
-                    else f" versus reference {fact.reference_text}"
-                )
-                change_text = (
-                    "" if fact.change_text is None else f" ({fact.change_text})"
-                )
+                ref_text = "" if fact.reference_text is None else f" versus reference {fact.reference_text}"
+                change_text = "" if fact.change_text is None else f" ({fact.change_text})"
                 comments.append(
                     f"{fact.metric_label} comparison for {group}: current "
                     f"{fact.value_text}{ref_text}{change_text}; statistical score "
                     f"not shown.{caveat_text}"
                 )
             else:
-                z_text = (
-                    ""
-                    if fact.z_score is None
-                    else f" with z-score {fact.z_score:.1f}"
-                )
-                ref_text = (
-                    ""
-                    if fact.reference_text is None
-                    else f" versus reference {fact.reference_text}"
-                )
-                change_text = (
-                    "" if fact.change_text is None else f" ({fact.change_text})"
-                )
+                z_text = "" if fact.z_score is None else f" with z-score {fact.z_score:.1f}"
+                ref_text = "" if fact.reference_text is None else f" versus reference {fact.reference_text}"
+                change_text = "" if fact.change_text is None else f" ({fact.change_text})"
                 comments.append(
                     f"{fact.metric_label} was {fact.direction_word} for {group}: "
                     f"current {fact.value_text}{ref_text}{change_text}{z_text}."
@@ -96,9 +75,7 @@ class TemplateCommentaryEngine:
 def commentary_facts_from_comparisons(
     comparisons: Sequence[MetricComparison],
     *,
-    metric_definitions: Mapping[str, MetricDefinition]
-    | Iterable[MetricDefinition]
-    | None = None,
+    metric_definitions: Mapping[str, MetricDefinition] | Iterable[MetricDefinition] | None = None,
     max_facts: int | None = None,
 ) -> tuple[CommentaryFact, ...]:
     """Convert comparison results into grounded deterministic commentary facts.
@@ -112,10 +89,7 @@ def commentary_facts_from_comparisons(
         raise ValueError("max_facts must be non-negative")
 
     definitions = _metric_definition_map(metric_definitions)
-    facts = tuple(
-        _commentary_fact_from_comparison(comparison, definitions)
-        for comparison in comparisons
-    )
+    facts = tuple(_commentary_fact_from_comparison(comparison, definitions) for comparison in comparisons)
     ordered = tuple(sorted(facts, key=_comparison_fact_sort_key))
     if max_facts is None:
         return ordered
@@ -172,9 +146,7 @@ def _commentary_fact_from_comparison(
         group=_comparison_group(comparison),
         value_text=_format_metric_value(comparison.value, unit),
         reference_text=(
-            None
-            if comparison.reference_value is None
-            else _format_metric_value(comparison.reference_value, unit)
+            None if comparison.reference_value is None else _format_metric_value(comparison.reference_value, unit)
         ),
         change_text=_format_change(comparison, unit),
         z_score=comparison.z_score,
@@ -250,9 +222,7 @@ def _join_phrase(parts: Sequence[str]) -> str:
 
 
 def _metric_definition_map(
-    metric_definitions: Mapping[str, MetricDefinition]
-    | Iterable[MetricDefinition]
-    | None,
+    metric_definitions: Mapping[str, MetricDefinition] | Iterable[MetricDefinition] | None,
 ) -> dict[str, MetricDefinition]:
     if metric_definitions is None:
         return {}
@@ -332,16 +302,10 @@ def _comparison_caveats(comparison: MetricComparison) -> list[str]:
     elif sample_size == 1:
         caveats.append("One reference observation; z-score is intentionally omitted.")
     elif confidence in {"insufficient", "weak"}:
-        caveats.append(
-            "Low confidence: "
-            f"{sample_size} reference observations; statistical scores are limited."
-        )
+        caveats.append(f"Low confidence: {sample_size} reference observations; statistical scores are limited.")
 
     if comparison.z_score is None and sample_size is not None and sample_size < 30:
-        caveats.append(
-            "No z-score shown because fewer than 30 comparable observations "
-            "were available."
-        )
+        caveats.append("No z-score shown because fewer than 30 comparable observations were available.")
 
     reference_unit = comparison.metadata.get("reference_observation_unit")
     reference_unit_label = format_reference_observation_unit_label(reference_unit)

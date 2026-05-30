@@ -9,7 +9,6 @@ from mmsr.kdb.schema_contracts import (
     extract_result_columns,
     liquidity_input_schema_contract,
     liquidity_output_schema_contract,
-    output_schema_contract_for_template,
     toxicity_reversion_input_schema_contracts,
     toxicity_reversion_output_schema_contract,
     validate_activity_output_schema,
@@ -343,12 +342,7 @@ def test_toxicity_reversion_contract_validates_column_mapping_result() -> None:
 
 
 def test_toxicity_reversion_contract_validates_row_dict_result() -> None:
-    result = [
-        {
-            key: values[0]
-            for key, values in _reversion_result().items()
-        }
-    ]
+    result = [{key: values[0] for key, values in _reversion_result().items()}]
 
     assert extract_result_columns(result) == tuple(_reversion_result())
 
@@ -395,7 +389,6 @@ def test_toxicity_reversion_contract_rejects_empty_row_list() -> None:
 def test_toxicity_reversion_contract_rejects_non_reversion_metric() -> None:
     with pytest.raises(OutputSchemaContractError, match="primary_quote_reversion"):
         toxicity_reversion_output_schema_contract("quoted_spread_bps")
-
 
 
 def test_output_schema_validation_accepts_keyed_table_mapping_representation() -> None:

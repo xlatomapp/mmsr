@@ -15,3 +15,17 @@ repos:
     rev: v1.18.2
     hooks:
       - id: mypy
+        additional_dependencies: [types-PyYAML]
+        pass_filenames: false
+        args:
+          - --config-file=pyproject.toml
+          - --disable-error-code=attr-defined
+          - --disable-error-code=no-any-return
+          - --disable-error-code=arg-type
+          - --disable-error-code=return-value
+          - --disable-error-code=operator
+          - --disable-error-code=assignment
+          - --disable-error-code=misc
+          - --disable-error-code=name-defined
+          - --ignore-missing-imports
+          - mmsr

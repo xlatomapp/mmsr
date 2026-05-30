@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime, time, timedelta
 
-from mmsr.periods.models import AuctionBucketLabels, IntradayBucketSpec, TimeBucket, TradingSession
+from mmsr.periods.models import (
+    AuctionBucketLabels,
+    IntradayBucketSpec,
+    TimeBucket,
+    TradingSession,
+)
 
 _BASE_DATE = datetime(2000, 1, 1)
 

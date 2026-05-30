@@ -2,7 +2,6 @@ from mmsr.metrics.results import MetricComparison
 from mmsr.metrics.starter_definitions import STARTER_METRICS
 from mmsr.report.overview import build_executive_market_overview_block
 
-
 DEFINITIONS = {
     metric.name: metric
     for metric in STARTER_METRICS
@@ -47,22 +46,13 @@ def test_executive_overview_surfaces_activity_and_liquidity_families() -> None:
         DEFINITIONS,
     )
 
-    assert (
-        'aria-label="Market activity and displayed liquidity summary"'
-        in block.body_html
-    )
+    assert 'aria-label="Market activity and displayed liquidity summary"' in block.body_html
     assert "<strong>Market activity:</strong> Watch" in block.body_html
     assert "1 observed metrics (Volume)" in block.body_html
-    assert (
-        "Leading signal: Volume average current 1,200,000.0000 shares"
-        in block.body_html
-    )
+    assert "Leading signal: Volume average current 1,200,000.0000 shares" in block.body_html
     assert "<strong>Displayed liquidity:</strong> Alert" in block.body_html
     assert "2 observed metrics (Quoted Spread, Top-of-Book Depth)" in block.body_html
-    assert (
-        "Leading signal: Quoted Spread average current 42.1000 bps"
-        in block.body_html
-    )
+    assert "Leading signal: Quoted Spread average current 42.1000 bps" in block.body_html
 
 
 def test_executive_overview_omits_family_summary_without_default_family_metrics() -> None:

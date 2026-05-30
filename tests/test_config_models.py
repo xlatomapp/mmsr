@@ -8,10 +8,10 @@ from mmsr.config.models import (
     ReferenceComparisonConfig,
     ReportConfig,
     SymbolUniverseConfig,
+    ToxicityConfidenceConfig,
     ToxicityConfig,
     ToxicityEventClusteringConfig,
     ToxicityFiltersConfig,
-    ToxicityConfidenceConfig,
 )
 
 
@@ -120,9 +120,7 @@ def test_toxicity_nested_configs_validate_thresholds_and_durations() -> None:
         except ValueError as exc:
             assert expected in str(exc)
         else:
-            raise AssertionError(
-                f"Expected invalid nested toxicity config for {expected}"
-            )
+            raise AssertionError(f"Expected invalid nested toxicity config for {expected}")
 
 
 def test_toxicity_config_populates_metric_run_parameters() -> None:
@@ -222,7 +220,10 @@ def test_kdb_namespace_config_rejects_global_or_invalid_names() -> None:
             lambda: CalendarConfig(namespace=".sb.mmsr", function="bad-name"),
             "calendar.function",
         ),
-        (lambda: KdbExecutionConfig(calculation_namespace="mmsr"), "calculation_namespace"),
+        (
+            lambda: KdbExecutionConfig(calculation_namespace="mmsr"),
+            "calculation_namespace",
+        ),
         (
             lambda: KdbExecutionConfig(symbol_chunk_size=0),
             "kdb.symbol_chunk_size",

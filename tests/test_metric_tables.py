@@ -17,10 +17,7 @@ from mmsr.report.metric_docs import (
 from mmsr.report.render_html import render_metric_table, render_report
 from mmsr.report.sections import build_comparison_metric_table
 
-
-QUOTED_SPREAD_BPS = next(
-    metric for metric in STARTER_METRICS if metric.name == "quoted_spread_bps"
-)
+QUOTED_SPREAD_BPS = next(metric for metric in STARTER_METRICS if metric.name == "quoted_spread_bps")
 VOLUME = next(metric for metric in STARTER_METRICS if metric.name == "volume")
 
 
@@ -125,9 +122,7 @@ def test_build_comparison_metric_table_formats_and_orders_rows() -> None:
     assert table.rows[0].reference_text == "31.4000 bps"
     assert table.rows[0].change_text == "change +10.7000 bps +34.1%"
     assert table.rows[0].status == "alert"
-    assert table.rows[0].group_text == (
-        "Date: 2026-05-22, Intraday bucket: 09:00–09:05, Market cap bucket: Small cap"
-    )
+    assert table.rows[0].group_text == ("Date: 2026-05-22, Intraday bucket: 09:00–09:05, Market cap bucket: Small cap")
 
 
 def test_build_comparison_metric_table_validates_inputs() -> None:

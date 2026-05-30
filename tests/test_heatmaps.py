@@ -13,10 +13,7 @@ from mmsr.report.metric_docs import (
 from mmsr.report.render_html import render_heatmap, render_report
 from mmsr.report.sections import build_heatmap
 
-
-QUOTED_SPREAD_BPS = next(
-    metric for metric in STARTER_METRICS if metric.name == "quoted_spread_bps"
-)
+QUOTED_SPREAD_BPS = next(metric for metric in STARTER_METRICS if metric.name == "quoted_spread_bps")
 VOLUME = next(metric for metric in STARTER_METRICS if metric.name == "volume")
 
 
@@ -100,7 +97,10 @@ def test_build_heatmap_preserves_observation_order_bucket_and_group_context() ->
         "2026-05-22",
         "2026-05-22",
     ]
-    assert [cell.time_bucket_text for cell in heatmap.cells] == ["AM opening auction", "09:05"]
+    assert [cell.time_bucket_text for cell in heatmap.cells] == [
+        "AM opening auction",
+        "09:05",
+    ]
     assert [cell.group_text for cell in heatmap.cells] == ["Venue: TSE", "Venue: ODX"]
     assert heatmap.cells[0].value_text == "12.4000 bps"
     assert heatmap.cells[0].value == 12.4
@@ -237,7 +237,6 @@ def test_heatmap_numeric_value_falls_back_to_display_text() -> None:
     assert heatmap.cells[0].numeric_value() == 12.4
     assert heatmap.has_svg_matrix()
     assert heatmap.svg_cells()[0].label == "12.4"
-
 
 
 def test_heatmap_models_validate_required_text() -> None:

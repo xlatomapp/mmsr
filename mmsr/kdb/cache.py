@@ -10,7 +10,6 @@ from typing import Any, Protocol
 from mmsr.kdb.query_plan import MetricRunRequest
 from mmsr.metrics.results import MetricObservation, MetricTimeSeries
 
-
 STOCK_METRICS_DIMENSION_COLUMNS: tuple[str, ...] = (
     "date",
     "timeBucket",
@@ -37,7 +36,7 @@ class MetricDayCacheLoader(Protocol):
 
     def __call__(
         self,
-        key: "MetricDayCacheKey",
+        key: MetricDayCacheKey,
         request: MetricRunRequest,
     ) -> MetricTimeSeries | None:
         """Load cached normalized metric data for ``key`` if available."""
@@ -55,12 +54,11 @@ class MetricDayCachePersister(Protocol):
 
     def __call__(
         self,
-        key: "MetricDayCacheKey",
+        key: MetricDayCacheKey,
         request: MetricRunRequest,
         series: MetricTimeSeries,
     ) -> None:
         """Persist normalized metric data for ``key``."""
-
 
 
 class StockMetricsDayCacheLoader(Protocol):
@@ -77,7 +75,7 @@ class StockMetricsDayCacheLoader(Protocol):
         self,
         trading_day: date,
         requests: Sequence[MetricRunRequest],
-        keys: Sequence["MetricDayCacheKey"],
+        keys: Sequence[MetricDayCacheKey],
         metric_names: Sequence[str],
     ) -> Iterable[Mapping[str, Any]] | None:
         """Load canonical wide ``stockMetrics`` rows for one trading day."""
@@ -95,7 +93,7 @@ class StockMetricsDayCachePersister(Protocol):
         self,
         trading_day: date,
         requests: Sequence[MetricRunRequest],
-        keys: Sequence["MetricDayCacheKey"],
+        keys: Sequence[MetricDayCacheKey],
         rows: Sequence[Mapping[str, Any]],
     ) -> None:
         """Persist canonical wide ``stockMetrics`` rows for one trading day."""
@@ -122,7 +120,7 @@ class MetricDayCacheKey:
     calculation_namespace: str
 
     @classmethod
-    def from_request(cls, request: MetricRunRequest) -> "MetricDayCacheKey":
+    def from_request(cls, request: MetricRunRequest) -> MetricDayCacheKey:
         """Build a cache key from a single-day metric run request."""
 
         return cls(
@@ -131,12 +129,8 @@ class MetricDayCacheKey:
             bucket_size=request.period.bucket.value,
             group_by=tuple(request.group_by),
             parameters=_stable_items(request.parameters),
-            source_functions=tuple(
-                sorted((str(k), str(v)) for k, v in request.source_functions.items())
-            ),
-            table_names=tuple(
-                sorted((str(k), str(v)) for k, v in request.table_names.items())
-            ),
+            source_functions=tuple(sorted((str(k), str(v)) for k, v in request.source_functions.items())),
+            table_names=tuple(sorted((str(k), str(v)) for k, v in request.table_names.items())),
             calculation_namespace=request.calculation_namespace,
         )
 
@@ -291,16 +285,9 @@ def merge_stock_metrics_rows(
             row = dict(raw_row)
             dimension_key = tuple(row.get(column) for column in STOCK_METRICS_DIMENSION_COLUMNS)
             if dimension_key not in merged:
-                merged[dimension_key] = {
-                    column: row.get(column)
-                    for column in STOCK_METRICS_DIMENSION_COLUMNS
-                }
+                merged[dimension_key] = {column: row.get(column) for column in STOCK_METRICS_DIMENSION_COLUMNS}
             merged[dimension_key].update(
-                {
-                    column: value
-                    for column, value in row.items()
-                    if column not in STOCK_METRICS_DIMENSION_COLUMNS
-                }
+                {column: value for column, value in row.items() if column not in STOCK_METRICS_DIMENSION_COLUMNS}
             )
     return tuple(merged.values())
 
@@ -357,9 +344,7 @@ def _coerce_stock_metric_date(value: Any, row_index: int) -> date:
                 return date(int(year), int(month), int(day))
             return date.fromisoformat(value)
         except ValueError as exc:
-            raise ValueError(
-                f"stockMetrics row {row_index} has invalid date value {value!r}"
-            ) from exc
+            raise ValueError(f"stockMetrics row {row_index} has invalid date value {value!r}") from exc
     raise ValueError(f"stockMetrics row {row_index} has unsupported date {value!r}")
 
 

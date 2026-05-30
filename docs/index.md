@@ -109,4 +109,3 @@ validation, use the [production readiness checklist](production_readiness.md).
 It records the sector taxonomy, segment labels, market-cap bucket rules, symbol
 metadata joins, required kdb+ table fields, and bounded live-smoke validation
 steps that must be confirmed with the market-data owner.
-

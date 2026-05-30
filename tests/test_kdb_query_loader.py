@@ -1,5 +1,5 @@
-from pathlib import Path
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -7,11 +7,11 @@ import pytest
 from mmsr.kdb.client import KdbClient, KdbConfig
 from mmsr.kdb.query_loader import (
     QueryTemplateError,
-    load_q_template,
     load_q_library_template,
-    render_template,
+    load_q_template,
     render_calculation_function_bootstrap,
     render_simulated_source_function_bootstrap,
+    render_template,
     template_parameters,
 )
 
@@ -74,10 +74,7 @@ def test_render_template_replaces_named_placeholders_with_whitespace() -> None:
         },
     )
 
-    assert rendered == (
-        "select from trade where date=2026.05.24, "
-        "time within (09:00;11:30)"
-    )
+    assert rendered == ("select from trade where date=2026.05.24, time within (09:00;11:30)")
 
 
 def test_render_template_requires_all_template_parameters() -> None:
@@ -115,10 +112,7 @@ def test_kdb_client_can_be_instantiated_from_config_without_importing_pykx() -> 
 def test_toxicity_reversion_installed_function_uses_future_mid_denominator() -> None:
     template = load_q_library_template("mmsr_calculations.q.j2")
 
-    assert (
-        "reversion_bps: aggressorSide * 10000 * "
-        "(postMid - primaryMid) % postMid" in template
-    )
+    assert "reversion_bps: aggressorSide * 10000 * (postMid - primaryMid) % postMid" in template
     assert "postMid > 0" in template
     assert "% primaryMid" not in template
     assert "`date`sym`venue`time xasc ptsQuotes" in template
@@ -186,7 +180,9 @@ def test_no_separate_q_template_directory_exists() -> None:
     assert not (Path(__file__).resolve().parents[1] / "mmsr" / "kdb" / "query_templates").exists()
 
 
-def test_kdb_client_uses_empty_strings_for_missing_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_kdb_client_uses_empty_strings_for_missing_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     captured: dict[str, object] = {}
 
     def fake_q_connection(**kwargs: object) -> object:
@@ -205,6 +201,7 @@ def test_kdb_client_uses_empty_strings_for_missing_credentials(monkeypatch: pyte
     assert captured["username"] == ""
     assert captured["password"] == ""
 
+
 def test_q_library_uses_safe_singleton_dictionary_key_enlistment() -> None:
     template = load_q_library_template("mmsr_calculations.q.j2")
 
@@ -219,7 +216,6 @@ def test_q_metric_functions_return_unkeyed_tables_for_python_schema_validation()
     assert "0!raze mmsrRollups" in template
     assert template.count("0!result") >= 3
     assert "    result\n    };" not in template
-
 
 
 def test_q_library_excludes_removed_legacy_metric_functions() -> None:

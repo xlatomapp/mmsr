@@ -82,8 +82,6 @@ STARTER_METRICS: list[MetricDefinition] = [
         required_tables=["quotes"],
         required_columns=["bidSize", "askSize"],
     ),
-
-
 ]
 
 PRIMARY_QUOTE_REVERSION_HORIZONS: tuple[tuple[str, str], ...] = (
@@ -107,10 +105,7 @@ for horizon, label in PRIMARY_QUOTE_REVERSION_HORIZONS:
                 f"prevailing mid before an aggressive venue trade to {horizon} "
                 "after the trade."
             ),
-            formula=(
-                "side * 10000 * (primary_mid[t + horizon] - "
-                "primary_mid[t-]) / primary_mid[t + horizon]"
-            ),
+            formula=("side * 10000 * (primary_mid[t + horizon] - primary_mid[t-]) / primary_mid[t + horizon]"),
             interpretation=(
                 "Positive values mean the primary mid moved in the aggressive "
                 "trade direction, suggesting greater adverse selection or "

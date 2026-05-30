@@ -8,15 +8,14 @@ trade/quote data.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
-from typing import Mapping
 
 from mmsr.analysis.comparison import ComparisonPolicy, compare_metric_timeseries
 from mmsr.metrics.base import MetricDefinition
 from mmsr.metrics.registry import build_default_registry
 from mmsr.metrics.results import MetricComparison, MetricObservation, MetricTimeSeries
-
 
 SAMPLE_REPORT_DATE = date(2026, 5, 22)
 SAMPLE_REFERENCE_DATES: tuple[date, ...] = (
@@ -126,13 +125,8 @@ def build_offline_metric_comparisons() -> tuple[MetricComparison, ...]:
     registry = build_default_registry()
     current = build_offline_metric_time_series()
     reference = build_offline_reference_time_series()
-    definitions = {
-        metric_name: registry.get(metric_name)
-        for metric_name in _SAMPLE_METRIC_NAMES
-    }
-    directions = {
-        name: definition.higher_is_better for name, definition in definitions.items()
-    }
+    definitions = {metric_name: registry.get(metric_name) for metric_name in _SAMPLE_METRIC_NAMES}
+    directions = {name: definition.higher_is_better for name, definition in definitions.items()}
     comparisons = compare_metric_timeseries(
         _flatten_observations(current),
         _flatten_observations(reference),
@@ -152,13 +146,8 @@ def build_offline_symbol_metric_comparisons() -> tuple[MetricComparison, ...]:
     """
 
     registry = build_default_registry()
-    definitions = {
-        metric_name: registry.get(metric_name)
-        for metric_name in _SAMPLE_METRIC_NAMES
-    }
-    directions = {
-        name: definition.higher_is_better for name, definition in definitions.items()
-    }
+    definitions = {metric_name: registry.get(metric_name) for metric_name in _SAMPLE_METRIC_NAMES}
+    directions = {name: definition.higher_is_better for name, definition in definitions.items()}
     comparisons = compare_metric_timeseries(
         _flatten_observation_mapping(_symbol_current_observations_by_metric()),
         _flatten_observation_mapping(_symbol_reference_observations_by_metric()),
@@ -172,10 +161,7 @@ def build_offline_sample_metrics() -> OfflineSampleMetrics:
     """Build all synthetic data needed by the first offline report examples."""
 
     registry = build_default_registry()
-    definitions = {
-        metric_name: registry.get(metric_name)
-        for metric_name in _SAMPLE_METRIC_NAMES
-    }
+    definitions = {metric_name: registry.get(metric_name) for metric_name in _SAMPLE_METRIC_NAMES}
     current = build_offline_metric_time_series()
     reference = build_offline_reference_time_series()
     symbol_current = build_offline_symbol_metric_time_series()
@@ -257,9 +243,7 @@ def _current_observations_by_metric() -> dict[str, tuple[MetricObservation, ...]
 
 
 def _reference_observations_by_metric() -> dict[str, tuple[MetricObservation, ...]]:
-    rows: dict[str, list[MetricObservation]] = {
-        metric_name: [] for metric_name in _SAMPLE_METRIC_NAMES
-    }
+    rows: dict[str, list[MetricObservation]] = {metric_name: [] for metric_name in _SAMPLE_METRIC_NAMES}
 
     for index, reference_date in enumerate(SAMPLE_REFERENCE_DATES):
         rows["quoted_spread_bps"].extend(
@@ -323,11 +307,7 @@ def _reference_observations_by_metric() -> dict[str, tuple[MetricObservation, ..
             )
         )
 
-    return {
-        metric_name: tuple(observations)
-        for metric_name, observations in rows.items()
-    }
-
+    return {metric_name: tuple(observations) for metric_name, observations in rows.items()}
 
 
 def _symbol_detail_observations_by_metric() -> dict[str, tuple[MetricObservation, ...]]:
@@ -515,9 +495,7 @@ def _symbol_reference_observations_by_metric() -> dict[
     str,
     tuple[MetricObservation, ...],
 ]:
-    rows: dict[str, list[MetricObservation]] = {
-        metric_name: [] for metric_name in _SAMPLE_METRIC_NAMES
-    }
+    rows: dict[str, list[MetricObservation]] = {metric_name: [] for metric_name in _SAMPLE_METRIC_NAMES}
 
     for index, reference_date in enumerate(SAMPLE_REFERENCE_DATES):
         rows["quoted_spread_bps"].append(
@@ -566,10 +544,8 @@ def _symbol_reference_observations_by_metric() -> dict[
             )
         )
 
-    return {
-        metric_name: tuple(observations)
-        for metric_name, observations in rows.items()
-    }
+    return {metric_name: tuple(observations) for metric_name, observations in rows.items()}
+
 
 def _observation(
     metric_name: str,
@@ -606,21 +582,13 @@ def _cycle_value(base: float, index: int, *, amplitude: float) -> float:
 def _flatten_observations(
     series_collection: tuple[MetricTimeSeries, ...],
 ) -> tuple[MetricObservation, ...]:
-    return tuple(
-        observation
-        for series in series_collection
-        for observation in series.observations
-    )
+    return tuple(observation for series in series_collection for observation in series.observations)
 
 
 def _flatten_observation_mapping(
     observations_by_metric: Mapping[str, tuple[MetricObservation, ...]],
 ) -> tuple[MetricObservation, ...]:
-    return tuple(
-        observation
-        for observations in observations_by_metric.values()
-        for observation in observations
-    )
+    return tuple(observation for observations in observations_by_metric.values() for observation in observations)
 
 
 __all__ = [

@@ -40,13 +40,9 @@ def test_build_offline_demo_report_assembles_document_with_appendix() -> None:
     assert len(summary_page.metric_tables) == 1
     assert len(summary_page.metric_tables[0].rows) == 9
     assert len(summary_page.commentary_blocks) == 1
-    assert summary_page.commentary_blocks[0].comments[0].startswith(
-        "Market Summary headline:"
-    )
+    assert summary_page.commentary_blocks[0].comments[0].startswith("Market Summary headline:")
     assert len(activity_page.plotly_charts) == 1
-    assert activity_page.plotly_charts[0].title == (
-        "Volume cumulative intraday distribution"
-    )
+    assert activity_page.plotly_charts[0].title == ("Volume cumulative intraday distribution")
     assert len(liquidity_page.plotly_charts) == 2
     assert liquidity_page.plotly_charts[0].title == "Quoted Spread intraday profile"
     assert liquidity_page.plotly_charts[1].title == "Top-of-Book Depth intraday profile"
@@ -71,9 +67,7 @@ def test_offline_demo_report_renders_comparison_visuals_commentary_and_help() ->
 
     assert "Market Summary" in html
     assert "Executive Market Overview" in html
-    assert html.index('<section class="html-block">') < html.index(
-        '<div class="metric-grid">'
-    )
+    assert html.index('<section class="html-block">') < html.index('<div class="metric-grid">')
     assert "Overall status:" in html
     assert "Current versus reference" in html
     assert "Activity Distribution" in html
@@ -150,29 +144,19 @@ def test_build_offline_demo_report_accepts_supplied_sample_metrics() -> None:
 
     document = build_offline_demo_report(sample_metrics)
 
-    assert len(document.pages[0].metric_tables[0].rows) == len(
-        sample_metrics.comparisons
-    )
+    assert len(document.pages[0].metric_tables[0].rows) == len(sample_metrics.comparisons)
     assert len(document.pages[1].plotly_charts) == 1
     assert len(document.pages[2].plotly_charts) == 2
-    assert len(document.pages[3].time_series_charts) == len(
-        sample_metrics.current_series
-    )
+    assert len(document.pages[3].time_series_charts) == len(sample_metrics.current_series)
     assert len(document.pages[4].metric_tables[0].rows) == 6
-    assert len(document.pages[5].time_series_charts) == len(
-        sample_metrics.current_series
-    )
+    assert len(document.pages[5].time_series_charts) == len(sample_metrics.current_series)
 
 
 def test_build_offline_demo_report_requires_definitions_for_current_series() -> None:
     sample_metrics = build_offline_sample_metrics()
     broken_sample = type(sample_metrics)(
         report_date=sample_metrics.report_date,
-        metric_definitions={
-            key: value
-            for key, value in sample_metrics.metric_definitions.items()
-            if key != "volume"
-        },
+        metric_definitions={key: value for key, value in sample_metrics.metric_definitions.items() if key != "volume"},
         current_series=sample_metrics.current_series,
         reference_series=sample_metrics.reference_series,
         comparisons=sample_metrics.comparisons,
@@ -183,7 +167,6 @@ def test_build_offline_demo_report_requires_definitions_for_current_series() -> 
         build_offline_demo_report(broken_sample)
 
 
-
 def test_build_offline_demo_report_can_disable_drilldown_page() -> None:
     document = build_offline_demo_report(
         options=OfflineDemoReportOptions(
@@ -192,9 +175,7 @@ def test_build_offline_demo_report_can_disable_drilldown_page() -> None:
         )
     )
 
-    assert "Sector, Segment, and Market-Cap Drilldowns" not in [
-        page.title for page in document.pages
-    ]
+    assert "Sector, Segment, and Market-Cap Drilldowns" not in [page.title for page in document.pages]
 
 
 def test_build_offline_demo_report_can_limit_drilldown_rows() -> None:
@@ -205,11 +186,7 @@ def test_build_offline_demo_report_can_limit_drilldown_rows() -> None:
         )
     )
 
-    drilldown_page = next(
-        page
-        for page in document.pages
-        if page.title == "Sector, Segment, and Market-Cap Drilldowns"
-    )
+    drilldown_page = next(page for page in document.pages if page.title == "Sector, Segment, and Market-Cap Drilldowns")
     assert len(drilldown_page.metric_tables[0].rows) == 2
 
 

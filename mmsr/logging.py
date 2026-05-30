@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 
-
 _LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s - %(message)s"
 _DEFAULT_LEVEL = logging.WARNING
 
@@ -17,9 +16,7 @@ def configure_logging(*, verbose: bool = False, log_level: str | None = None) ->
     snippets.
     """
 
-    level = _coerce_log_level(log_level) if log_level else (
-        logging.DEBUG if verbose else _DEFAULT_LEVEL
-    )
+    level = _coerce_log_level(log_level) if log_level else (logging.DEBUG if verbose else _DEFAULT_LEVEL)
     logging.basicConfig(level=level, format=_LOG_FORMAT, force=True)
     logging.getLogger("mmsr").setLevel(level)
     return level

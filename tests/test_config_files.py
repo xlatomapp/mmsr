@@ -3,14 +3,11 @@ from pathlib import Path
 from mmsr.config.loading import load_report_config_file
 from mmsr.kdb.query_plan import template_for_metric
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_production_minimal_config_loads_supported_kdb_metrics() -> None:
-    config, period = load_report_config_file(
-        REPO_ROOT / "config" / "report.production_minimal.yaml"
-    )
+    config, period = load_report_config_file(REPO_ROOT / "config" / "report.production_minimal.yaml")
 
     assert config.title == "Japanese Market Microstructure Monitor"
     assert period.start_date.isoformat() == "2026-05-01"
@@ -35,15 +32,9 @@ def test_production_minimal_config_loads_supported_kdb_metrics() -> None:
         "liquidity",
         "toxicity_reversion",
     }
-    assert config.kdb.raw_data_functions.to_source_functions()["pts_trades"] == (
-        ".sb.mmsr.getPtsTrade"
-    )
-    assert config.kdb.raw_data_functions.to_source_functions()["pts_quotes"] == (
-        ".sb.mmsr.getPtsQuote"
-    )
-    assert config.kdb.raw_data_functions.to_source_functions()["primary_quotes"] == (
-        ".sb.mmsr.getQuote"
-    )
+    assert config.kdb.raw_data_functions.to_source_functions()["pts_trades"] == (".sb.mmsr.getPtsTrade")
+    assert config.kdb.raw_data_functions.to_source_functions()["pts_quotes"] == (".sb.mmsr.getPtsQuote")
+    assert config.kdb.raw_data_functions.to_source_functions()["primary_quotes"] == (".sb.mmsr.getQuote")
     assert config.kdb.symbol_chunk_group_by == ("sym",)
     assert config.kdb.aggregation_levels == (
         "market",
