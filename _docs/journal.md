@@ -10340,4 +10340,75 @@ Removed files:
   reduce raze size but requires careful re-aggregation of non-linear columns
   (positive_reversion_ratio, valid_primary_quote_ratio).
 
+---
+
+## 2026-05-30 — R1 complete: validated against live kdb in 3 incremental steps
+
+### Implemented
+
+R1 changes were built and tested against live kdb (192.168.3.99:5001) one
+step at a time to isolate the `params` error:
+
+**Step 1 — Operator timing log** (commit `e38aab4`):
+- Captured `runReportDay` result as `timingResult` variable.
+- Emit `-1` log line: `MMSR runReportDay <date> ref:<ms> calc:<ms>
+  rollup:<ms> total:<ms> chunks:<n> syms:<n>`.
+- No structural changes. ✅ Live-kdb validated.
+
+**Step 2 — Split chunk timing** (commit `c6e6a1c`):
+- Chunk lambda now times source loading (`srcStart`/`srcEnd`) separately from
+  metric calculation (`calcEnd`).
+- Returns `(sourceLoadMs; metricCalcMs; resultDict)` triple instead of bare dict.
+- `chunkCalcMs = sourceLoadMs + metricCalcMs` (backward-compatible output).
+- `-1` log shows `src:` and `calc:` breakdown.
+- ✅ Live-kdb validated.
+
+**Step 3 — preAggregateFacts helper** (commit `adff89f`):
+- Added `preAggregateFacts` using simple `select sum turnover, sum volume,
+  sum trade_count by date, time_bucket, topixCapGrp from facts` — avoids the
+  functional-select `?` form that caused the original `params` error.
+- Called from chunk lambda on activity-family metrics only; liquidity and
+  reversion pass through unchanged.
+- Per-chunk row count drops from ~(symbols × buckets) to ~(cap-groups ×
+  buckets), shrinking the cross-chunk `raze` intermediate table.
+- ✅ Live-kdb validated.
+
+**Root cause of the earlier `params` error**: the functional select form
+`?[facts;();{x!x}byCols;aggDict]` where `aggDict` was incorrectly constructed
+via `3#{(sum;x)}` and `additiveSpec aggCols` (which returns a list, not a
+dictionary). The simple `select sum ... by ...` form is correct and safer.
+
+### Files changed
+
+- `mmsr/kdb/q_lib/mmsr_calculations.q.j2`
+- `tests/test_kdb_query_loader.py`
+
+### Validation
+
+- Live kdb (192.168.3.99:5001): `mmsr render` with `--inject-simulated-sources` ✅
+- `pytest-full`: all 370+ tests pass
+- `ruff-check`, `ruff-format`, `mypy`: all pass
+
+### Current milestone
+
+- R1: q metric calculation performance pass
+
+### Estimated milestone completion
+
+- R1: 100% — all four exit criteria met with live-kdb-validated changes:
+  1. Per-stage q timings: ref / source-load / metric-calc / rollup / total,
+     surfaced via `-1` operator log and metadata columns.
+  2. Source loading once per chunk; all metric families share `rawSources`.
+  3. Reversion horizons reuse one `prepareToxicityReversion` call.
+  4. Tests guard against no-op wrappers, duplicate source loads, and repeated
+     family preparation.
+
+### Best next deterministic step
+
+- R2: Read `mmsr/report/market_report.py` and `mmsr/report/overview.py` to
+  understand the current executive overview, then redesign the first report
+  page to lead with a concise deterministic market narrative.
+
+### Open questions
+
 - None at this time.
