@@ -89,7 +89,7 @@ def test_mock_kdb_demo_report_renders_canonical_report_visuals_and_labels() -> N
     assert "mock kdb integration" in html
     assert "KdbMetricRunner" in html
     assert "plotly-chart__figure" in html
-    assert '<section class="heatmap">' not in html
+    assert '<section class="heatmap">' in html
     assert "Compact plot data" in html
     assert "AM opening auction" in html
     assert "Market cap bucket: Small cap" in html

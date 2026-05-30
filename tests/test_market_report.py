@@ -110,8 +110,8 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert "Top group-level drilldowns" in html
     assert "drilldown-delta-bars" in html
     assert "Group Delta Overview" in html
-    assert "Group Comparison Matrix" in html
-    assert "drilldown-matrix" in html
+    assert "change by group" in html
+    assert "heatmap__svg" in html
     assert "Executive Market Overview" in html
     assert "Market KPI Snapshot" in html
     assert "Report Meta" in html
@@ -142,7 +142,7 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert "plotly-chart__figure" in html
     assert "Compact plot data" in html
     assert "time-series-chart__placeholder" not in html
-    assert '<section class="heatmap">' not in html
+    assert '<section class="heatmap">' in html
     assert "heatmap__placeholder" not in html
     assert "AM opening auction" in html
     assert "Market cap bucket: Small cap" in html
