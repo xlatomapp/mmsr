@@ -29,3 +29,11 @@ repos:
           - --disable-error-code=name-defined
           - --ignore-missing-imports
           - mmsr
+  - repo: local
+    hooks:
+      - id: pytest-full
+        name: pytest-full
+        entry: python -m pytest
+        language: system
+        pass_filenames: false
+        always_run: true

@@ -35,13 +35,13 @@ from mmsr.kdb.query_plan import (
     KdbMetricQueryPlanner,
     RenderedMetricQuery,
     group_by_for_metric_result,
+    template_for_metric,
 )
 from mmsr.kdb.runner import (
     KdbMetricRunner,
     KdbMetricRunnerError,
     MetricRunRequest,
     normalize_metric_result,
-    template_for_metric,
 )
 from mmsr.kdb.schema_contracts import (
     OutputSchemaContractError,

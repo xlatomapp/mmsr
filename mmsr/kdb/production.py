@@ -135,8 +135,8 @@ class KdbProductionPreflightResult:
     preflight_step: ProductionMetricRunStep
     rendered_query: object
     result_row_count: int
-    sample_timing_ms: Mapping[str, int] | None = None
     checks: tuple[KdbProductionPreflightCheck, ...]
+    sample_timing_ms: Mapping[str, int] | None = None
 
     @property
     def ok(self) -> bool:

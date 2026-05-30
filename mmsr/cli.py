@@ -1030,6 +1030,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = app(args=args, prog_name="mmsr", standalone_mode=False)
     except typer.Exit as exc:
         return int(exc.exit_code or 0)
+    except Exception as exc:
+        if exc.__class__.__name__ == "NoArgsIsHelpError":
+            return 0
+        raise
 
     return int(result or 0)
 

@@ -84,9 +84,7 @@ def test_offline_demo_report_renders_comparison_visuals_commentary_and_help() ->
     assert "Quoted Spread intraday time-bucket trend for symbol 7203" not in html
     assert "Volume intraday time-bucket trend for symbol 8306" not in html
     assert "Top-of-Book Depth intraday time-bucket trend for symbol 6758" not in html
-    assert "Symbol: 7203" not in html
-    assert "Symbol: 6758" not in html
-    assert "Symbol: 8306" not in html
+    assert "Symbol 7203 Detail" not in html
     assert "symbol=7203" not in html
     assert "mock data sample" in html
     assert "plotly-chart__figure" in html

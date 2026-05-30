@@ -32,7 +32,8 @@ def test_dev_and_doc_dependency_groups_are_explicit() -> None:
     dev_dependencies = set(groups["dev"]["dependencies"])
     doc_dependencies = set(groups["doc"]["dependencies"])
 
-    assert {"pytest", "black", "isort", "flake8", "mypy", "tox", "pre-commit"} <= (dev_dependencies)
+    assert {"pytest", "ruff", "mypy", "tox", "pre-commit"} <= (dev_dependencies)
+    assert {"black", "isort", "flake8"}.isdisjoint(dev_dependencies)
     assert {"mkdocs", "mkdocs-material", "mkdocstrings"} <= doc_dependencies
 
 
