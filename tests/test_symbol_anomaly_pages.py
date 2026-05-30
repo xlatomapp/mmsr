@@ -110,6 +110,7 @@ def test_build_symbol_anomaly_page_renders_metric_table_with_scope_and_help() ->
     assert 'role="status"' in page.html_blocks[0].body_html
     assert 'aria-live="polite"' in page.html_blocks[0].body_html
     assert 'data-symbol-anomaly-index="0"' in page.html_blocks[0].body_html
+    assert 'aria-label="Select anomaly 7203 Quoted Spread status Alert"' in page.html_blocks[0].body_html
     assert '"detail_anchor":"symbol-detail-7203-' in page.html_blocks[0].body_html
     assert "7203" in page.html_blocks[0].body_html
     assert len(page.metric_tables) == 1
@@ -559,6 +560,7 @@ def test_market_report_adds_symbol_detail_index_when_detail_pages_exist() -> Non
     assert "data-symbol-anomaly-explorer" in html
     assert "data-symbol-anomaly-detail" in html
     assert "data-symbol-anomaly-spec" in html
+    assert ".symbol-anomaly-explorer__row:focus-visible" in html
     assert "Open detail page" in html
 
 

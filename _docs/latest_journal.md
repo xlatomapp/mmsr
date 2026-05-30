@@ -17,49 +17,42 @@ Use this file as the **active-step buffer**.
 
 ## Current Step Entry
 
-## 2026-05-30 — D5 implementation start: accessibility hooks for interactive drilldown/anomaly panels
+## 2026-05-31 — D5 implementation: keyboard-focus and semantic row labels for anomaly explorer
 
 ### What changed
-- Added explicit accessibility attributes for interactive visuals:
-  - drilldown liquidity heatmap container now has `role="img"` and `aria-label="Liquidity group-metric heatmap"`.
-  - selected-group trend chart container now has `role="img"` and `aria-label="Selected group daily trend chart"`.
-  - anomaly detail panel now has `role="status"` and `aria-live="polite"` for deterministic screen-reader updates after row selection.
-- Added regression assertions:
-  - `tests/test_drilldowns.py` now checks ARIA hooks in matrix explorer HTML block.
-  - `tests/test_symbol_anomaly_pages.py` now checks live-region attributes in anomaly detail block.
-- Updated design roadmap status:
-  - D4 marked complete
-  - D5 marked in progress
-  - immediate next deterministic step switched to D5 polish/a11y/budget hardening.
+- Added explicit semantic labels for anomaly explorer row buttons in `mmsr/report/symbols.py`:
+  - each row button now has deterministic `aria-label` including symbol, metric, and status.
+- Added keyboard focus-visible styling for anomaly explorer buttons in `mmsr/report/templates/report.html.j2`:
+  - `.symbol-anomaly-explorer__row:focus-visible` outline for non-pointer navigation.
+- Added/updated regression assertions in `tests/test_symbol_anomaly_pages.py`:
+  - validates button `aria-label` text in anomaly block HTML
+  - validates focus-visible CSS rule appears in rendered report HTML.
 
 ### Files changed
-- `mmsr/report/drilldowns.py`
 - `mmsr/report/symbols.py`
-- `tests/test_drilldowns.py`
+- `mmsr/report/templates/report.html.j2`
 - `tests/test_symbol_anomaly_pages.py`
-- `_docs/report_design_roadmap.md`
 - `_docs/journal.md`
 - `_docs/latest_journal.md`
 
 ### Tests updated
-- `tests/test_drilldowns.py`
 - `tests/test_symbol_anomaly_pages.py`
 
 ### Validation
 - `PRE_COMMIT_HOME=/tmp/pre-commit-cache conda run -n mmsr pre-commit run --all-files` passed.
 
 ### Current milestone
-- D5 in progress (D4 closed).
+- D5 in progress.
 
 ### Estimated completion
-- ~25% of D5.
+- ~35% of D5.
 
 ### Remaining work
-- Add further accessibility assertions for focus/keyboard semantics where applicable.
-- Keep report budget guard tests green while polishing visual hierarchy.
+- Add additional accessibility coverage for drilldown matrix controls where keyboard semantics rely on Plotly.
+- Continue budget/polish assertions and update milestone docs when D5 exit criteria are met.
 
 ### Best next deterministic implementation step
-- Add keyboard-focus-visible styling and semantic label checks for interactive buttons in anomaly explorer, with render assertions.
+- Add deterministic report-budget snapshot assertions for the redesigned interactive layout (including drilldown/anomaly blocks) and wire that status into D5 closeout docs.
 
 ### Open questions
 - None.

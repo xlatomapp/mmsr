@@ -243,7 +243,9 @@ def _build_symbol_anomaly_explorer_block(
     row_items = "".join(
         (
             '<button type="button" class="symbol-anomaly-explorer__row" '
-            f'data-symbol-anomaly-index="{idx}">'
+            f'data-symbol-anomaly-index="{idx}" '
+            f'aria-label="Select anomaly {escape(item["symbol"])} {escape(item["metric_label"])} '
+            f'status {escape(item["status"])}">'
             f'<span class="symbol-anomaly-explorer__symbol">{escape(item["symbol"])}</span>'
             f'<span class="symbol-anomaly-explorer__metric">{escape(item["metric_label"])}</span>'
             f'<span class="symbol-anomaly-explorer__status">{escape(item["status"])}</span>'
