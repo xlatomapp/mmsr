@@ -251,8 +251,6 @@ def _kdb_config(
                     "market_bucket",
                     "topix_cap_group",
                     "topix_cap_group_bucket",
-                    "symbol",
-                    "symbol_bucket",
                 ],
             ),
             "data.kdb.aggregation_levels",

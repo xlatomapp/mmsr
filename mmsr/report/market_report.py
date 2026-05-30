@@ -159,7 +159,7 @@ class MarketReportOptions:
     toxicity_reversion_venue_order: tuple[str, ...] = DEFAULT_REVERSION_VENUE_ORDER
     toxicity_reversion_horizon_order: tuple[str, ...] = DEFAULT_REVERSION_HORIZON_ORDER
     max_toxicity_reversion_comments: int = 5
-    include_symbol_anomaly_page: bool = True
+    include_symbol_anomaly_page: bool = False
     symbol_anomaly_page_title: str = "Symbol Anomalies"
     symbol_anomaly_table_title: str = "Top symbol-level anomalies"
     symbol_anomaly_help_text: str = (
@@ -170,8 +170,8 @@ class MarketReportOptions:
     )
     max_symbol_anomalies: int = 12
     symbol_group_keys: tuple[str, ...] = DEFAULT_SYMBOL_GROUP_KEYS
-    include_symbol_detail_pages: bool = True
-    include_symbol_detail_index: bool = True
+    include_symbol_detail_pages: bool = False
+    include_symbol_detail_index: bool = False
     symbol_detail_index_title: str = "Symbol Detail Index"
     symbol_detail_index_help_text: str = (
         "Compact navigation for emitted per-symbol detail pages. The rows are "

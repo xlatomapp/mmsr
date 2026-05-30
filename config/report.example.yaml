@@ -25,8 +25,8 @@ data:
     # raw source functions. Trade/quote functions receive date and the filtered
     # reference table.
     symbol_chunk_size: 500
-    # Chunk raw source calls by stocks and aggregate by symbol before
-    # concatenating chunk outputs, avoiding full-universe trade/quote scans.
+    # Chunk raw source calls by stocks inside q before rolling up to the
+    # configured market/group aggregation levels.
     symbol_chunk_group_by:
       - sym
     # q-side rollups generated from razed chunk outputs.
@@ -35,8 +35,6 @@ data:
       - market_bucket
       - topix_cap_group
       - topix_cap_group_bucket
-      - symbol
-      - symbol_bucket
     raw_data_functions:
       namespace: ".sb.mmsr"
       trade: "getTrade"

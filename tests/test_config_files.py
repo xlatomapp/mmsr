@@ -45,6 +45,12 @@ def test_production_minimal_config_loads_supported_kdb_metrics() -> None:
         ".sb.mmsr.getQuote"
     )
     assert config.kdb.symbol_chunk_group_by == ("sym",)
+    assert config.kdb.aggregation_levels == (
+        "market",
+        "market_bucket",
+        "topix_cap_group",
+        "topix_cap_group_bucket",
+    )
 
 
 def test_example_config_uses_market_monitoring_metrics() -> None:
@@ -63,3 +69,9 @@ def test_example_config_uses_market_monitoring_metrics() -> None:
         "primary_quote_reversion_5s_bps",
         "primary_quote_reversion_10s_bps",
     ]
+    assert config.kdb.aggregation_levels == (
+        "market",
+        "market_bucket",
+        "topix_cap_group",
+        "topix_cap_group_bucket",
+    )

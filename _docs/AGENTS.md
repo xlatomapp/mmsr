@@ -11,7 +11,7 @@ The package must support:
 - kdb-first computation through PyKX.
 - Time-series-native report periods.
 - Configurable intraday buckets such as `1m`, `5m`, `30m`, with explicit auction buckets such as `AMO`, `AMC`, `PMO`, and `PMC`.
-- Market-wide, market-cap, segment, sector, intraday, and symbol-level breakdowns.
+- Market-wide, market-cap, segment, sector, intraday, and optional symbol-level breakdowns.
 - First-class metric definitions.
 - Report visuals and metric cards with metric information/help text.
 - Deterministic template commentary by default.
@@ -31,7 +31,9 @@ Default report implementation must stay centered on:
 - displayed liquidity: `quoted_spread_bps` and `top_of_book_depth`;
 - Cross-Venue Toxicity/Reversion using the six `primary_quote_reversion_*_bps`
   horizons;
-- market-wide, intraday, taxonomy, venue, and symbol-level views;
+- market-wide, intraday, taxonomy, and venue views by default;
+- symbol-level views only as explicit opt-in escalation from market/group
+  changes, not as the default product shape;
 - volatility or market-quality extensions only when they describe market state
   rather than a specific execution outcome.
 
@@ -43,6 +45,32 @@ features unless the user explicitly changes the product scope. Do not keep produ
 Do not expand report-local validation helpers into a reusable validation
 framework inside this package. After several reports exist, repeated validation
 needs should be designed above `mmsr`.
+
+## 1B. Active near-term direction
+
+The active roadmap reset is: desk-first report, slimmer code, faster q. Future
+work should prioritize the `Current roadmap reset` section in
+`_docs/ROADMAP.md`.
+
+Default implementation should:
+
+- lead with a high-level market summary for trading-desk review;
+- highlight important market-level changes before detailed diagnostics;
+- drill down to TPX cap group, sector, segment, venue, and intraday
+  distributions;
+- treat symbol pages and symbol rollups as explicit opt-in escalation;
+- keep calculation in kdb and return aggregated report facts to Python;
+- keep the codebase small by removing redundant wrappers, stale compatibility
+  paths, and demo-only behavior that leaks into production defaults.
+
+The first recommended implementation sequence is:
+
+1. Remove no-op q wrappers around native q functions.
+2. Remove `symbol` and `symbol_bucket` from default production aggregation
+   levels.
+3. Disable symbol anomaly/detail pages by default.
+4. Add q timing instrumentation inside `runReportDay`.
+5. Add tests that lock the new default report shape and aggregation defaults.
 
 ## 2. Mandatory reading order before any code change
 
@@ -117,10 +145,23 @@ Python should orchestrate the workflow. kdb+ should do the heavy calculation.
 - Use PyKX for kdb+ connectivity.
 - Keep the PyKX dependency lazily imported where possible so documentation and unit tests can run without a live kdb connection.
 - Do not fetch raw full-day trade/quote data into Python for normal report generation.
-- Put reusable q code under `mmsr/kdb/q_templates/`.
+- Put reusable q code under `mmsr/kdb/q_lib/`.
 - Validate all query parameters before constructing q queries.
 - Prefer query templates with explicit parameter substitution over ad hoc string concatenation.
 - Test query rendering separately from query execution.
+- Prefer the installed q `runReportDay[runDate; reportConfig]` production path.
+  Older single-metric or batch query paths should not be expanded unless there
+  is an explicit compatibility requirement.
+- Do not wrap native q functions such as `sum`, `count`, `med`, or `wavg` just
+  to rename them. A q helper is justified only when it adds real policy, null
+  handling, validation, reuse, or a domain-specific convention.
+- Profile and optimize q at the source-load, metric-calculation, rollup,
+  cache, and serialization stages before adding more metric families or report
+  pages.
+- Load raw sources once per day/chunk where possible, reuse prepared family
+  state, and avoid returning raw or near-raw rows to Python.
+- Keep `stockMetrics` cache work focused on aggregated metric facts, not raw
+  trade or quote persistence.
 
 ## 7. Period, calendar, and intraday bucket rules
 
@@ -207,6 +248,36 @@ Minimum expected test areas:
 - Report component metric help rendering.
 
 Tests should not require a live kdb instance unless explicitly marked as integration tests.
+
+## 12A. Local live-kdb testing
+
+The default test suite must remain offline and deterministic. Live kdb tests are
+opt-in only and should stay marked with `kdb_integration`.
+
+For local live-kdb smoke testing, the currently available endpoint is:
+
+```text
+host: 192.163.3.99
+port: 5001
+```
+
+Use the endpoint through CLI flags or environment variables, for example:
+
+```bash
+MMSR_KDB_HOST=192.163.3.99 MMSR_KDB_PORT=5001 poetry run pytest -m kdb_integration
+```
+
+or:
+
+```bash
+poetry run mmsr preflight \
+  --config config/report.production_minimal.yaml \
+  --kdb-host 192.163.3.99 \
+  --kdb-port 5001
+```
+
+Do not hard-code this host or port into production configs or package code. Treat
+it as a local developer/test endpoint only.
 
 ## 13. Style rules
 

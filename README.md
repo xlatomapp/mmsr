@@ -461,20 +461,26 @@ When normalized comparisons include a symbol-like group key such as `symbol`,
 `ticker`, `security_code`, or `sym`, the canonical report builder can insert a
 deterministic "Symbol Anomalies" page. The page is built from existing
 `MetricComparison` facts only: it does not query kdb+, calculate new metrics, or
-call an LLM. By default it keeps the worst alert/watch comparison per symbol and
-renders a metric table with metric help text and human-readable scope labels.
+call an LLM. Symbol pages are opt-in escalation views; the default desk-level
+market monitor omits them even when symbol-scoped rows are available. When
+enabled, the page keeps the worst alert/watch comparison per symbol and renders
+a metric table with metric help text and human-readable scope labels.
 
 ```python
 from mmsr.report import MarketReportOptions, build_market_monitor_report
 
 document = build_market_monitor_report(
     report_input,
-    options=MarketReportOptions(max_symbol_anomalies=20),
+    options=MarketReportOptions(
+        include_symbol_anomaly_page=True,
+        include_symbol_detail_pages=True,
+        include_symbol_detail_index=True,
+        max_symbol_anomalies=20,
+    ),
 )
 ```
 
-Set `include_symbol_anomaly_page=False` when a report should omit this page even
-if symbol-scoped rows are present. Use `MarketReportOptions.symbol_group_keys`
+Use `MarketReportOptions.symbol_group_keys`
 when a client schema uses a different identifier column such as
 `client_symbol`, `issue_code`, or `local_code`; the same configured key order is
 used for the anomaly summary page and any per-symbol detail pages. When callers
@@ -491,10 +497,9 @@ Index` with deterministic links to each emitted detail page. Set
 `include_symbol_detail_pages=False` to omit the detail pages or
 `include_symbol_detail_index=False` to keep the details while omitting the index.
 
-The bundled `offline-demo` includes three synthetic symbol-scoped comparison rows
-and matching symbol detail series, so both the summary anomaly page and
-per-symbol detail pages are visible without real market data, live kdb+, PyKX, or
-LLM access.
+The bundled synthetic fixtures include symbol-scoped comparison rows and matching
+symbol detail series for opt-in report tests without real market data, live
+kdb+, PyKX, or LLM access.
 
 ### Sector, segment, and market-cap drilldowns
 
@@ -641,8 +646,10 @@ The default rollup levels are configured under `data.kdb.aggregation_levels`:
 - `market_bucket`
 - `topix_cap_group`
 - `topix_cap_group_bucket`
-- `symbol`
-- `symbol_bucket`
+
+Symbol and symbol-bucket rollups remain supported as explicit opt-in
+aggregation levels for escalation reports, but they are not part of the default
+desk-level market monitor.
 
 Quote source contracts no longer require an `auction` column. Quotes are treated
 as continuous-session rows and use continuous intraday buckets; trade-side

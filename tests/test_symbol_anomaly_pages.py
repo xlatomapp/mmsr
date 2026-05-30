@@ -131,7 +131,7 @@ def test_build_symbol_anomaly_page_returns_none_without_symbol_rows() -> None:
     assert build_symbol_anomaly_page(comparisons, definitions.docs()) is None
 
 
-def test_market_report_includes_symbol_page_when_symbol_comparisons_exist() -> None:
+def test_market_report_skips_symbol_page_by_default() -> None:
     definitions = build_default_registry()
     comparison = _comparison(
         "quoted_spread_bps",
@@ -150,6 +150,36 @@ def test_market_report_includes_symbol_page_when_symbol_comparisons_exist() -> N
             comparisons=(comparison,),
         ),
         options=MarketReportOptions(include_metric_definitions_appendix=False),
+    )
+
+    assert [page.title for page in document.pages] == [
+        "Market Summary",
+        "Intraday Detail",
+    ]
+
+
+def test_market_report_includes_symbol_page_when_explicitly_enabled() -> None:
+    definitions = build_default_registry()
+    comparison = _comparison(
+        "quoted_spread_bps",
+        "7203",
+        status="alert",
+        z_score=2.9,
+        empirical_tail=0.01,
+    )
+
+    document = build_market_monitor_report(
+        MarketReportInput(
+            metric_definitions={
+                "quoted_spread_bps": definitions.get("quoted_spread_bps"),
+            },
+            current_series=(),
+            comparisons=(comparison,),
+        ),
+        options=MarketReportOptions(
+            include_metric_definitions_appendix=False,
+            include_symbol_anomaly_page=True,
+        ),
     )
 
     assert [page.title for page in document.pages] == [
@@ -434,6 +464,28 @@ def test_market_report_includes_symbol_detail_pages_when_symbol_series_exist() -
 
     assert [page.title for page in document.pages] == [
         "Market Summary",
+        "Intraday Detail",
+    ]
+
+    document = build_market_monitor_report(
+        MarketReportInput(
+            metric_definitions={
+                "quoted_spread_bps": definitions.get("quoted_spread_bps"),
+            },
+            current_series=(),
+            comparisons=(comparison,),
+            symbol_series=symbol_series,
+        ),
+        options=MarketReportOptions(
+            include_metric_definitions_appendix=False,
+            include_symbol_anomaly_page=True,
+            include_symbol_detail_pages=True,
+            include_symbol_detail_index=True,
+        ),
+    )
+
+    assert [page.title for page in document.pages] == [
+        "Market Summary",
         "Symbol Anomalies",
         "Symbol 7203 Detail",
         "Intraday Detail",
@@ -468,7 +520,12 @@ def test_market_report_adds_symbol_detail_index_when_detail_pages_exist() -> Non
             comparisons=(comparison,),
             symbol_series=symbol_series,
         ),
-        options=MarketReportOptions(include_metric_definitions_appendix=False),
+        options=MarketReportOptions(
+            include_metric_definitions_appendix=False,
+            include_symbol_anomaly_page=True,
+            include_symbol_detail_pages=True,
+            include_symbol_detail_index=True,
+        ),
     )
     symbol_page = document.pages[1]
     detail_page = document.pages[2]
@@ -509,6 +566,8 @@ def test_market_report_symbol_detail_index_can_be_disabled() -> None:
         ),
         options=MarketReportOptions(
             include_metric_definitions_appendix=False,
+            include_symbol_anomaly_page=True,
+            include_symbol_detail_pages=True,
             include_symbol_detail_index=False,
         ),
     )
@@ -543,6 +602,7 @@ def test_market_report_symbol_detail_pages_can_be_disabled() -> None:
         ),
         options=MarketReportOptions(
             include_metric_definitions_appendix=False,
+            include_symbol_anomaly_page=True,
             include_symbol_detail_pages=False,
         ),
     )
@@ -599,6 +659,8 @@ def test_market_report_uses_custom_symbol_group_keys_for_summary_and_details() -
         ),
         options=MarketReportOptions(
             include_metric_definitions_appendix=False,
+            include_symbol_anomaly_page=True,
+            include_symbol_detail_pages=True,
             symbol_group_keys=("client_symbol",),
         ),
     )

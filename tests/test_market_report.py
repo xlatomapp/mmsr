@@ -38,7 +38,6 @@ def test_market_monitor_report_is_canonical_production_format() -> None:
         "Activity Distribution",
         "Displayed Liquidity",
         "Reference and Target Daily Trends",
-        "Symbol Anomalies",
         "Sector, Segment, and Market-Cap Drilldowns",
         "Intraday Detail",
         "Metric Definitions Appendix",
@@ -48,9 +47,8 @@ def test_market_monitor_report_is_canonical_production_format() -> None:
     activity_page = document.pages[1]
     liquidity_page = document.pages[2]
     trend_page = document.pages[3]
-    symbol_page = document.pages[4]
-    drilldown_page = document.pages[5]
-    detail_page = document.pages[6]
+    drilldown_page = document.pages[4]
+    detail_page = document.pages[5]
 
     assert len(summary_page.html_blocks) == 1
     assert summary_page.html_blocks[0].title == "Executive Market Overview"
@@ -77,7 +75,6 @@ def test_market_monitor_report_is_canonical_production_format() -> None:
     assert trend_page.time_series_charts[0].x_axis_label == "Trading day"
     assert "reference" in trend_page.time_series_charts[0].points[0].metadata_text
     assert "target" in trend_page.time_series_charts[0].points[-1].metadata_text
-    assert len(symbol_page.metric_tables[0].rows) == 3
     assert len(drilldown_page.metric_tables[0].rows) == 6
     assert drilldown_page.metric_tables[0].help_text is not None
     assert len(detail_page.time_series_charts) == 3
@@ -107,7 +104,7 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert "intraday profile" in html
     assert "Reference and Target Daily Trends" in html
     assert "daily reference-to-target trend" in html
-    assert "Symbol Anomalies" in html
+    assert "Symbol Anomalies" not in html
     assert "Sector, Segment, and Market-Cap Drilldowns" in html
     assert "Top group-level drilldowns" in html
     assert "Executive Market Overview" in html
@@ -152,7 +149,6 @@ def test_market_monitor_report_can_omit_appendix_and_limit_components() -> None:
         "Activity Distribution",
         "Displayed Liquidity",
         "Reference and Target Daily Trends",
-        "Symbol Anomalies",
         "Sector, Segment, and Market-Cap Drilldowns",
         "Intraday Detail",
     ]
@@ -163,9 +159,9 @@ def test_market_monitor_report_can_omit_appendix_and_limit_components() -> None:
     assert len(document.pages[1].plotly_charts) == 1
     assert len(document.pages[2].plotly_charts) == 2
     assert all(len(chart.points) == 1 for chart in document.pages[3].time_series_charts)
-    assert len(document.pages[5].metric_tables[0].rows) == 6
-    assert all(len(chart.points) == 1 for chart in document.pages[6].time_series_charts)
-    assert document.pages[6].heatmaps == []
+    assert len(document.pages[4].metric_tables[0].rows) == 6
+    assert all(len(chart.points) == 1 for chart in document.pages[5].time_series_charts)
+    assert document.pages[5].heatmaps == []
 
 
 def test_market_monitor_report_can_disable_drilldown_page() -> None:
@@ -182,7 +178,6 @@ def test_market_monitor_report_can_disable_drilldown_page() -> None:
         "Activity Distribution",
         "Displayed Liquidity",
         "Reference and Target Daily Trends",
-        "Symbol Anomalies",
         "Intraday Detail",
     ]
 
@@ -217,7 +212,7 @@ def test_market_monitor_report_passes_custom_drilldown_options() -> None:
         ),
     )
 
-    drilldown_page = document.pages[5]
+    drilldown_page = document.pages[4]
     assert drilldown_page.title == "Market-Cap Drilldowns"
     table = drilldown_page.metric_tables[0]
     assert table.title == "Market-cap rows"
@@ -245,7 +240,7 @@ def test_market_monitor_report_can_opt_into_intraday_heatmaps() -> None:
         if page.title.startswith("Symbol ") and page.title.endswith(" Detail")
     ]
     assert len(detail_page.heatmaps) == 3
-    assert all(page.heatmaps for page in symbol_detail_pages)
+    assert symbol_detail_pages == []
 
 def test_market_monitor_report_requires_metric_definitions_for_current_series() -> None:
     sample = build_offline_sample_metrics()

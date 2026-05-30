@@ -316,8 +316,6 @@ class KdbExecutionConfig:
         "market_bucket",
         "topix_cap_group",
         "topix_cap_group_bucket",
-        "symbol",
-        "symbol_bucket",
     )
 
     def __post_init__(self) -> None:

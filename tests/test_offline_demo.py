@@ -22,10 +22,6 @@ def test_build_offline_demo_report_assembles_document_with_appendix() -> None:
         "Activity Distribution",
         "Displayed Liquidity",
         "Reference and Target Daily Trends",
-        "Symbol Anomalies",
-        "Symbol 7203 Detail",
-        "Symbol 6758 Detail",
-        "Symbol 8306 Detail",
         "Sector, Segment, and Market-Cap Drilldowns",
         "Intraday Detail",
         "Metric Definitions Appendix",
@@ -35,10 +31,8 @@ def test_build_offline_demo_report_assembles_document_with_appendix() -> None:
     activity_page = document.pages[1]
     liquidity_page = document.pages[2]
     trend_page = document.pages[3]
-    symbol_page = document.pages[4]
-    symbol_7203_page = document.pages[5]
-    drilldown_page = document.pages[8]
-    detail_page = document.pages[9]
+    drilldown_page = document.pages[4]
+    detail_page = document.pages[5]
 
     assert len(summary_page.html_blocks) == 1
     assert summary_page.html_blocks[0].title == "Executive Market Overview"
@@ -58,22 +52,6 @@ def test_build_offline_demo_report_assembles_document_with_appendix() -> None:
     assert liquidity_page.plotly_charts[1].title == "Top-of-Book Depth intraday profile"
     assert len(trend_page.time_series_charts) == 3
     assert trend_page.time_series_charts[0].x_axis_label == "Trading day"
-    assert len(symbol_page.metric_tables) == 1
-    assert [row.group_text for row in symbol_page.metric_tables[0].rows] == [
-        "Date: 2026-05-22, Intraday bucket: AM opening auction, "
-        "Market cap bucket: Large cap, Market segment: Prime, Symbol: 7203",
-        "Date: 2026-05-22, Intraday bucket: 09:00–09:05, "
-        "Market cap bucket: Large cap, Market segment: Prime, Symbol: 6758",
-        "Date: 2026-05-22, Intraday bucket: 09:00–09:05, "
-        "Market cap bucket: Large cap, Market segment: Prime, Symbol: 8306",
-    ]
-    assert len(symbol_7203_page.time_series_charts) == 1
-    assert len(symbol_7203_page.heatmaps) == 0
-    assert (
-        symbol_7203_page.time_series_charts[0].title
-        == "Quoted Spread intraday time-bucket trend for symbol 7203"
-    )
-    assert len(symbol_7203_page.time_series_charts[0].points) == 3
     assert len(drilldown_page.metric_tables) == 1
     assert len(drilldown_page.metric_tables[0].rows) == 6
     assert len(detail_page.time_series_charts) == 3
@@ -104,17 +82,17 @@ def test_offline_demo_report_renders_comparison_visuals_commentary_and_help() ->
     assert "intraday profile" in html
     assert "Reference and Target Daily Trends" in html
     assert "daily reference-to-target trend" in html
-    assert "Symbol Anomalies" in html
-    assert "Top symbol-level anomalies" in html
+    assert "Symbol Anomalies" not in html
+    assert "Top symbol-level anomalies" not in html
     assert "Sector, Segment, and Market-Cap Drilldowns" in html
     assert "Top group-level drilldowns" in html
-    assert "Symbol 7203 Detail" in html
-    assert "Quoted Spread intraday time-bucket trend for symbol 7203" in html
-    assert "Volume intraday time-bucket trend for symbol 8306" in html
-    assert "Top-of-Book Depth intraday time-bucket trend for symbol 6758" in html
-    assert "Symbol: 7203" in html
-    assert "Symbol: 6758" in html
-    assert "Symbol: 8306" in html
+    assert "Symbol 7203 Detail" not in html
+    assert "Quoted Spread intraday time-bucket trend for symbol 7203" not in html
+    assert "Volume intraday time-bucket trend for symbol 8306" not in html
+    assert "Top-of-Book Depth intraday time-bucket trend for symbol 6758" not in html
+    assert "Symbol: 7203" not in html
+    assert "Symbol: 6758" not in html
+    assert "Symbol: 8306" not in html
     assert "symbol=7203" not in html
     assert "mock data sample" in html
     assert "plotly-chart__figure" in html
@@ -153,10 +131,6 @@ def test_build_offline_demo_report_can_omit_appendix_and_limit_rows() -> None:
         "Activity Distribution",
         "Displayed Liquidity",
         "Reference and Target Daily Trends",
-        "Symbol Anomalies",
-        "Symbol 7203 Detail",
-        "Symbol 6758 Detail",
-        "Symbol 8306 Detail",
         "Sector, Segment, and Market-Cap Drilldowns",
         "Intraday Detail",
     ]
@@ -166,11 +140,9 @@ def test_build_offline_demo_report_can_omit_appendix_and_limit_rows() -> None:
     assert len(document.pages[1].plotly_charts) == 1
     assert len(document.pages[2].plotly_charts) == 2
     assert all(len(chart.points) == 1 for chart in document.pages[3].time_series_charts)
+    assert len(document.pages[4].metric_tables[0].rows) == 6
     assert all(len(chart.points) == 1 for chart in document.pages[5].time_series_charts)
     assert document.pages[5].heatmaps == []
-    assert len(document.pages[8].metric_tables[0].rows) == 6
-    assert all(len(chart.points) == 1 for chart in document.pages[9].time_series_charts)
-    assert document.pages[9].heatmaps == []
 
 
 def test_build_offline_demo_report_accepts_supplied_sample_metrics() -> None:
@@ -186,9 +158,8 @@ def test_build_offline_demo_report_accepts_supplied_sample_metrics() -> None:
     assert len(document.pages[3].time_series_charts) == len(
         sample_metrics.current_series
     )
-    assert len(document.pages[5].time_series_charts) == 1
-    assert len(document.pages[8].metric_tables[0].rows) == 6
-    assert len(document.pages[9].time_series_charts) == len(
+    assert len(document.pages[4].metric_tables[0].rows) == 6
+    assert len(document.pages[5].time_series_charts) == len(
         sample_metrics.current_series
     )
 

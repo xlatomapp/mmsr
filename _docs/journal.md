@@ -9755,3 +9755,159 @@ Removed files:
 
 - Should symbol aggregation remain available through config only, or should the
   CLI expose a short explicit flag for one-off symbol escalation reports?
+
+
+---
+
+## 2026-05-30 — Update agent rules for roadmap reset and local kdb endpoint
+
+### Implemented
+
+- Updated `_docs/AGENTS.md` to reflect the active desk-first roadmap reset:
+  market/group-first default report behavior, symbol output as opt-in
+  escalation, slimmer codebase expectations, and q performance hardening.
+- Corrected the reusable q code location in agent rules to `mmsr/kdb/q_lib/`.
+- Added q implementation guidance to avoid no-op wrappers around native q
+  functions and prefer the installed `runReportDay` production path.
+- Added local live-kdb testing guidance for the available developer endpoint
+  `192.163.3.99:5001`, while keeping live tests opt-in and forbidding hard-coded
+  endpoint values in package code or production configs.
+
+### Files changed
+
+- `_docs/AGENTS.md`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- None. Documentation-only contributor guidance update.
+
+### Validation
+
+- `git diff --check -- _docs/AGENTS.md _docs/journal.md` passed.
+
+### Current milestone
+
+- Milestone R0: Slim and stabilize the default product surface.
+
+### Estimated milestone completion
+
+- 5%. Contributor rules now point at the reset, but implementation has not
+  started.
+
+### Remaining work before milestone completion
+
+- Remove no-op q wrappers.
+- Remove default symbol aggregation levels.
+- Disable symbol pages by default.
+- Add `runReportDay` timing instrumentation.
+- Lock default report shape and aggregation defaults in tests.
+
+### Best next deterministic step
+
+- Start the first implementation PR for Milestone R0 by updating the default
+  production aggregation levels and report option defaults, then add regression
+  tests.
+
+### Open questions
+
+- Should local live-kdb testing also be mirrored in `docs/kdb_integration_testing.md`,
+  or should the endpoint stay only in contributor guidance?
+
+
+---
+
+## 2026-05-30 — Start R0 default slimming implementation
+
+### Implemented
+
+- Changed the canonical market report defaults so symbol anomaly pages,
+  per-symbol detail pages, and the symbol detail index are disabled unless
+  explicitly enabled through `MarketReportOptions`.
+- Removed `symbol` and `symbol_bucket` from default kdb aggregation levels in
+  config models, config loading fallbacks, production/example YAML configs, and
+  the packaged live-kdb example config.
+- Updated README documentation to describe symbol pages and symbol rollups as
+  opt-in escalation behavior rather than default desk-report output.
+- Removed no-op q wrappers around native q functions:
+  - removed `sumSize`;
+  - removed `rowCount`;
+  - removed `weightedAverage`;
+  - replaced their call sites with native `sum`, `count`, and `wavg`.
+- Updated report/config/q tests to lock the new default behavior and the removal
+  of redundant q helpers.
+- Updated symbol report tests so symbol pages/details are still covered through
+  explicit opt-in options.
+
+### Files changed
+
+- `README.md`
+- `config/report.example.yaml`
+- `config/report.production_minimal.yaml`
+- `mmsr/config/loading.py`
+- `mmsr/config/models.py`
+- `mmsr/examples/config/live_kdb_report.yaml`
+- `mmsr/kdb/q_lib/mmsr_calculations.q.j2`
+- `mmsr/report/market_report.py`
+- `tests/test_config_files.py`
+- `tests/test_kdb_query_loader.py`
+- `tests/test_market_report.py`
+- `tests/test_offline_demo.py`
+- `tests/test_symbol_anomaly_pages.py`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Updated config-file tests to assert default aggregation levels exclude symbol
+  and symbol-bucket rollups.
+- Updated market/offline report tests to assert symbol pages are absent by
+  default.
+- Updated symbol report tests to assert default skip behavior and explicit
+  opt-in behavior.
+- Updated q-library rendering tests to assert redundant native-function wrappers
+  are not installed.
+
+### Validation
+
+- `python -m compileall mmsr tests` passed.
+- Text-level checks confirmed default YAML files do not include `symbol` or
+  `symbol_bucket`, the q library no longer contains `weightedAverage`,
+  `sumSize`, or `rowCount`, and report symbol-page defaults are false.
+- `git diff --check` passed.
+- Could not run pytest in this environment:
+  - `python -m pytest ...` failed because `pytest` is not installed;
+  - `uvx pytest ...` failed because `uvx` is not installed;
+  - `pytest ...` failed because `pytest` is not on PATH;
+  - `poetry run pytest ...` failed because `poetry` is not installed.
+- A plain Python runtime smoke could not import config/report modules because
+  runtime dependency `yaml` is not installed in this environment.
+
+### Current milestone
+
+- Milestone R0: Slim and stabilize the default product surface.
+
+### Estimated milestone completion
+
+- 35%. Default symbol output is now opt-in and the first redundant q wrappers
+  are removed. q timing instrumentation and broader cleanup remain.
+
+### Remaining work before milestone completion
+
+- Add `runReportDay` timing instrumentation.
+- Remove or quarantine legacy single-metric/batch paths where no compatibility
+  requirement remains.
+- Re-run the focused pytest suite in an environment with dependencies.
+- Continue slimming report/demo defaults that still bias product review toward
+  symbol-level artifacts.
+
+### Best next deterministic step
+
+- Add q timing instrumentation inside `runReportDay` for source load,
+  calculation, rollup, and serialization boundaries, then validate rendered q
+  text with focused tests.
+
+### Open questions
+
+- Should offline-demo expose an explicit symbol-escalation flag, or should symbol
+  fixtures remain test-only until product review asks for demo-visible symbol
+  pages again?

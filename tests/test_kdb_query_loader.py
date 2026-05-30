@@ -130,7 +130,9 @@ def test_render_calculation_function_bootstrap_installs_helpers_in_namespace() -
 
     assert ".desk.mmsr.sumNotional" in rendered
     assert ".desk.mmsr.medianQuotedSpreadBps" in rendered
-    assert ".desk.mmsr.weightedAverage" in rendered
+    assert ".desk.mmsr.weightedAverage" not in rendered
+    assert ".desk.mmsr.sumSize" not in rendered
+    assert ".desk.mmsr.rowCount" not in rendered
     assert ".desk.mmsr.callTradingCalendar" in rendered
     assert "{{" not in rendered
 

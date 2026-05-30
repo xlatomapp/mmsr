@@ -3,8 +3,6 @@
 / running metric calculations. All MMSR-owned q functions live in this file.
 
 {{ calculation_namespace }}.sumNotional:{[price;size] sum price * size};
-{{ calculation_namespace }}.sumSize:{[size] sum size};
-{{ calculation_namespace }}.rowCount:{[rows] count rows};
 {{ calculation_namespace }}.partedSym:{[t]
     / Reversion aj paths are day-scoped in production. After xasc by the aj
     / grouping keys, sym is contiguous for one runDate, so p# lets aj use the
@@ -13,7 +11,6 @@
     };
 {{ calculation_namespace }}.medianQuotedSpreadBps:{[bid;ask] med 10000 * (ask - bid) % ((ask + bid) % 2)};
 {{ calculation_namespace }}.medianTopOfBookDepth:{[bidSize;askSize] med bidSize + askSize};
-{{ calculation_namespace }}.weightedAverage:{[weights;values] wavg[weights; values]};
 {{ calculation_namespace }}.positiveRatio:{[values] avg values > 0};
 {{ calculation_namespace }}.inferAggressorSide:{[tradePrice;mid] ?[tradePrice>mid;1;?[tradePrice<mid;-1;0]]};
 {{ calculation_namespace }}.callTradingCalendar:{[calendarFunction;start;end] calendarFunction[start;end]};
@@ -69,8 +66,8 @@
     trades: rawTrades lj refs;
     result: select
         turnover: {{ calculation_namespace }}.sumNotional[tradePrice; tradeSize],
-        volume: {{ calculation_namespace }}.sumSize[tradeSize],
-        trade_count: {{ calculation_namespace }}.rowCount[i]
+        volume: sum tradeSize,
+        trade_count: count i
     by date,
        time_bucket: {{ calculation_namespace }}.timeBucket[time; session; auction; params`bucket],
        sym,
@@ -211,10 +208,10 @@
             valid_pts_quote: ptsQuoteAge <= params`max_pts_quote_age
         from tradeWithPostMid;
     result: select
-        reversion_bps: {{ calculation_namespace }}.weightedAverage[notional; reversion_bps],
+        reversion_bps: wavg[notional; reversion_bps],
         horizon_sort_order: first horizon_sort_order,
         positive_reversion_ratio: {{ calculation_namespace }}.positiveRatio[reversion_bps],
-        trade_count: {{ calculation_namespace }}.rowCount[i],
+        trade_count: count i,
         notional: sum notional,
         valid_primary_quote_ratio: avg valid_primary_quote
     by date,
