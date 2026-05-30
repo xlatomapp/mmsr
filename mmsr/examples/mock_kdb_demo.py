@@ -71,12 +71,12 @@ class MockKdbIntegrationDemoOptions:
     include_metric_definitions_appendix: bool = True
     max_metric_cards: int = 6
     max_comments: int = 5
-    max_table_rows: int | None = None
+    max_table_rows: int | None = 12
     max_chart_points: int | None = None
     max_heatmap_cells: int | None = None
     max_overview_metrics: int = 5
     include_drilldown_page: bool = True
-    max_drilldown_rows: int | None = 20
+    max_drilldown_rows: int | None = 12
 
     def __post_init__(self) -> None:
         _require_non_empty(self.title, "title")
@@ -114,7 +114,9 @@ class MockKdbIntegrationDemoOptions:
             include_daily_trend_page=self.include_daily_trend_page,
             include_intraday_heatmaps=self.include_intraday_heatmaps,
             summary_scope_label="mock kdb integration",
-            include_metric_definitions_appendix=self.include_metric_definitions_appendix,
+            include_metric_definitions_appendix=(
+                self.include_metric_definitions_appendix
+            ),
             max_metric_cards=self.max_metric_cards,
             max_comments=self.max_comments,
             max_table_rows=self.max_table_rows,

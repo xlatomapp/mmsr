@@ -63,8 +63,8 @@ def collect_metric_definitions_from_pages(
 ) -> tuple[MetricDefinition, ...]:
     """Collect unique metric definitions used by report-page components.
 
-    Definitions from metric cards, metric table rows, time-series charts, and
-    heatmaps are de-duplicated by metric name and sorted by category, label, and
+    Definitions from metric cards, metric table rows, time-series charts,
+    compact Plotly charts, and heatmaps are de-duplicated by metric name and sorted by category, label, and
     appendix is stable across repeated report runs.
     """
 
@@ -76,6 +76,8 @@ def collect_metric_definitions_from_pages(
             for row in table.rows:
                 _register_definition(definitions, row.metric)
         for chart in page.time_series_charts:
+            _register_definition(definitions, chart.metric)
+        for chart in page.plotly_charts:
             _register_definition(definitions, chart.metric)
         for heatmap in page.heatmaps:
             _register_definition(definitions, heatmap.metric)

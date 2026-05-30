@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from math import isfinite
+from typing import Any
 
 from mmsr.metrics.base import MetricDefinition
 
@@ -151,6 +153,97 @@ class TimeSeriesChart:
         """Return an explicit y-axis label or a deterministic metric fallback."""
 
         return self.y_axis_label or self.metric.unit or self.metric.label
+
+    def has_plotly_plot(self) -> bool:
+        """Return whether the chart has at least one plottable Plotly point."""
+
+        return bool(self._numeric_points())
+
+    def plotly_figure(self) -> dict[str, Any]:
+        """Return a compact Plotly line-chart figure for the rendered points.
+
+        The figure contains only the arrays required for the visual and hover
+        labels. It deliberately avoids embedding a full audit/backing table in
+        the final report HTML.
+        """
+
+        return {
+            "data": self._plotly_traces(),
+            "layout": {
+                "template": "plotly_white",
+                "autosize": True,
+                "height": 360,
+                "margin": {"l": 56, "r": 24, "t": 24, "b": 72},
+                "xaxis": {"title": self.x_axis_label, "type": "category"},
+                "yaxis": {"title": self.resolved_y_axis_label()},
+                "legend": {"orientation": "h", "y": -0.28},
+                "hovermode": "x unified",
+            },
+            "config": {
+                "displaylogo": False,
+                "responsive": True,
+            },
+        }
+
+    def plotly_figure_json(self) -> str:
+        """Return a script-safe JSON Plotly figure specification."""
+
+        return _safe_json_dumps(self.plotly_figure())
+
+    def compact_data_summary(self) -> str:
+        """Return a compact summary of the data embedded in the chart JSON."""
+
+        numeric_points = self._numeric_points()
+        series_count = len(
+            _ordered_unique(
+                point.series_text or self.metric.label
+                for _, point, _ in numeric_points
+            )
+        )
+        x_count = len(_ordered_unique(point.x_text for _, point, _ in numeric_points))
+        skipped = len(self.points) - len(numeric_points)
+        parts = [
+            f"{len(numeric_points):,} plottable points",
+            f"{series_count:,} series",
+            f"{x_count:,} x-axis buckets",
+        ]
+        if skipped:
+            parts.append(f"{skipped:,} non-numeric points omitted from plot arrays")
+        return "; ".join(parts) + "."
+
+    def _plotly_traces(self) -> list[dict[str, Any]]:
+        numeric_points = self._numeric_points()
+        if not numeric_points:
+            return []
+
+        traces: list[dict[str, Any]] = []
+        series_names = _ordered_unique(
+            point.series_text or self.metric.label for _, point, _ in numeric_points
+        )
+        for series_name in series_names:
+            series_points = [
+                (point, value)
+                for _, point, value in numeric_points
+                if (point.series_text or self.metric.label) == series_name
+            ]
+            traces.append(
+                {
+                    "type": "scatter",
+                    "mode": "lines+markers",
+                    "name": series_name,
+                    "x": [point.x_text for point, _ in series_points],
+                    "y": [value for _, value in series_points],
+                    "text": [
+                        _plotly_hover_text(point)
+                        for point, _ in series_points
+                    ],
+                    "hovertemplate": (
+                        "%{text}<br><b>%{y}</b>"
+                        "<extra>%{fullData.name}</extra>"
+                    ),
+                }
+            )
+        return traces
 
     def has_svg_plot(self) -> bool:
         """Return whether the chart has at least one plottable numeric value."""
@@ -601,6 +694,87 @@ def _heatmap_cell_label(value_text: str) -> str:
 
 
 
+def _safe_json_dumps(value: Mapping[str, Any]) -> str:
+    """Serialize JSON for embedding inside a script tag."""
+
+    return (
+        json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+        .replace("</", "<\\/")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
+
+
+def _plotly_hover_text(point: TimeSeriesChartPoint) -> str:
+    parts = [f"<b>{point.x_text}</b>", f"Value: {point.value_text}"]
+    if point.date_text:
+        parts.append(f"Date: {point.date_text}")
+    if point.time_bucket_text:
+        parts.append(f"Bucket: {point.time_bucket_text}")
+    if point.metadata_text:
+        parts.append(point.metadata_text)
+    return "<br>".join(parts)
+
+
+
+@dataclass(frozen=True)
+class PlotlyChart:
+    """A compact Plotly figure with metric help text.
+
+    ``figure`` should contain only derived chart arrays and Plotly layout/config
+    keys needed for the visualization. It should not carry raw market rows or a
+    full backing table payload.
+    """
+
+    title: str
+    metric: MetricDefinition
+    figure: Mapping[str, Any]
+    x_axis_label: str = "x"
+    y_axis_label: str | None = None
+    help_text: str | None = None
+    data_summary: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.title.strip():
+            raise ValueError("title must not be empty")
+        if not self.x_axis_label.strip():
+            raise ValueError("x_axis_label must not be empty")
+        if self.y_axis_label is not None and not self.y_axis_label.strip():
+            raise ValueError("y_axis_label must not be empty when supplied")
+        if self.help_text is not None and not self.help_text.strip():
+            raise ValueError("help_text must not be empty when supplied")
+        if self.data_summary is not None and not self.data_summary.strip():
+            raise ValueError("data_summary must not be empty when supplied")
+        if "data" not in self.figure:
+            raise ValueError("figure must contain Plotly 'data'")
+
+    def metric_help_text(self) -> str:
+        """Return the help text for this chart's metric."""
+
+        return self.metric.help_text()
+
+    def resolved_y_axis_label(self) -> str:
+        """Return an explicit y-axis label or a deterministic metric fallback."""
+
+        return self.y_axis_label or self.metric.unit or self.metric.label
+
+    def plotly_figure_json(self) -> str:
+        """Return a script-safe JSON Plotly figure specification."""
+
+        return _safe_json_dumps(dict(self.figure))
+
+    def compact_data_summary(self) -> str:
+        """Return a compact summary of the data embedded in the figure JSON."""
+
+        if self.data_summary is not None:
+            return self.data_summary
+        traces = self.figure.get("data", ())
+        if isinstance(traces, list | tuple):
+            return f"{len(traces):,} Plotly traces embedded; raw rows omitted."
+        return "Plotly figure embedded; raw rows omitted."
+
+
+
 @dataclass(frozen=True)
 class CommentaryBlock:
     """A block of deterministic commentary lines."""
@@ -637,6 +811,7 @@ class ReportPage:
     metric_cards: list[MetricCard] = field(default_factory=list)
     metric_tables: list[MetricTable] = field(default_factory=list)
     time_series_charts: list[TimeSeriesChart] = field(default_factory=list)
+    plotly_charts: list[PlotlyChart] = field(default_factory=list)
     heatmaps: list[Heatmap] = field(default_factory=list)
     commentary_blocks: list[CommentaryBlock] = field(default_factory=list)
     html_blocks: list[HtmlBlock] = field(default_factory=list)

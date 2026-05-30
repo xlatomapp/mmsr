@@ -1,5 +1,5 @@
 {% from "partials/help_control.html.j2" import help_control %}
-<section class="time-series-chart">
+<section class="time-series-chart plotly-chart">
   <div class="component-heading">
     <h3>{{ chart.title }}</h3>
     <div class="component-heading__help">
@@ -13,67 +13,18 @@
     <span>Metric: {{ chart.metric.label }}</span>
   </div>
   {% if chart.points %}
-    {% if chart.has_svg_plot() %}
-      <div class="time-series-chart__visual" role="img" aria-label="{{ chart.title }} line chart">
-        <svg class="time-series-chart__svg" viewBox="{{ chart.svg_view_box() }}" aria-labelledby="{{ chart.title | replace(' ', '-') }}-svg-title">
-          <title id="{{ chart.title | replace(' ', '-') }}-svg-title">{{ chart.title }} line chart</title>
-          <desc>Deterministic inline SVG trend chart. The backing data table below preserves every rendered point for auditability.</desc>
-          <line class="time-series-chart__axis" x1="58.00" y1="200.00" x2="696.00" y2="200.00"></line>
-          <line class="time-series-chart__axis" x1="58.00" y1="20.00" x2="58.00" y2="200.00"></line>
-          {% for tick in chart.svg_y_ticks() %}
-            <line class="time-series-chart__gridline" x1="58.00" y1="{{ tick.y }}" x2="696.00" y2="{{ tick.y }}"></line>
-            <text class="time-series-chart__tick-label time-series-chart__tick-label--y" x="{{ tick.x }}" y="{{ tick.y }}">{{ tick.label }}</text>
-          {% endfor %}
-          {% for series in chart.svg_series() %}
-            <polyline class="time-series-chart__series {{ series.css_class }}" points="{{ series.polyline_points }}"></polyline>
-            {% for marker in series.markers %}
-              <circle class="time-series-chart__marker {{ series.css_class }}" cx="{{ marker.cx }}" cy="{{ marker.cy }}" r="3.50">
-                <title>{{ marker.title }}</title>
-              </circle>
-            {% endfor %}
-          {% endfor %}
-          {% for tick in chart.svg_x_ticks() %}
-            <text class="time-series-chart__tick-label time-series-chart__tick-label--x" x="{{ tick.x }}" y="{{ tick.y }}">{{ tick.label }}</text>
-          {% endfor %}
-        </svg>
-        {% if chart.svg_legend_labels() | length > 1 %}
-          <ul class="time-series-chart__legend" aria-label="Chart series">
-            {% for label in chart.svg_legend_labels() %}
-              <li>{{ label }}</li>
-            {% endfor %}
-          </ul>
-        {% endif %}
+    {% if chart.has_plotly_plot() %}
+      <div class="plotly-chart__visual" role="img" aria-label="{{ chart.title }} Plotly chart">
+        <div class="plotly-chart__figure" data-mmsr-plotly></div>
+        <script type="application/json" class="plotly-chart__spec">{{ chart.plotly_figure_json() | safe }}</script>
       </div>
+      <details class="plotly-chart__data-summary">
+        <summary>Compact plot data</summary>
+        <p>{{ chart.compact_data_summary() }} Raw observation rows are not rendered as an HTML table.</p>
+      </details>
     {% else %}
-      <p class="time-series-chart__empty">No numeric values were supplied for the trend visual; backing data is shown below.</p>
+      <p class="time-series-chart__empty">No numeric values were supplied for the trend visual.</p>
     {% endif %}
-    <details class="time-series-chart__data" open>
-      <summary>Backing data</summary>
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">X</th>
-            <th scope="col">Date</th>
-            <th scope="col">Bucket</th>
-            <th scope="col">Series</th>
-            <th scope="col">Value</th>
-            <th scope="col">Context</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for point in chart.points %}
-            <tr>
-              <th scope="row">{{ point.x_text }}</th>
-              <td>{{ point.date_text if point.date_text else "—" }}</td>
-              <td>{{ point.time_bucket_text if point.time_bucket_text else "—" }}</td>
-              <td>{{ point.series_text if point.series_text else "—" }}</td>
-              <td>{{ point.value_text }}</td>
-              <td>{{ point.metadata_text if point.metadata_text else "—" }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </details>
   {% else %}
     <p class="time-series-chart__empty">No time-series points were supplied for this chart.</p>
   {% endif %}

@@ -11,6 +11,7 @@ from mmsr.kdb.query_loader import (
     load_q_library_template,
     render_template,
     render_calculation_function_bootstrap,
+    render_simulated_source_function_bootstrap,
     template_parameters,
 )
 
@@ -20,6 +21,18 @@ def test_load_q_library_template_reads_single_calculation_library() -> None:
 
     assert ".calcLiquidity" in template
     assert ".callTradingCalendar" in template
+
+
+def test_load_q_library_template_reads_simulated_source_library() -> None:
+    template = load_q_library_template("mmsr_simulated_sources.q.j2")
+
+    assert ".getTradingCalendar" in template
+    assert ".getRef" in template
+    assert ".getTrade" in template
+    assert ".getQuote" in template
+    assert ".getPtsTrade" in template
+    assert ".getPtsQuote" in template
+    assert ".getPrimaryQuote" in template
 
 
 def test_load_q_library_template_rejects_paths_and_non_q_library_names() -> None:
@@ -122,9 +135,49 @@ def test_render_calculation_function_bootstrap_installs_helpers_in_namespace() -
     assert "{{" not in rendered
 
 
-def test_render_calculation_function_bootstrap_validates_namespace() -> None:
+def test_render_simulated_source_function_bootstrap_installs_kdb_sources() -> None:
+    rendered = render_simulated_source_function_bootstrap(".dev.mmsr")
+
+    assert ".dev.mmsr.symbolCount:240;" in rendered
+    assert ".dev.mmsr.getTradingCalendar" in rendered
+    assert ".dev.mmsr.getRef" in rendered
+    assert ".dev.mmsr.getTrade" in rendered
+    assert ".dev.mmsr.getQuote" in rendered
+    assert ".dev.mmsr.getPtsTrade" in rendered
+    assert ".dev.mmsr.getPtsQuote" in rendered
+    assert ".dev.mmsr.getPrimaryQuote" in rendered
+    assert "date" in rendered
+    assert "sym" in rendered
+    assert "tradePrice" in rendered
+    assert "tradeSize" in rendered
+    assert "bidPrice" in rendered
+    assert "askPrice" in rendered
+    assert "bidSize" in rendered
+    assert "askSize" in rendered
+    assert "{{" not in rendered
+
+
+def test_render_simulated_source_function_bootstrap_accepts_symbol_count() -> None:
+    rendered = render_simulated_source_function_bootstrap(
+        ".dev.mmsr",
+        symbol_count=17,
+    )
+
+    assert ".dev.mmsr.symbolCount:17;" in rendered
+    assert "{{" not in rendered
+
+
+def test_render_simulated_source_function_bootstrap_validates_symbol_count() -> None:
+    with pytest.raises(ValueError, match="symbol_count must be positive"):
+        render_simulated_source_function_bootstrap(".dev.mmsr", symbol_count=0)
+
+
+def test_q_bootstrap_renderers_validate_namespaces() -> None:
     with pytest.raises(ValueError, match="must start with"):
         render_calculation_function_bootstrap("desk.mmsr")
+
+    with pytest.raises(ValueError, match="invalid source_namespace"):
+        render_simulated_source_function_bootstrap(".bad-name")
 
 
 def test_no_separate_q_template_directory_exists() -> None:

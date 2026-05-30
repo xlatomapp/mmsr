@@ -27,10 +27,12 @@ from mmsr.report.overview import (
 )
 from mmsr.report.sections import (
     ComparisonSectionOptions,
+    build_activity_intraday_distribution_chart,
     build_comparison_metric_table,
     build_comparison_report_page,
     build_heatmap,
     build_intraday_time_bucket_chart,
+    build_reference_target_intraday_profile_chart,
     build_reference_target_trend_chart,
 )
 from mmsr.report.symbols import (
@@ -101,13 +103,42 @@ class MarketReportOptions:
         "intraday bucket and configured group context are carried as chart "
         "series so the trend runs through the reference and target periods."
     )
+    activity_distribution_page_title: str = "Activity Distribution"
+    activity_distribution_help_text: str = (
+        "Compact Plotly diagnostics for activity metrics. Historical intraday "
+        "observations are reduced to cumulative-percent box statistics by "
+        "bucket; the current period is shown as a line with circle markers; "
+        "session and auction shares are shown as horizontal stacked bars."
+    )
+    include_activity_distribution_page: bool = True
+    activity_distribution_metric_names: tuple[str, ...] = (
+        "turnover",
+        "volume",
+        "trade_count",
+    )
+    max_activity_distribution_charts: int | None = None
+    displayed_liquidity_page_title: str = "Displayed Liquidity"
+    displayed_liquidity_help_text: str = (
+        "Compact Plotly diagnostics for displayed liquidity metrics. Historical "
+        "intraday observations are reduced to per-bucket box statistics, the "
+        "current period is shown as a line with circle markers, and the largest "
+        "group-level current-minus-reference deltas are shown as a capped "
+        "horizontal bar chart."
+    )
+    include_displayed_liquidity_page: bool = True
+    displayed_liquidity_metric_names: tuple[str, ...] = (
+        "quoted_spread_bps",
+        "top_of_book_depth",
+    )
+    max_displayed_liquidity_charts: int | None = None
+    max_displayed_liquidity_groups: int | None = 12
     include_daily_trend_page: bool = True
     include_intraday_heatmaps: bool = False
     summary_scope_label: str = "report scope"
     include_metric_definitions_appendix: bool = True
     max_metric_cards: int = 6
     max_comments: int = 5
-    max_table_rows: int | None = None
+    max_table_rows: int | None = 12
     max_chart_points: int | None = None
     max_heatmap_cells: int | None = None
     max_overview_metrics: int = 5
@@ -137,7 +168,7 @@ class MarketReportOptions:
         "symbol using status, adverse-tail diagnostics, z-score magnitude, and "
         "absolute percentage change as deterministic ranking inputs."
     )
-    max_symbol_anomalies: int = 20
+    max_symbol_anomalies: int = 12
     symbol_group_keys: tuple[str, ...] = DEFAULT_SYMBOL_GROUP_KEYS
     include_symbol_detail_pages: bool = True
     include_symbol_detail_index: bool = True
@@ -163,7 +194,7 @@ class MarketReportOptions:
         "already-computed comparison facts. The page does not calculate new "
         "metrics, query kdb+, or call an LLM."
     )
-    max_drilldown_rows: int | None = 20
+    max_drilldown_rows: int | None = 12
     drilldown_group_keys: tuple[str, ...] = DEFAULT_DRILLDOWN_GROUP_KEYS
 
     def __post_init__(self) -> None:
@@ -182,6 +213,42 @@ class MarketReportOptions:
         _require_non_empty(self.detail_help_text, "detail_help_text")
         _require_non_empty(self.daily_trend_page_title, "daily_trend_page_title")
         _require_non_empty(self.daily_trend_help_text, "daily_trend_help_text")
+        _require_non_empty(
+            self.activity_distribution_page_title,
+            "activity_distribution_page_title",
+        )
+        _require_non_empty(
+            self.activity_distribution_help_text,
+            "activity_distribution_help_text",
+        )
+        _require_metric_name_sequence(
+            self.activity_distribution_metric_names,
+            "activity_distribution_metric_names",
+        )
+        _require_optional_non_negative(
+            self.max_activity_distribution_charts,
+            "max_activity_distribution_charts",
+        )
+        _require_non_empty(
+            self.displayed_liquidity_page_title,
+            "displayed_liquidity_page_title",
+        )
+        _require_non_empty(
+            self.displayed_liquidity_help_text,
+            "displayed_liquidity_help_text",
+        )
+        _require_metric_name_sequence(
+            self.displayed_liquidity_metric_names,
+            "displayed_liquidity_metric_names",
+        )
+        _require_optional_non_negative(
+            self.max_displayed_liquidity_charts,
+            "max_displayed_liquidity_charts",
+        )
+        _require_optional_non_negative(
+            self.max_displayed_liquidity_groups,
+            "max_displayed_liquidity_groups",
+        )
         _require_non_empty(self.summary_scope_label, "summary_scope_label")
         _require_non_empty(self.symbol_anomaly_page_title, "symbol_anomaly_page_title")
         _require_non_empty(
@@ -268,6 +335,20 @@ def build_market_monitor_report(
     )
 
     pages = [summary_page]
+    activity_distribution_page = _build_activity_distribution_page(
+        report_input,
+        definitions,
+        options=resolved_options,
+    )
+    if activity_distribution_page is not None:
+        pages.append(activity_distribution_page)
+    displayed_liquidity_page = _build_displayed_liquidity_page(
+        report_input,
+        definitions,
+        options=resolved_options,
+    )
+    if displayed_liquidity_page is not None:
+        pages.append(displayed_liquidity_page)
     daily_trend_page = _build_daily_trend_page(
         report_input,
         definitions,
@@ -378,6 +459,112 @@ def _build_summary_page(
     )
 
 
+def _build_activity_distribution_page(
+    report_input: MarketReportInput,
+    definitions: Mapping[str, MetricDefinition],
+    *,
+    options: MarketReportOptions,
+) -> ReportPage | None:
+    if (
+        not options.include_activity_distribution_page
+        or not report_input.reference_series
+    ):
+        return None
+
+    current_by_metric = {
+        series.metric_name: series
+        for series in report_input.current_series
+        if not _series_has_symbol_scope(series, options.symbol_group_keys)
+    }
+    reference_by_metric = {
+        series.metric_name: series
+        for series in report_input.reference_series
+        if not _series_has_symbol_scope(series, options.symbol_group_keys)
+    }
+    charts = []
+    for metric_name in options.activity_distribution_metric_names:
+        target_series = current_by_metric.get(metric_name)
+        reference_series = reference_by_metric.get(metric_name)
+        if target_series is None or reference_series is None:
+            continue
+        definition = _require_definition(metric_name, definitions)
+        charts.append(
+            build_activity_intraday_distribution_chart(
+                f"{definition.label} cumulative intraday distribution",
+                reference_series=reference_series,
+                target_series=target_series,
+                metric_definition=definition,
+                help_text=options.activity_distribution_help_text,
+            )
+        )
+        if (
+            options.max_activity_distribution_charts is not None
+            and len(charts) >= options.max_activity_distribution_charts
+        ):
+            break
+
+    if not charts:
+        return None
+    return ReportPage(
+        title=options.activity_distribution_page_title.strip(),
+        plotly_charts=charts,
+    )
+
+
+def _build_displayed_liquidity_page(
+    report_input: MarketReportInput,
+    definitions: Mapping[str, MetricDefinition],
+    *,
+    options: MarketReportOptions,
+) -> ReportPage | None:
+    if (
+        not options.include_displayed_liquidity_page
+        or not report_input.reference_series
+    ):
+        return None
+
+    current_by_metric = {
+        series.metric_name: series
+        for series in report_input.current_series
+        if not _series_has_symbol_scope(series, options.symbol_group_keys)
+    }
+    reference_by_metric = {
+        series.metric_name: series
+        for series in report_input.reference_series
+        if not _series_has_symbol_scope(series, options.symbol_group_keys)
+    }
+    charts = []
+    for metric_name in options.displayed_liquidity_metric_names:
+        target_series = current_by_metric.get(metric_name)
+        reference_series = reference_by_metric.get(metric_name)
+        if target_series is None or reference_series is None:
+            continue
+        definition = _require_definition(metric_name, definitions)
+        charts.append(
+            build_reference_target_intraday_profile_chart(
+                f"{definition.label} intraday profile",
+                reference_series=reference_series,
+                target_series=target_series,
+                metric_definition=definition,
+                group_by=("market_cap_bucket", "segment", "sector", "venue"),
+                max_groups=options.max_displayed_liquidity_groups,
+                help_text=options.displayed_liquidity_help_text,
+            )
+        )
+        if (
+            options.max_displayed_liquidity_charts is not None
+            and len(charts) >= options.max_displayed_liquidity_charts
+        ):
+            break
+
+    if not charts:
+        return None
+    return ReportPage(
+        title=options.displayed_liquidity_page_title.strip(),
+        plotly_charts=charts,
+    )
+
+
 def _build_daily_trend_page(
     report_input: MarketReportInput,
     definitions: Mapping[str, MetricDefinition],
@@ -484,6 +671,7 @@ def _build_symbol_anomaly_page(
         metric_cards=page.metric_cards,
         metric_tables=page.metric_tables,
         time_series_charts=page.time_series_charts,
+        plotly_charts=page.plotly_charts,
         heatmaps=page.heatmaps,
         commentary_blocks=page.commentary_blocks,
         html_blocks=[*page.html_blocks, index_block],
@@ -598,6 +786,17 @@ def _build_detail_page(
     )
 
 
+def _series_has_symbol_scope(
+    series: MetricTimeSeries,
+    symbol_group_keys: tuple[str, ...],
+) -> bool:
+    symbol_keys = {key.casefold() for key in symbol_group_keys}
+    for observation in series.observations:
+        if symbol_keys.intersection(key.casefold() for key in observation.group):
+            return True
+    return False
+
+
 def _is_toxicity_reversion_metric(metric_name: str) -> bool:
     return (
         metric_name.startswith("primary_quote_reversion_")
@@ -674,6 +873,14 @@ def _require_drilldown_group_keys(drilldown_group_keys: tuple[str, ...]) -> None
     for key in drilldown_group_keys:
         if not key.strip():
             raise ValueError("drilldown_group_keys must not contain empty values")
+
+
+def _require_metric_name_sequence(values: tuple[str, ...], field_name: str) -> None:
+    if not values:
+        raise ValueError(f"{field_name} must not be empty")
+    for value in values:
+        if not value.strip():
+            raise ValueError(f"{field_name} must not contain empty values")
 
 
 __all__ = [

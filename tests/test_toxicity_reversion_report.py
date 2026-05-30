@@ -74,20 +74,19 @@ def test_toxicity_reversion_page_builds_horizon_curve_by_venue() -> None:
 
     assert page is not None
     assert page.title == "Cross-Venue Toxicity"
-    assert len(page.time_series_charts) == 1
-    chart = page.time_series_charts[0]
+    assert page.time_series_charts == []
+    assert len(page.plotly_charts) == 1
+    chart = page.plotly_charts[0]
     assert chart.x_axis_label == "Horizon"
     assert chart.resolved_y_axis_label() == "Reversion (bps)"
-    assert chart.svg_legend_labels() == ("TSE", "SBIJ")
-    assert [point.x_text for point in chart.points] == ["10ms", "10ms", "1s", "1s"]
-    assert [point.series_text for point in chart.points] == [
-        "TSE",
-        "SBIJ",
-        "TSE",
-        "SBIJ",
-    ]
+    assert [trace["name"] for trace in chart.figure["data"]] == ["TSE", "SBIJ"]
+    assert chart.figure["data"][0]["x"] == ["10ms", "1s"]
+    assert chart.figure["data"][0]["y"] == [0.10, 0.55]
+    assert chart.figure["data"][0]["mode"] == "lines+markers"
+    assert chart.figure["data"][0]["marker"]["symbol"] == ["circle", "circle"]
     assert chart.metric.label == "Cross-Venue Reversion Curve"
     assert "kdb query has already applied" in chart.metric_help_text()
+    assert "raw trade or quote rows are not embedded" in chart.compact_data_summary()
     assert page.commentary_blocks
 
 
@@ -141,6 +140,15 @@ def test_toxicity_reversion_page_adds_reversion_comparison_table() -> None:
     )
 
     assert page is not None
+    assert len(page.plotly_charts) == 2
+    diagnostic_chart = page.plotly_charts[1]
+    assert diagnostic_chart.title == "Reversion current-minus-reference diagnostics"
+    assert diagnostic_chart.figure["data"][0]["type"] == "bar"
+    assert diagnostic_chart.figure["data"][0]["orientation"] == "h"
+    assert diagnostic_chart.figure["data"][0]["x"] == [0.25]
+    assert "Venue: TSE" in diagnostic_chart.figure["data"][0]["y"][0]
+    assert "Horizon: 10ms" in diagnostic_chart.figure["data"][0]["y"][0]
+    assert "full comparison rows are not rendered" in diagnostic_chart.compact_data_summary()
     assert len(page.metric_tables) == 1
     table = page.metric_tables[0]
     assert table.title == "Reversion current versus reference"
@@ -204,8 +212,8 @@ def test_toxicity_reversion_page_ranks_contexts_by_positive_reversion() -> None:
     )
 
     assert page is not None
-    assert len(page.time_series_charts) == 1
-    assert "09:05" in page.time_series_charts[0].title
+    assert len(page.plotly_charts) == 1
+    assert "09:05" in page.plotly_charts[0].title
 
 
 def test_toxicity_reversion_page_can_rank_contexts_chronologically() -> None:
@@ -235,8 +243,8 @@ def test_toxicity_reversion_page_can_rank_contexts_chronologically() -> None:
     )
 
     assert page is not None
-    assert len(page.time_series_charts) == 1
-    assert "09:00" in page.time_series_charts[0].title
+    assert len(page.plotly_charts) == 1
+    assert "09:00" in page.plotly_charts[0].title
 
 
 def test_toxicity_reversion_page_can_rank_contexts_by_upstream_sort_order() -> None:
@@ -268,9 +276,9 @@ def test_toxicity_reversion_page_can_rank_contexts_by_upstream_sort_order() -> N
     )
 
     assert page is not None
-    assert len(page.time_series_charts) == 1
-    assert "09:05" in page.time_series_charts[0].title
-    assert "Context sort order: 5" in page.time_series_charts[0].points[0].metadata_text
+    assert len(page.plotly_charts) == 1
+    assert "09:05" in page.plotly_charts[0].title
+    assert "Context sort order: 5" in page.plotly_charts[0].figure["data"][0]["text"][0]
 
 
 def test_toxicity_reversion_page_can_rank_contexts_by_lowest_confidence() -> None:
@@ -312,9 +320,9 @@ def test_toxicity_reversion_page_can_rank_contexts_by_lowest_confidence() -> Non
     )
 
     assert page is not None
-    assert len(page.time_series_charts) == 1
-    assert "09:05" in page.time_series_charts[0].title
-    assert "Low confidence" in page.time_series_charts[0].points[0].metadata_text
+    assert len(page.plotly_charts) == 1
+    assert "09:05" in page.plotly_charts[0].title
+    assert "Low confidence" in page.plotly_charts[0].figure["data"][0]["text"][0]
 
 
 def test_toxicity_reversion_page_requires_metric_definitions() -> None:
@@ -382,10 +390,10 @@ def test_market_report_inserts_toxicity_reversion_page_from_current_series() -> 
         "Cross-Venue Toxicity",
         "Intraday Detail",
     ]
-    assert document.pages[1].time_series_charts[0].x_axis_label == "Horizon"
-    assert len(document.pages[1].metric_tables) == 1
-    assert document.pages[1].metric_tables[0].rows[0].metric.name == (
-        "primary_quote_reversion_10ms_bps"
+    assert document.pages[1].plotly_charts[0].x_axis_label == "Horizon"
+    assert len(document.pages[1].metric_tables) == 0
+    assert document.pages[1].plotly_charts[-1].title == (
+        "Reversion current-minus-reference diagnostics"
     )
     assert document.pages[2].time_series_charts == []
     assert document.pages[2].heatmaps == []
@@ -461,7 +469,7 @@ def test_market_report_passes_toxicity_context_ranking_option() -> None:
     )
 
     assert document.pages[1].title == "Cross-Venue Toxicity"
-    assert "09:00" in document.pages[1].time_series_charts[0].title
+    assert "09:00" in document.pages[1].plotly_charts[0].title
 
 
 def test_market_report_passes_toxicity_context_sort_order_ranking_option() -> None:
@@ -501,7 +509,7 @@ def test_market_report_passes_toxicity_context_sort_order_ranking_option() -> No
     )
 
     assert document.pages[1].title == "Cross-Venue Toxicity"
-    assert "09:05" in document.pages[1].time_series_charts[0].title
+    assert "09:05" in document.pages[1].plotly_charts[0].title
 
 
 def test_market_report_toxicity_reversion_page_can_be_disabled() -> None:

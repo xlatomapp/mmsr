@@ -8978,3 +8978,714 @@ Removed files:
 ### Open questions
 
 - Should `persist_stock_metrics` merge with existing user-owned cached rows in kdb, or should the user hook own upsert semantics entirely?
+
+---
+
+## 2026-05-29 — Compact Plotly report HTML and activity distribution visuals
+
+### Implemented
+
+- Reworked the default time-series chart HTML partial to render compact Plotly
+  figure specifications instead of inline SVG-only visuals and full backing-data
+  tables.
+- Added a generic `PlotlyChart` report component, renderer entry point, metric
+  documentation collection support, and a reusable Plotly partial template.
+- Added a report-level Plotly loader/initializer so each chart is rendered from
+  colocated JSON while keeping the visible HTML focused on visuals and metric
+  help.
+- Added an `Activity Distribution` market-report page for activity metrics that
+  renders:
+  - current cumulative intraday percent as a line with circle markers;
+  - historical cumulative intraday percent as per-bucket box/whisker statistics;
+  - reference/current session and auction share as horizontal stacked bars.
+- Kept activity diagnostics aggregated and intentionally skipped symbol-scoped
+  series so the default report does not emit single-stock plots.
+- Added options to enable/disable the activity page, configure the activity
+  metric names, and cap the number of activity distribution charts.
+- Updated demo/report page ordering expectations and compact-data rendering
+  assertions.
+
+### Files changed
+
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `mmsr/report/__init__.py`
+- `mmsr/report/components.py`
+- `mmsr/report/market_report.py`
+- `mmsr/report/metric_docs.py`
+- `mmsr/report/render_html.py`
+- `mmsr/report/sections.py`
+- `mmsr/report/templates/report.html.j2`
+- `mmsr/report/templates/partials/plotly_chart.html.j2`
+- `mmsr/report/templates/partials/time_series_chart.html.j2`
+- `tests/test_cli.py`
+- `tests/test_market_report.py`
+- `tests/test_mock_kdb_demo.py`
+- `tests/test_offline_demo.py`
+- `tests/test_time_series_charts.py`
+
+### Tests added or updated
+
+- Added explicit coverage for compact activity distribution Plotly figures,
+  including box statistics without raw `y` arrays, current line markers, and
+  horizontal stacked session bars.
+- Updated report, CLI, offline-demo, mock-kdb-demo, and chart-rendering tests to
+  expect the new Activity Distribution page and compact Plotly chart markup.
+- Updated assertions to verify compact plot data summaries replace raw backing
+  tables in chart components.
+
+### Validation
+
+- Ran `python -m py_compile` on the touched report modules and updated tests
+  successfully.
+- Ran `python -m pytest -q` successfully.
+- Rendered the deterministic offline demo report and confirmed:
+  - the Activity Distribution page is present;
+  - Plotly initialization is present;
+  - `Backing data` is absent;
+  - `Compact plot data` is present;
+  - the generated sample HTML was about 134 KB.
+- Python startup emitted the known non-fatal `artifact_tool` spreadsheet warmup
+  warning in this environment, but validation commands completed successfully.
+- `black` and `flake8` were not installed/executable on this environment PATH,
+  so formatter/linter validation could not be run here.
+
+### Current milestone
+
+- Milestone 9C: compact Plotly report HTML for kdb-scale data.
+
+### Estimated milestone completion
+
+- 75%
+
+### Remaining work before milestone completion
+
+- Validate HTML size and visual usability with a real kdb-backed production
+  report.
+- Add metric-specific compact Plotly diagnostics for displayed liquidity and
+  reversion where the generic trend charts are not sufficient.
+- Decide whether production deployments should use Plotly from CDN, a packaged
+  local Plotly asset, or an offline self-contained bundle.
+- Confirm the preferred reference window and session-label conventions for the
+  activity distribution page.
+
+### Best next deterministic step
+
+- Run one real kdb-backed report render with the new compact Plotly report layer,
+  record the output HTML size, and inspect the activity distribution page before
+  adding more metric-specific compact visuals.
+
+### Open questions
+
+- Is using the Plotly CDN acceptable for the production report environment, or
+  must Plotly be bundled locally for offline report viewing?
+- Should session-share stacks use the current AMO/AMC/PMO/PMC and continuous
+  AM/PM labels, or should they follow a client-specific exchange session map?
+
+
+---
+
+## 2026-05-29 — Add compact displayed-liquidity Plotly visuals and cap report tables
+
+### Implemented
+
+- Added a `Displayed Liquidity` market-report page for displayed-liquidity
+  metrics such as `quoted_spread_bps` and `top_of_book_depth`.
+- Added `build_reference_target_intraday_profile_chart()` for compact
+  non-additive metric diagnostics:
+  - historical per-bucket box/whisker statistics without raw `y` value arrays;
+  - current-period intraday profile as a line with circle markers;
+  - capped horizontal group-delta bars showing current minus reference by
+    market-cap, segment, sector, or venue context.
+- Wired displayed-liquidity page options into the canonical market report,
+  including enable/disable flags, metric-name selection, chart caps, and group
+  delta caps.
+- Kept displayed-liquidity visuals aggregated and skipped symbol-scoped series
+  in the default market report path.
+- Changed default comparison, symbol-anomaly, drilldown, offline-demo, and
+  mock-kdb-demo table limits so tables remain capped summary diagnostics rather
+  than full payload dumps.
+- Updated the roadmap to record displayed-liquidity visual coverage and the
+  remaining reversion/toxicity visual milestone work.
+
+### Files changed
+
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `mmsr/cli.py`
+- `mmsr/examples/mock_kdb_demo.py`
+- `mmsr/examples/offline_demo.py`
+- `mmsr/report/__init__.py`
+- `mmsr/report/market_report.py`
+- `mmsr/report/sections.py`
+- `tests/test_market_report.py`
+- `tests/test_mock_kdb_demo.py`
+- `tests/test_offline_demo.py`
+- `tests/test_time_series_charts.py`
+
+### Tests added or updated
+
+- Added unit coverage for compact displayed-liquidity intraday profile figures,
+  verifying box statistics are embedded without raw `y` arrays, current profile
+  markers are present, group deltas are capped, and rendered Plotly partials do
+  not emit tables.
+- Updated canonical market-report, offline-demo, and mock-kdb-demo tests to
+  expect the new `Displayed Liquidity` page.
+- Updated option-validation tests for displayed-liquidity page text and caps.
+- Updated report-page ordering tests and compact rendering assertions.
+
+### Validation
+
+- `python -m py_compile` on the touched report, example, CLI, and test modules
+  passed.
+- `python -m pytest -q` passed.
+- Rendered the deterministic offline demo report and confirmed:
+  - `Displayed Liquidity` is present;
+  - `Backing data` is absent;
+  - 13 Plotly figure containers are present;
+  - the generated sample HTML is about 143 KB.
+- `black --check .` and `flake8 .` could not be run because the executables are
+  present but not executable in this environment (`PermissionError`).
+- Python startup emitted the known non-fatal `artifact_tool` spreadsheet warmup
+  warning in this environment, but validation commands completed successfully.
+
+### Current milestone
+
+- Milestone 9C: compact Plotly report HTML for kdb-scale data.
+
+### Estimated milestone completion
+
+- 86%
+
+### Remaining work before milestone completion
+
+- Validate HTML size and visual usability with one real kdb-backed production
+  report using the user's real data shape.
+- Convert Cross-Venue Toxicity/Reversion from generic trend charts plus capped
+  comparison rows into compact Plotly horizon curves and capped venue/horizon
+  diagnostics.
+- Decide whether production deployments should use the Plotly CDN, a packaged
+  local Plotly asset, or an offline self-contained bundle.
+
+### Best next deterministic step
+
+- Rework the Cross-Venue Toxicity/Reversion page to render compact Plotly
+  horizon progression curves and capped venue/horizon comparison diagnostics,
+  then remove or further minimize the remaining reversion comparison table.
+
+### Open questions
+
+- Is using the Plotly CDN acceptable for the production report environment, or
+  must Plotly be bundled locally for offline report viewing?
+- Should session-share stacks use the current AMO/AMC/PMO/PMC and continuous
+  AM/PM labels, or should they follow a client-specific exchange session map?
+---
+
+## 2026-05-29 — Clarify Plotly current-mean and null-filtered percentile semantics
+
+### Implemented
+
+- Clarified the compact Plotly chart semantics requested for report visuals:
+  - current-period activity lines are rendered from mean daily bucket totals
+    before cumulative-percent calculation;
+  - current-period displayed-liquidity profiles are rendered from per-bucket
+    means;
+  - reference/historical box-and-whisker inputs are filtered for null, NaN, and
+    non-finite values before percentile statistics are calculated.
+- Changed activity session-share bars to use mean daily session percentages for
+  both the current and reference periods, reducing distortion from high-volume
+  days in a multi-day period.
+- Updated Plotly trace names, hover text, compact data summaries, and roadmap
+  wording so report users can see that the current line is a mean and the
+  reference boxes are null-filtered percentile summaries.
+
+### Files changed
+
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `mmsr/report/sections.py`
+- `tests/test_time_series_charts.py`
+
+### Tests added or updated
+
+- Added coverage that activity distribution charts:
+  - ignore null and NaN metric observations;
+  - compute the current cumulative-percent line from mean daily bucket totals;
+  - keep reference box statistics as percentile summaries.
+- Added coverage that displayed-liquidity intraday profile charts:
+  - ignore null and NaN observations;
+  - compute current profile values as per-bucket means;
+  - compute reference q1/median/q3 from the null-filtered historical values.
+- Updated compact data-summary expectations to include the current-mean and
+  null-filtered percentile semantics.
+
+### Validation
+
+- `python -m py_compile` over all package and test modules passed.
+- `python -m pytest tests/test_time_series_charts.py -q` passed.
+- `python -m pytest -q` passed.
+- Rendered the deterministic offline demo report and confirmed:
+  - `Current mean cumulative %` is present;
+  - `null-filtered percentile box statistics` is present;
+  - `Backing data` is absent;
+  - the generated sample HTML is about 143 KB.
+- `black` and `flake8` could not be run because the executables are not
+  available on `PATH` in this environment.
+- Python startup emitted the known non-fatal `artifact_tool` spreadsheet warmup
+  warning in this environment, but validation commands completed successfully.
+
+### Current milestone
+
+- Milestone 9C: compact Plotly report HTML for kdb-scale data.
+
+### Estimated milestone completion
+
+- 89%
+
+### Remaining work before milestone completion
+
+- Validate HTML size and visual usability with one real kdb-backed production
+  report using the user's real data shape.
+- Convert Cross-Venue Toxicity/Reversion from generic trend charts plus capped
+  comparison rows into compact Plotly horizon curves and capped venue/horizon
+  diagnostics.
+- Decide whether production deployments should use the Plotly CDN, a packaged
+  local Plotly asset, or an offline self-contained bundle.
+
+### Best next deterministic step
+
+- Rework the Cross-Venue Toxicity/Reversion page to render compact Plotly
+  horizon progression curves and capped venue/horizon comparison diagnostics,
+  then remove or further minimize the remaining reversion comparison table.
+
+### Open questions
+
+- Is using the Plotly CDN acceptable for the production report environment, or
+  must Plotly be bundled locally for offline report viewing?
+- Should session-share stacks use the current AMO/AMC/PMO/PMC and continuous
+  AM/PM labels, or should they follow a client-specific exchange session map?
+
+
+---
+
+## 2026-05-29 — Convert Cross-Venue Toxicity/Reversion to compact Plotly visuals
+
+### Implemented
+
+- Reworked the Cross-Venue Toxicity/Reversion report page from generic
+  time-series chart components into compact Plotly horizon progression curves.
+- Each reversion curve now plots horizon on the x-axis, reversion in bps on the
+  y-axis, and one line/marker series per venue.
+- Low-confidence reversion points are marked with open-circle markers and
+  surfaced in compact hover text rather than as expanded backing rows.
+- Added a capped horizontal Plotly diagnostic chart for reversion
+  current-minus-reference deltas by venue/horizon context.
+- Disabled the reversion comparison table by default so the page remains
+  visualization-first; the table remains available only when explicitly capped
+  through `max_comparison_rows`.
+- Updated the roadmap to record completed reversion/toxicity visual coverage and
+  the remaining real-kdb smoke/Plotly-asset decisions.
+
+### Files changed
+
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `mmsr/report/toxicity.py`
+- `tests/test_toxicity_reversion_report.py`
+
+### Tests added or updated
+
+- Updated toxicity report tests to assert Plotly horizon curves instead of
+  time-series chart components.
+- Added assertions that reversion diagnostic comparisons render as capped
+  horizontal Plotly bars while the default table payload is omitted.
+- Updated market-report toxicity wiring assertions to expect Plotly charts and no
+  default reversion comparison table.
+
+### Validation
+
+- `python -m py_compile` over all package and test modules passed.
+- `python -m pytest tests/test_toxicity_reversion_report.py -q` passed.
+- `python -m pytest -q` passed.
+- Rendered the deterministic offline demo report and confirmed:
+  - `Backing data` is absent;
+  - `time-series-chart__placeholder` is absent;
+  - 13 Plotly figure containers are present;
+  - generated sample HTML is about 143 KB.
+- Rendered a focused toxicity-only report and confirmed:
+  - 2 Plotly charts are emitted;
+  - 0 metric tables and 0 time-series charts are emitted by default;
+  - the reversion diagnostic chart is present;
+  - no HTML table is emitted;
+  - generated focused HTML is about 21 KB.
+- `black --check .` and `flake8 .` could not be run because the executable shims
+  are present but not executable in this environment (`PermissionError`).
+- `python -m black --check .` and `python -m flake8 .` could not be run because
+  those modules are not installed in this environment.
+- Python startup emitted the known non-fatal `artifact_tool` spreadsheet warmup
+  warning in this environment, but validation commands completed successfully.
+
+### Current milestone
+
+- Milestone 9C: compact Plotly report HTML for kdb-scale data.
+
+### Estimated milestone completion
+
+- 94%
+
+### Remaining work before milestone completion
+
+- Validate HTML size and visual usability with one real kdb-backed production
+  report using the user's real data shape.
+- Decide whether production deployments should use the Plotly CDN, a packaged
+  local Plotly asset, or an offline self-contained bundle.
+- Consider a hard fixture-based HTML size budget after a real-kdb report size is
+  known.
+
+### Best next deterministic step
+
+- Add a compact report-size/smoke validation hook or documented production smoke
+  command that records final HTML size, Plotly chart count, and absence of raw
+  backing-data tables for a real kdb-backed run.
+
+### Open questions
+
+- Is using the Plotly CDN acceptable for the production report environment, or
+  must Plotly be bundled locally for offline report viewing?
+- Should session-share stacks use the current AMO/AMC/PMO/PMC and continuous
+  AM/PM labels, or should they follow a client-specific exchange session map?
+- What is the target maximum final HTML size for a representative real kdb-backed
+  production report?
+
+
+---
+
+## 2026-05-30 — Add simulated q source functions for dev/debug reports
+
+### Implemented
+
+- Added a packaged deterministic q source-function library for development and
+  debugging without production kdb tables.
+- The rendered q defines `getTradingCalendar`, `getRef`, `getTrade`, `getQuote`,
+  `getPtsTrade`, `getPtsQuote`, and `getPrimaryQuote` under a configurable
+  namespace.
+- Added `render_simulated_source_function_bootstrap()` so Python callers and CLI
+  tools can materialize the q source functions.
+- Added `mmsr simulated-source-q` to write a loadable q file for a dev kdb
+  session.
+- Added a simulated-source report config and `simulated-source-demo` convenience
+  path that exercises the production-shaped executor/report flow without PyKX or
+  a live kdb socket.
+- Kept the simulated path scoped to market-monitoring source rows and report
+  development; it is explicitly not production market evidence.
+
+### Files changed
+
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `mmsr/cli.py`
+- `mmsr/examples/__init__.py`
+- `mmsr/examples/config/simulated_source_report.yaml`
+- `mmsr/examples/simulated_source_report.py`
+- `mmsr/kdb/__init__.py`
+- `mmsr/kdb/query_loader.py`
+- `mmsr/kdb/q_lib/mmsr_simulated_sources.q.j2`
+- `mmsr/kdb/simulated.py`
+- `tests/test_cli.py`
+- `tests/test_kdb_query_loader.py`
+- `tests/test_kdb_simulated_sources.py`
+
+### Tests added or updated
+
+- Added q-template loading and rendering assertions for the simulated source
+  library.
+- Added CLI tests for writing a simulated q source-function file.
+- Added simulated-source client/source-boundary tests for reference rows and
+  required source schema columns.
+- Added a simulated-source report file smoke test.
+
+### Validation
+
+- `python -m py_compile` over all package and test modules passed.
+- `python -m pytest tests/test_kdb_query_loader.py tests/test_kdb_simulated_sources.py tests/test_cli.py -q` passed.
+- `python -m pytest -q` passed.
+- The generated simulated-source report render contains the expected market
+  summary, activity, displayed-liquidity, and Cross-Venue Toxicity pages, uses
+  Plotly figures, and does not include `Backing data`.
+- The generated q source-function file contains the configured namespace and all
+  simulated source functions.
+- The generated q was inspected through string/schema tests only; a live q
+  interpreter was not available in this environment.
+- `black` and `flake8` were not run because the environment still lacks usable
+  formatter/linter executables.
+- Python startup emitted the known non-fatal `artifact_tool` spreadsheet warmup
+  warning in this environment, but validation commands completed successfully.
+
+### Current milestone
+
+- Milestone 9D: simulated kdb source functions for dev/debug.
+
+### Estimated milestone completion
+
+- 88%
+
+### Remaining work before milestone completion
+
+- Validate the generated simulated q source functions in a real kdb+ process.
+- Add a simulator-size knob to the CLI/config if developers need to stress-test
+  larger universes or bucket grids.
+
+### Best next deterministic step
+
+- Run the generated `mmsr_simulated_sources.q` in a local kdb+ session, call each
+  source function with a small reference table, and confirm the production report
+  q runner can consume the returned raw rows end-to-end.
+
+### Open questions
+
+- Should the simulated q source functions expose a configurable symbol count via
+  a q variable only, or should the CLI also render a chosen default into the q
+  bootstrap file?
+
+---
+
+## 2026-05-30 — Add simulator universe-size controls
+
+### Implemented
+
+- Added a positive `symbol_count` option to the simulated q bootstrap renderer.
+- The generated q now bakes the selected default into
+  `<namespace>.symbolCount`, while still allowing q users to override the
+  variable after loading for ad hoc stress tests.
+- Added `--symbol-count` to `mmsr simulated-source-q`.
+- Added `--symbol-count` to `mmsr simulated-source-demo` and wired it into the
+  local simulated-source client.
+- Updated README usage examples for small smoke tests and larger synthetic
+  universe stress runs.
+- Updated the roadmap to mark the simulator-size knob as implemented.
+
+### Files changed
+
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `mmsr/cli.py`
+- `mmsr/kdb/query_loader.py`
+- `mmsr/kdb/q_lib/mmsr_simulated_sources.q.j2`
+- `tests/test_cli.py`
+- `tests/test_kdb_query_loader.py`
+
+### Tests added or updated
+
+- Added q-renderer assertions for custom simulated q `symbolCount` values.
+- Added q-renderer validation for non-positive simulated symbol counts.
+- Updated CLI tests to assert the q export command and Python file helper pass
+  custom symbol counts into the rendered q.
+- Added a simulated-source demo CLI smoke test with a small custom symbol count.
+
+### Validation
+
+- `python -m py_compile` over all package and test modules passed.
+- `python -m pytest tests/test_kdb_query_loader.py tests/test_kdb_simulated_sources.py tests/test_cli.py -q` passed.
+- `python -m pytest -q` passed.
+- Ran `python -m mmsr.cli simulated-source-q --output sim_sources_17.q
+  --namespace .qa.mmsr --symbol-count 17` and confirmed the file was written.
+- Ran `python -m mmsr.cli simulated-source-demo --output sim_demo_7.html
+  --symbol-count 7` and confirmed the report rendered with Plotly figures and
+  without `Backing data`.
+- A live q interpreter was still unavailable in this environment, so the
+  generated q has not yet been executed inside kdb+.
+- `black --check .` and `flake8 .` could not be run because the executable shims
+  are present but not executable in this environment (`PermissionError`).
+- `python -m black --check .` and `python -m flake8 .` could not be run because
+  those modules are not installed in this environment.
+- Python startup emitted the known non-fatal `artifact_tool` spreadsheet warmup
+  warning in this environment, but validation commands completed successfully.
+
+### Current milestone
+
+- Milestone 9D: simulated kdb source functions for dev/debug.
+
+### Estimated milestone completion
+
+- 93%
+
+### Remaining work before milestone completion
+
+- Validate the generated simulated q source functions in a real kdb+ process.
+- Add optional simulator knobs beyond symbol count only if developers need to
+  vary venue count, bucket grid depth, or trading-day depth.
+
+### Best next deterministic step
+
+- When q is available, load the generated `mmsr_simulated_sources.q` in a local
+  kdb+ session, call each source function with a small reference table, and
+  confirm the production report q runner can consume the returned raw rows
+  end-to-end.
+
+### Open questions
+
+- Should the simulator eventually expose venue-count and bucket-grid controls,
+  or is symbol-count sufficient for the near-term report-size and layout smoke
+  tests?
+
+
+
+---
+
+## 2026-05-30 — Add remote-kdb simulated source injection flags
+
+### Implemented
+
+- Added `--inject-simulated-sources`, `--simulated-source-namespace`, and
+  `--simulated-symbol-count` to the normal production `plan`, `preflight`, and
+  `render` commands.
+- The injection path sends the deterministic simulated source-function q
+  bootstrap to the connected kdb process before normal planning/preflight/render
+  execution.
+- When injection is enabled, the loaded report config is routed for that run so
+  calendar, reference-data, trade, quote, PTS trade/quote, and primary quote
+  source-function calls use the injected simulated namespace.
+- MMSR-owned calculation functions still install and run in the configured
+  `data.kdb.calculation_namespace`; only the source-getter boundary is swapped.
+- Documented the preferred remote-kdb dev workflow using
+  `--inject-simulated-sources` on existing production commands.
+
+### Files changed
+
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `mmsr/cli.py`
+- `tests/test_production_cli.py`
+
+### Tests added or updated
+
+- Added a production-plan test confirming simulated q is injected into the
+  configured remote client and source-function names are routed to the simulated
+  namespace.
+- Added a production-preflight CLI test confirming the new flags inject
+  simulated q and execute the sample metric against simulated source getters.
+- Updated the fake production kdb client to accept bootstrap-only q injection
+  calls.
+
+### Validation
+
+- `python -m py_compile` over all package and test modules passed.
+- `python -m pytest tests/test_production_cli.py tests/test_logging.py -q` passed.
+- `python -m pytest -q` passed.
+- A live q interpreter was still unavailable in this environment, so the
+  injected bootstrap has not yet been executed inside a real remote kdb+
+  process.
+- `black --check .` and `flake8 .` could not be run because the executable
+  shims are present but not executable in this environment (`PermissionError`).
+- `python -m black --check .` and `python -m flake8 .` could not be run because
+  those modules are not installed in this environment.
+- Python startup emitted the known non-fatal `artifact_tool` spreadsheet warmup
+  warning in this environment, but validation commands completed successfully.
+
+### Current milestone
+
+- Milestone 9D: simulated kdb source functions for dev/debug.
+
+### Estimated milestone completion
+
+- 96%
+
+### Remaining work before milestone completion
+
+- Validate `--inject-simulated-sources` against an actual remote kdb+ process.
+- Add optional simulator knobs beyond symbol count only if developers need to
+  vary venue count, bucket-grid depth, or trading-day depth.
+
+### Best next deterministic step
+
+- In a development environment with q available, run `mmsr preflight
+  --inject-simulated-sources` against a remote kdb process and verify each
+  simulated getter can be called by the normal production q runner.
+
+### Open questions
+
+- Should the older `simulated-source-q` and `simulated-source-demo` convenience
+  commands stay as developer utilities, or be deprecated in docs now that the
+  normal production commands can inject simulated source getters directly?
+
+
+---
+
+## 2026-05-30 — Remove redundant standalone simulated-source paths
+
+### Implemented
+
+- Removed the wrong-direction standalone `simulated-source-q` CLI command.
+- Removed the wrong-direction standalone `simulated-source-demo` CLI command.
+- Removed the local Python simulated kdb client/report path that bypassed a
+  live or remote kdb process.
+- Kept the q simulated source-function bootstrap used by
+  `--inject-simulated-sources` on normal `plan`, `preflight`, and `render`.
+- Updated README and roadmap so the supported dev/debug path is one mechanism:
+  inject simulated source getters into the same kdb process used by normal
+  production commands.
+
+### Files changed
+
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+- `README.md`
+- `pyproject.toml`
+- `mmsr/cli.py`
+- `mmsr/examples/__init__.py`
+- `mmsr/examples/simulated_source_report.py` removed
+- `mmsr/examples/config/simulated_source_report.yaml` removed
+- `mmsr/kdb/simulated.py` removed
+- `tests/test_cli.py`
+- `tests/test_kdb_simulated_sources.py` removed
+
+### Tests added or updated
+
+- Removed tests for the deleted standalone simulated-source commands and local
+  Python simulated client.
+- Added CLI help assertions that the deleted standalone commands are not listed.
+- Kept q bootstrap rendering and remote injection coverage in
+  `tests/test_kdb_query_loader.py` and `tests/test_production_cli.py`.
+
+### Validation
+
+- `python -m py_compile` over all package and test modules passed.
+- `python -m pytest tests/test_cli.py tests/test_production_cli.py
+  tests/test_kdb_query_loader.py -q` passed.
+- `python -m pytest -q` passed.
+- `black --check .` and `flake8 .` could not be run because the executable
+  shims are present but not executable in this environment (`PermissionError`).
+- `python -m black --check .` and `python -m flake8 .` could not be run because
+  those modules are not installed in this environment.
+- A live q/kdb+ process is still unavailable in this environment, so
+  `--inject-simulated-sources` has not yet been executed against a real remote
+  kdb process.
+- Python startup emitted the known non-fatal `artifact_tool` spreadsheet warmup
+  warning in this environment, but validation commands completed successfully.
+
+### Current milestone
+
+- Milestone 9D: simulated kdb source functions for dev/debug.
+
+### Estimated milestone completion
+
+- 97%
+
+### Remaining work before milestone completion
+
+- Validate the injected simulated source q bootstrap in a real remote kdb+
+  process.
+- Keep additional simulator knobs out unless a concrete dev/debug need appears.
+
+### Best next deterministic step
+
+- Run `mmsr preflight --inject-simulated-sources` against a remote kdb process
+  and confirm the normal production q runner can consume the injected simulated
+  calendar, reference-data, trade, quote, PTS, and primary-quote getters.
+
+### Open questions
+
+- None.

@@ -23,8 +23,8 @@ def test_render_offline_demo_report_file_writes_deterministic_html(tmp_path) -> 
     assert "Market Summary" in html
     assert "Executive Market Overview" in html
     assert "Metric Definitions Appendix" in html
-    assert "time-series-chart__svg" in html
-    assert "Backing data" in html
+    assert "plotly-chart__figure" in html
+    assert "Compact plot data" in html
     assert "time-series-chart__placeholder" not in html
     assert '<section class="heatmap">' not in html
     assert "heatmap__placeholder" not in html
@@ -129,13 +129,17 @@ def test_render_mock_kdb_demo_report_file_writes_deterministic_html(tmp_path) ->
     assert "Market Summary" in html
     assert "Executive Market Overview" in html
     assert "Metric Definitions Appendix" in html
-    assert "time-series-chart__svg" in html
+    assert "plotly-chart__figure" in html
     assert '<section class="heatmap">' not in html
-    assert "Backing data" in html
+    assert "Compact plot data" in html
     assert "mock kdb integration" in html
     assert "time-series-chart__placeholder" not in html
     assert "heatmap__placeholder" not in html
     assert "pykx" not in sys.modules
+
+
+
+
 
 
 def test_main_mock_kdb_demo_renders_to_requested_path(tmp_path, capsys) -> None:
@@ -221,6 +225,8 @@ def test_main_without_command_prints_help(capsys) -> None:
     help_text = capsys.readouterr().out
     assert "offline-demo" in help_text
     assert "mock-kdb-demo" in help_text
+    assert "simulated-source-q" not in help_text
+    assert "simulated-source-demo" not in help_text
 
 
 def test_offline_demo_cli_surfaces_option_validation(tmp_path) -> None:

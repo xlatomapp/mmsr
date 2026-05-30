@@ -24,6 +24,8 @@ def test_mock_kdb_demo_executes_q_templates_and_builds_report() -> None:
     )
     assert [page.title for page in result.document.pages] == [
         "Market Summary",
+        "Activity Distribution",
+        "Displayed Liquidity",
         "Reference and Target Daily Trends",
         "Sector, Segment, and Market-Cap Drilldowns",
         "Intraday Detail",
@@ -42,18 +44,25 @@ def test_mock_kdb_demo_executes_q_templates_and_builds_report() -> None:
     assert len(result.comparisons) == 6
     assert len(result.executed_queries) == 6
     assert all("select" in query for query in result.executed_queries)
-    assert all("calc" in query or "MMSR reusable q calculation library" in query for query in result.executed_queries)
+    assert all(
+        "calc" in query or "MMSR reusable q calculation library" in query
+        for query in result.executed_queries
+    )
     assert any("mock_trade" in query for query in result.executed_queries)
     assert any("mock_quote" in query for query in result.executed_queries)
     assert any("2026.05.22;2026.05.22" in query for query in result.executed_queries)
     assert any("2026.04.06;2026.05.21" in query for query in result.executed_queries)
 
     summary_page = result.document.pages[0]
-    trend_page = result.document.pages[1]
-    drilldown_page = result.document.pages[2]
-    detail_page = result.document.pages[3]
+    activity_page = result.document.pages[1]
+    liquidity_page = result.document.pages[2]
+    trend_page = result.document.pages[3]
+    drilldown_page = result.document.pages[4]
+    detail_page = result.document.pages[5]
     assert summary_page.html_blocks[0].title == "Executive Market Overview"
     assert len(summary_page.metric_tables[0].rows) == 6
+    assert len(activity_page.plotly_charts) == 1
+    assert len(liquidity_page.plotly_charts) == 2
     assert len(trend_page.time_series_charts) == 3
     assert trend_page.time_series_charts[0].x_axis_label == "Trading day"
     assert len(drilldown_page.metric_tables[0].rows) == 6
@@ -72,15 +81,19 @@ def test_mock_kdb_demo_report_renders_canonical_report_visuals_and_labels() -> N
     assert "Mock kdb Integration Demo" in html
     assert "mmsr mock kdb sample" in html
     assert "Executive Market Overview" in html
+    assert "Activity Distribution" in html
+    assert "cumulative intraday distribution" in html
+    assert "Displayed Liquidity" in html
+    assert "intraday profile" in html
     assert "Reference and Target Daily Trends" in html
     assert "daily reference-to-target trend" in html
     assert "Sector, Segment, and Market-Cap Drilldowns" in html
     assert "Top group-level drilldowns" in html
     assert "mock kdb integration" in html
     assert "KdbMetricRunner" in html
-    assert "time-series-chart__svg" in html
+    assert "plotly-chart__figure" in html
     assert '<section class="heatmap">' not in html
-    assert "Backing data" in html
+    assert "Compact plot data" in html
     assert "AM opening auction" in html
     assert "Market cap bucket: Small cap" in html
     assert "Reference observation unit: trading day" in html
@@ -105,6 +118,8 @@ def test_mock_kdb_demo_options_can_omit_appendix_and_limit_components() -> None:
 
     assert [page.title for page in document.pages] == [
         "Market Summary",
+        "Activity Distribution",
+        "Displayed Liquidity",
         "Reference and Target Daily Trends",
         "Sector, Segment, and Market-Cap Drilldowns",
         "Intraday Detail",
@@ -112,10 +127,12 @@ def test_mock_kdb_demo_options_can_omit_appendix_and_limit_components() -> None:
     assert len(document.pages[0].metric_cards) == 2
     assert len(document.pages[0].metric_tables[0].rows) == 3
     assert len(document.pages[0].commentary_blocks[0].comments) == 2
-    assert all(len(chart.points) == 1 for chart in document.pages[1].time_series_charts)
-    assert len(document.pages[2].metric_tables[0].rows) == 6
+    assert len(document.pages[1].plotly_charts) == 1
+    assert len(document.pages[2].plotly_charts) == 2
     assert all(len(chart.points) == 1 for chart in document.pages[3].time_series_charts)
-    assert document.pages[3].heatmaps == []
+    assert len(document.pages[4].metric_tables[0].rows) == 6
+    assert all(len(chart.points) == 1 for chart in document.pages[5].time_series_charts)
+    assert document.pages[5].heatmaps == []
 
 
 
@@ -129,6 +146,8 @@ def test_mock_kdb_demo_options_can_disable_drilldown_page() -> None:
 
     assert [page.title for page in document.pages] == [
         "Market Summary",
+        "Activity Distribution",
+        "Displayed Liquidity",
         "Reference and Target Daily Trends",
         "Intraday Detail",
     ]

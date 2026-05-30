@@ -26,6 +26,8 @@ from mmsr.kdb.production import (
 from mmsr.kdb.query_loader import (
     QueryTemplateError,
     load_q_template,
+    render_calculation_function_bootstrap,
+    render_simulated_source_function_bootstrap,
     render_template,
     template_parameters,
 )
@@ -104,6 +106,8 @@ __all__ = [
     "QueryTemplateError",
     "load_q_template",
     "normalize_metric_result",
+    "render_calculation_function_bootstrap",
+    "render_simulated_source_function_bootstrap",
     "render_template",
     "template_for_metric",
     "template_parameters",

@@ -73,6 +73,8 @@ class FakeProductionKdbClient:
 
     def execute(self, query: str, *args):
         self.queries.append(query)
+        if "symbolCount:" in query and "getTrade" in query:
+            return None
         if "getTradingCalendar" in query:
             start, end = args
             if end < date(2026, 5, 1):
@@ -193,6 +195,39 @@ def test_summarize_production_report_plan_queries_calendar_not_metrics(
     assert all("getTradingCalendar" in query for query in FakeProductionKdbClient.queries[1:])
     assert "Reference-data universe function: .sb.mmsr.getRef" in "\n".join(summary.summary_lines())
     assert ".sb.mmsr.getTrade" in "\n".join(summary.summary_lines())
+
+def test_summarize_production_report_plan_can_inject_simulated_sources(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    config_path = tmp_path / "report.yaml"
+    config_path.write_text(CONFIG_YAML, encoding="utf-8")
+    FakeProductionKdbClient.queries = []
+
+    monkeypatch.setattr("mmsr.cli.KdbClient", FakeProductionKdbClient)
+
+    summary = summarize_production_report_plan(
+        config_path=config_path,
+        kdb_host="remote-kdb",
+        kdb_port=5001,
+        symbols=["7203", "6758", "9984"],
+        inject_simulated_sources=True,
+        simulated_source_namespace=".dev.mmsr",
+        simulated_symbol_count=11,
+    )
+
+    assert ".dev.mmsr.symbolCount:11;" in FakeProductionKdbClient.queries[0]
+    assert ".dev.mmsr.getTrade" in FakeProductionKdbClient.queries[0]
+    assert "callTradingCalendar" in FakeProductionKdbClient.queries[1]
+    assert all(
+        ".dev.mmsr.getTradingCalendar" in query
+        for query in FakeProductionKdbClient.queries[2:]
+    )
+    lines = "\n".join(summary.summary_lines())
+    assert "Reference-data universe function: .dev.mmsr.getRef" in lines
+    assert ".dev.mmsr.getTrade" in lines
+    assert ".sb.mmsr.getTrade" not in lines
+
 
 def test_summarize_production_report_plan_uses_symbol_function_without_cli_symbols(
     tmp_path,
@@ -327,6 +362,44 @@ def test_main_preflight_command_prints_diagnostics(tmp_path, monkeypatch, capsys
     assert "Preflight status: passed" in output
     assert "Sample metric: volume" in output
     assert "Required output columns:" in output
+
+def test_main_preflight_command_can_inject_simulated_sources(
+    tmp_path,
+    monkeypatch,
+    capsys,
+) -> None:
+    config_path = tmp_path / "report.yaml"
+    config_path.write_text(CONFIG_YAML, encoding="utf-8")
+    FakeProductionKdbClient.queries = []
+
+    monkeypatch.setattr("mmsr.cli.KdbClient", FakeProductionKdbClient)
+
+    exit_code = main(
+        [
+            "preflight",
+            "--config",
+            str(config_path),
+            "--kdb-host",
+            "remote-kdb",
+            "--kdb-port",
+            "5001",
+            "--symbol",
+            "7203",
+            "--inject-simulated-sources",
+            "--simulated-source-namespace",
+            ".dev.mmsr",
+            "--simulated-symbol-count",
+            "13",
+        ]
+    )
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "Preflight status: passed" in output
+    assert ".dev.mmsr.symbolCount:13;" in FakeProductionKdbClient.queries[0]
+    assert ".dev.mmsr.getTrade" in FakeProductionKdbClient.queries[-1]
+    assert ".sb.mmsr.getTrade" not in FakeProductionKdbClient.queries[-1]
+
 
 def test_main_preflight_command_accepts_metric_selection(
     tmp_path,

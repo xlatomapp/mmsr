@@ -125,6 +125,33 @@ def _is_valid_parameter_name(name: str) -> bool:
 
 
 
+
+def _validate_q_namespace(value: str, field_name: str) -> str:
+    """Validate and return a q namespace used for rendered q bootstraps."""
+
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{field_name} must be a non-empty string")
+    if not value.startswith("."):
+        raise ValueError(f"{field_name} must start with '.'")
+    if re.fullmatch(
+        r"\.[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*",
+        value,
+    ) is None:
+        raise ValueError(f"invalid {field_name}: {value!r}")
+    return value
+
+
+
+def _validate_positive_int(value: int, field_name: str) -> int:
+    """Validate positive integer q bootstrap options."""
+
+    if not isinstance(value, int):
+        raise TypeError(f"{field_name} must be an integer")
+    if value < 1:
+        raise ValueError(f"{field_name} must be positive")
+    return value
+
+
 def _shared_q_library_template() -> str:
     """Return the single canonical q library template."""
 
@@ -138,16 +165,47 @@ def render_calculation_function_bootstrap(calculation_namespace: str) -> str:
     configured namespace so metric aggregation logic remains owned by the
     package rather than by the user's source-data boundary.
     """
-    if not isinstance(calculation_namespace, str) or not calculation_namespace:
-        raise ValueError("calculation_namespace must be a non-empty string")
-    if not calculation_namespace.startswith("."):
-        raise ValueError("calculation_namespace must start with '.'")
-    if not re.fullmatch(
-        r"\.[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*",
+
+    calculation_namespace = _validate_q_namespace(
         calculation_namespace,
-    ):
-        raise ValueError(f"invalid calculation_namespace: {calculation_namespace!r}")
+        "calculation_namespace",
+    )
     return render_template(
         _shared_q_library_template(),
         {"calculation_namespace": calculation_namespace},
+    )
+
+
+def _simulated_source_q_library_template() -> str:
+    """Return the deterministic dev/debug q source-function template."""
+
+    return load_q_library_template("mmsr_simulated_sources.q.j2")
+
+
+def render_simulated_source_function_bootstrap(
+    source_namespace: str = ".sim.mmsr",
+    *,
+    symbol_count: int = 240,
+) -> str:
+    """Render deterministic q source functions for development/debugging.
+
+    The rendered q defines ``getTradingCalendar``, ``getRef``, ``getTrade``,
+    ``getQuote``, ``getPtsTrade``, ``getPtsQuote``, and ``getPrimaryQuote`` in
+    ``source_namespace``. These functions implement the same source boundary as
+    the production runner but synthesize deterministic rows so a developer can
+    generate reports without production trade/quote/reference tables.
+
+    ``symbol_count`` controls the default q universe size baked into the
+    bootstrap file. Operators may still override ``<namespace>.symbolCount`` in
+    q after loading the generated file for ad hoc stress tests.
+    """
+
+    source_namespace = _validate_q_namespace(source_namespace, "source_namespace")
+    symbol_count_value = _validate_positive_int(symbol_count, "symbol_count")
+    return render_template(
+        _simulated_source_q_library_template(),
+        {
+            "source_namespace": source_namespace,
+            "symbol_count": str(symbol_count_value),
+        },
     )

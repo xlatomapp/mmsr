@@ -1,0 +1,121 @@
+/ MMSR deterministic simulated kdb source functions for dev/debug.
+/ These functions are intentionally small and deterministic. They expose the
+/ same source boundary expected by the production report-day runner:
+/   getTradingCalendar[start;end]
+/   getRef[date]
+/   getTrade[date;refs]
+/   getQuote[date;refs]
+/   getPtsTrade[date;refs]
+/   getPtsQuote[date;refs]
+/   getPrimaryQuote[date;refs]
+/ They are for report development and debugging only, not market evidence.
+
+{{ source_namespace }}.symbolCount:{{ symbol_count }};
+{{ source_namespace }}.venues:`SBIJ`JNX`Cboe;
+{{ source_namespace }}.primaryVenue:`TSE;
+{{ source_namespace }}.topixCapGroups:`Large`Mid`Small;
+{{ source_namespace }}.marketSegments:`Prime`Standard;
+{{ source_namespace }}.sectors:`Banks`Technology`Autos`Retail`Pharma`Industrials;
+{{ source_namespace }}.intradayTimes:09:00:00.000 09:30:00.000 10:00:00.000 10:30:00.000 11:00:00.000 11:29:00.000 12:30:00.000 13:00:00.000 13:30:00.000 14:00:00.000 14:30:00.000 15:00:00.000 15:25:00.000;
+{{ source_namespace }}.intradaySessions:`am`am`am`am`am`am`pm`pm`pm`pm`pm`pm`pm;
+{{ source_namespace }}.intradayAuctions:1 0 0 0 0 2 1 0 0 0 0 0 2;
+
+{{ source_namespace }}.weekdayDates:{[start;end]
+    if[start>end; :0#start];
+    dates:start + til 1 + end - start;
+    / q date 2000.01.01 has integer value 0 and was a Saturday.
+    dates where not ((`int$dates) mod 7) in 0 1
+    };
+
+{{ source_namespace }}.getTradingCalendar:{[start;end]
+    {{ source_namespace }}.weekdayDates[start;end]
+    };
+
+{{ source_namespace }}.symbols:{[n]
+    `$"SIM",/:string 1 + til n
+    };
+
+{{ source_namespace }}.getRef:{[runDate]
+    n:{{ source_namespace }}.symbolCount;
+    syms:{{ source_namespace }}.symbols[n];
+    ([] date:n#runDate;
+        sym:syms;
+        ric:syms;
+        topixCapGrp:n#{{ source_namespace }}.topixCapGroups;
+        market_segment:n#{{ source_namespace }}.marketSegments;
+        sector:n#{{ source_namespace }}.sectors;
+        lot_size:n#100)
+    };
+
+{{ source_namespace }}.symTimeGrid:{[runDate;refs]
+    syms:exec sym from refs;
+    nSyms:count syms;
+    times:{{ source_namespace }}.intradayTimes;
+    sessions:{{ source_namespace }}.intradaySessions;
+    auctions:{{ source_namespace }}.intradayAuctions;
+    nTimes:count times;
+    ([] date:(nSyms*nTimes)#runDate;
+        time:raze {[nSyms;x] nSyms#x}[nSyms] each times;
+        sym:raze nTimes#enlist syms;
+        session:raze {[nSyms;x] nSyms#x}[nSyms] each sessions;
+        auction:raze {[nSyms;x] nSyms#x}[nSyms] each auctions)
+    };
+
+{{ source_namespace }}.withRowNumber:{[t]
+    update row:til count sym from t
+    };
+
+{{ source_namespace }}.simMid:{[rows;offset]
+    1000f + offset + (0.25 * rows mod 41)
+    };
+
+{{ source_namespace }}.getTrade:{[runDate;refs]
+    t:{{ source_namespace }}.withRowNumber {{ source_namespace }}.symTimeGrid[runDate;refs];
+    update
+        tradePrice:{{ source_namespace }}.simMid[row;0f],
+        tradeSize:100 * 1 + row mod 25
+    from t
+    };
+
+{{ source_namespace }}.quoteFromGrid:{[runDate;refs;venue]
+    q:{{ source_namespace }}.withRowNumber {{ source_namespace }}.symTimeGrid[runDate;refs];
+    mid:{{ source_namespace }}.simMid[q`row;0.5f];
+    spread:0.5f + 0.05f * q`row mod 10;
+    update
+        venue:venue,
+        bidPrice:mid - spread % 2,
+        askPrice:mid + spread % 2,
+        bidSize:1000 * 1 + row mod 30,
+        askSize:1000 * 1 + (row + 7) mod 30
+    from q
+    };
+
+{{ source_namespace }}.getQuote:{[runDate;refs]
+    {{ source_namespace }}.quoteFromGrid[runDate;refs;{{ source_namespace }}.primaryVenue]
+    };
+
+{{ source_namespace }}.getPrimaryQuote:{[runDate;refs]
+    {{ source_namespace }}.quoteFromGrid[runDate;refs;{{ source_namespace }}.primaryVenue]
+    };
+
+{{ source_namespace }}.getPtsTrade:{[runDate;refs]
+    t:{{ source_namespace }}.withRowNumber {{ source_namespace }}.symTimeGrid[runDate;refs];
+    update
+        venue:(count t)#{{ source_namespace }}.venues,
+        tradePrice:{{ source_namespace }}.simMid[row;1.0f],
+        tradeSize:100 * 1 + (row + 3) mod 25
+    from t
+    };
+
+{{ source_namespace }}.getPtsQuote:{[runDate;refs]
+    q:{{ source_namespace }}.withRowNumber {{ source_namespace }}.symTimeGrid[runDate;refs];
+    mid:{{ source_namespace }}.simMid[q`row;1.25f];
+    spread:0.65f + 0.06f * q`row mod 12;
+    update
+        venue:(count q)#{{ source_namespace }}.venues,
+        bidPrice:mid - spread % 2,
+        askPrice:mid + spread % 2,
+        bidSize:900 * 1 + row mod 28,
+        askSize:900 * 1 + (row + 5) mod 28
+    from q
+    };

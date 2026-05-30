@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Sequence
 import logging
@@ -22,6 +23,7 @@ from mmsr.kdb.production import (
     KdbProductionPreflight,
     KdbProductionPreflightResult,
 )
+from mmsr.kdb.query_loader import render_simulated_source_function_bootstrap
 from mmsr.kdb.runner import KdbMetricRunner
 from mmsr.logging import configure_logging
 from mmsr.metrics.registry import build_default_registry
@@ -50,7 +52,6 @@ app = typer.Typer(
 )
 
 LOGGER = logging.getLogger(__name__)
-
 
 
 def build_cli_app() -> typer.Typer:
@@ -278,6 +279,8 @@ def _mock_kdb_demo_command(
     typer.echo(f"Rendered mock-kdb integration report: {output_path}")
     return 0
 
+
+
 @app.command(
     "plan",
     help=(
@@ -335,6 +338,28 @@ def _plan_command(
         "--log-level",
         help="Explicit Python log level: DEBUG, INFO, WARNING, ERROR, or CRITICAL.",
     ),
+    inject_simulated_sources: bool = typer.Option(
+        False,
+        "--inject-simulated-sources",
+        help=(
+            "Install deterministic simulated source getter functions into the "
+            "connected kdb process before planning and route calendar/reference/"
+            "trade/quote source calls to that namespace."
+        ),
+    ),
+    simulated_source_namespace: str | None = typer.Option(
+        None,
+        "--simulated-source-namespace",
+        help=(
+            "q namespace for injected simulated source getters. Defaults to the "
+            "configured raw_data_functions namespace."
+        ),
+    ),
+    simulated_symbol_count: int = typer.Option(
+        240,
+        "--simulated-symbol-count",
+        help="Number of synthetic symbols baked into the injected simulated q source functions.",
+    ),
 ) -> int:
     """Print target/reference execution scope without running metric q."""
 
@@ -347,6 +372,9 @@ def _plan_command(
         kdb_username=kdb_username,
         kdb_password=kdb_password,
         symbols=symbol,
+        inject_simulated_sources=inject_simulated_sources,
+        simulated_source_namespace=simulated_source_namespace,
+        simulated_symbol_count=simulated_symbol_count,
     )
     for line in summary.summary_lines():
         typer.echo(line)
@@ -419,6 +447,28 @@ def _render_command(
         "--log-level",
         help="Explicit Python log level: DEBUG, INFO, WARNING, ERROR, or CRITICAL.",
     ),
+    inject_simulated_sources: bool = typer.Option(
+        False,
+        "--inject-simulated-sources",
+        help=(
+            "Install deterministic simulated source getter functions into the "
+            "connected kdb process before planning and route calendar/reference/"
+            "trade/quote source calls to that namespace."
+        ),
+    ),
+    simulated_source_namespace: str | None = typer.Option(
+        None,
+        "--simulated-source-namespace",
+        help=(
+            "q namespace for injected simulated source getters. Defaults to the "
+            "configured raw_data_functions namespace."
+        ),
+    ),
+    simulated_symbol_count: int = typer.Option(
+        240,
+        "--simulated-symbol-count",
+        help="Number of synthetic symbols baked into the injected simulated q source functions.",
+    ),
 ) -> int:
     """Render a production report by executing configured kdb source functions."""
 
@@ -433,6 +483,9 @@ def _render_command(
         kdb_password=kdb_password,
         symbols=symbol,
         template_dir=template_dir,
+        inject_simulated_sources=inject_simulated_sources,
+        simulated_source_namespace=simulated_source_namespace,
+        simulated_symbol_count=simulated_symbol_count,
     )
     typer.echo(f"Rendered production kdb-backed report: {output_path}")
     return 0
@@ -502,6 +555,28 @@ def _preflight_command(
         "--log-level",
         help="Explicit Python log level: DEBUG, INFO, WARNING, ERROR, or CRITICAL.",
     ),
+    inject_simulated_sources: bool = typer.Option(
+        False,
+        "--inject-simulated-sources",
+        help=(
+            "Install deterministic simulated source getter functions into the "
+            "connected kdb process before planning and route calendar/reference/"
+            "trade/quote source calls to that namespace."
+        ),
+    ),
+    simulated_source_namespace: str | None = typer.Option(
+        None,
+        "--simulated-source-namespace",
+        help=(
+            "q namespace for injected simulated source getters. Defaults to the "
+            "configured raw_data_functions namespace."
+        ),
+    ),
+    simulated_symbol_count: int = typer.Option(
+        240,
+        "--simulated-symbol-count",
+        help="Number of synthetic symbols baked into the injected simulated q source functions.",
+    ),
 ) -> int:
     """Run one bounded production metric step and print diagnostics."""
 
@@ -515,6 +590,9 @@ def _preflight_command(
         kdb_password=kdb_password,
         symbols=symbol,
         metric_name=metric,
+        inject_simulated_sources=inject_simulated_sources,
+        simulated_source_namespace=simulated_source_namespace,
+        simulated_symbol_count=simulated_symbol_count,
     )
     for line in result.summary_lines():
         typer.echo(line)
@@ -548,6 +626,107 @@ def _kdb_symbol_source(
     )
 
 
+def _simulated_source_namespace_for_config(
+    report_config: ReportConfig,
+    simulated_source_namespace: str | None,
+) -> str:
+    """Return the q namespace to install and route simulated getters through."""
+
+    if simulated_source_namespace is not None:
+        return simulated_source_namespace
+    return report_config.kdb.raw_data_functions.namespace
+
+
+def _report_config_with_simulated_source_functions(
+    report_config: ReportConfig,
+    *,
+    source_namespace: str,
+) -> ReportConfig:
+    """Route all source-function boundaries to injected simulated q getters."""
+
+    simulated_raw_functions = replace(
+        report_config.kdb.raw_data_functions,
+        namespace=source_namespace,
+        trade="getTrade",
+        quote="getQuote",
+        pts_trade="getPtsTrade",
+        pts_quote="getPtsQuote",
+        primary_quote="getPrimaryQuote",
+        reference_data="getRef",
+        venue_trade=None,
+        venue_quote=None,
+    )
+    simulated_kdb = replace(
+        report_config.kdb,
+        raw_data_functions=simulated_raw_functions,
+    )
+    simulated_calendar = replace(
+        report_config.calendar,
+        source="kdb",
+        namespace=source_namespace,
+        function="getTradingCalendar",
+    )
+    simulated_reference = replace(
+        report_config.reference_data,
+        source="kdb",
+        namespace=source_namespace,
+        function="getRef",
+    )
+    simulated_symbols = replace(
+        report_config.symbols,
+        source="kdb",
+        namespace=source_namespace,
+        function="getRef",
+    )
+    return replace(
+        report_config,
+        kdb=simulated_kdb,
+        calendar=simulated_calendar,
+        reference_data=simulated_reference,
+        symbols=simulated_symbols,
+    )
+
+
+def _maybe_inject_simulated_source_functions(
+    *,
+    client: KdbClient,
+    report_config: ReportConfig,
+    inject_simulated_sources: bool,
+    simulated_source_namespace: str | None,
+    simulated_symbol_count: int,
+) -> ReportConfig:
+    """Optionally install simulated q getters and return the routed config.
+
+    The kdb process can still be remote. This helper only sends a q bootstrap to
+    the configured connection before normal plan/preflight/render execution; it
+    does not switch to the local Python simulated client.
+    """
+
+    if not inject_simulated_sources:
+        return report_config
+
+    source_namespace = _simulated_source_namespace_for_config(
+        report_config,
+        simulated_source_namespace,
+    )
+    LOGGER.info(
+        "Injecting simulated source functions into remote kdb namespace %s "
+        "with symbol_count=%s",
+        source_namespace,
+        simulated_symbol_count,
+    )
+    client.execute(
+        render_simulated_source_function_bootstrap(
+            source_namespace,
+            symbol_count=simulated_symbol_count,
+        )
+    )
+    return _report_config_with_simulated_source_functions(
+        report_config,
+        source_namespace=source_namespace,
+    )
+
+
 def summarize_production_report_plan(
     *,
     config_path: str | Path,
@@ -556,6 +735,9 @@ def summarize_production_report_plan(
     kdb_username: str | None = None,
     kdb_password: str | None = None,
     symbols: Sequence[str] | None = None,
+    inject_simulated_sources: bool = False,
+    simulated_source_namespace: str | None = None,
+    simulated_symbol_count: int = 240,
 ) -> KdbProductionPlanSummary:
     """Return a production execution summary without executing metric q."""
 
@@ -575,6 +757,13 @@ def summarize_production_report_plan(
             username=kdb_username,
             password=kdb_password,
         )
+    )
+    report_config = _maybe_inject_simulated_source_functions(
+        client=client,
+        report_config=report_config,
+        inject_simulated_sources=inject_simulated_sources,
+        simulated_source_namespace=simulated_source_namespace,
+        simulated_symbol_count=simulated_symbol_count,
     )
     calendar = _kdb_calendar_source(client, report_config)
     symbol_source = _kdb_symbol_source(client, report_config)
@@ -601,6 +790,9 @@ def preflight_production_report(
     kdb_password: str | None = None,
     symbols: Sequence[str] | None = None,
     metric_name: str | None = None,
+    inject_simulated_sources: bool = False,
+    simulated_source_namespace: str | None = None,
+    simulated_symbol_count: int = 240,
 ) -> KdbProductionPreflightResult:
     """Run a bounded production preflight against the configured kdb endpoint."""
 
@@ -620,6 +812,13 @@ def preflight_production_report(
             username=kdb_username,
             password=kdb_password,
         )
+    )
+    report_config = _maybe_inject_simulated_source_functions(
+        client=client,
+        report_config=report_config,
+        inject_simulated_sources=inject_simulated_sources,
+        simulated_source_namespace=simulated_source_namespace,
+        simulated_symbol_count=simulated_symbol_count,
     )
     calendar = _kdb_calendar_source(client, report_config)
     symbol_source = _kdb_symbol_source(client, report_config)
@@ -648,6 +847,9 @@ def render_production_report_file(
     kdb_password: str | None = None,
     symbols: Sequence[str] | None = None,
     template_dir: str | Path | None = None,
+    inject_simulated_sources: bool = False,
+    simulated_source_namespace: str | None = None,
+    simulated_symbol_count: int = 240,
 ) -> Path:
     """Render a production report through the production kdb executor.
 
@@ -677,6 +879,13 @@ def render_production_report_file(
             username=kdb_username,
             password=kdb_password,
         )
+    )
+    report_config = _maybe_inject_simulated_source_functions(
+        client=client,
+        report_config=report_config,
+        inject_simulated_sources=inject_simulated_sources,
+        simulated_source_namespace=simulated_source_namespace,
+        simulated_symbol_count=simulated_symbol_count,
     )
     calendar = _kdb_calendar_source(client, report_config)
     symbol_source = _kdb_symbol_source(client, report_config)
@@ -894,7 +1103,10 @@ def _offline_demo_options_from_values(
             defaults.max_metric_cards,
         ),
         max_comments=_default_when_none(max_comments, defaults.max_comments),
-        max_table_rows=max_table_rows,
+        max_table_rows=_default_when_none(
+            max_table_rows,
+            defaults.max_table_rows,
+        ),
         max_chart_points=max_chart_points,
         max_heatmap_cells=max_heatmap_cells,
         include_intraday_heatmaps=include_intraday_heatmaps,
@@ -937,7 +1149,10 @@ def _mock_kdb_demo_options_from_values(
             defaults.max_metric_cards,
         ),
         max_comments=_default_when_none(max_comments, defaults.max_comments),
-        max_table_rows=max_table_rows,
+        max_table_rows=_default_when_none(
+            max_table_rows,
+            defaults.max_table_rows,
+        ),
         max_chart_points=max_chart_points,
         max_heatmap_cells=max_heatmap_cells,
         include_intraday_heatmaps=include_intraday_heatmaps,
@@ -950,7 +1165,7 @@ def _mock_kdb_demo_options_from_values(
     )
 
 
-def _default_when_none(value: int | None, default: int) -> int:
+def _default_when_none(value: int | None, default: int | None) -> int | None:
     if value is None:
         return default
     return value

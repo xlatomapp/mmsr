@@ -8,6 +8,7 @@ from mmsr.report.components import (
     MetricCard,
     MetricTable,
     MetricTableRow,
+    PlotlyChart,
     ReportBranding,
     ReportDocument,
     ReportPage,
@@ -40,9 +41,11 @@ from mmsr.report.overview import (
 )
 from mmsr.report.sections import (
     ComparisonSectionOptions,
+    build_activity_intraday_distribution_chart,
     build_comparison_metric_table,
     build_comparison_report_page,
     build_heatmap,
+    build_reference_target_intraday_profile_chart,
     build_time_series_chart,
 )
 
@@ -89,6 +92,7 @@ __all__ = [
     "MetricCard",
     "MetricTable",
     "MetricTableRow",
+    "PlotlyChart",
     "TimeSeriesChart",
     "TimeSeriesChartPoint",
     "MetricDefinitionsAppendixOptions",
@@ -101,11 +105,13 @@ __all__ = [
     "ReportDocument",
     "ReportPage",
     "append_metric_definitions_appendix",
+    "build_activity_intraday_distribution_chart",
     "build_comparison_metric_table",
     "build_comparison_report_page",
     "build_drilldown_report_page",
     "build_executive_market_overview_block",
     "build_heatmap",
+    "build_reference_target_intraday_profile_chart",
     "build_market_monitor_report",
     "build_metric_definitions_appendix_page",
     "build_symbol_anomaly_page",

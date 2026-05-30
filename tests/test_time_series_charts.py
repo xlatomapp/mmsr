@@ -15,8 +15,18 @@ from mmsr.report.metric_docs import (
     append_metric_definitions_appendix,
     collect_metric_definitions_from_pages,
 )
-from mmsr.report.render_html import render_report, render_time_series_chart
-from mmsr.report.sections import build_intraday_time_bucket_chart, build_reference_target_trend_chart, build_time_series_chart
+from mmsr.report.render_html import (
+    render_plotly_chart,
+    render_report,
+    render_time_series_chart,
+)
+from mmsr.report.sections import (
+    build_activity_intraday_distribution_chart,
+    build_intraday_time_bucket_chart,
+    build_reference_target_intraday_profile_chart,
+    build_reference_target_trend_chart,
+    build_time_series_chart,
+)
 
 
 QUOTED_SPREAD_BPS = next(
@@ -57,13 +67,14 @@ def test_time_series_chart_renders_metric_help_and_period_context() -> None:
     assert "venue=TSE" in html
     assert "12.4000 bps" in html
     assert "Sample size: 120" in html
-    assert "time-series-chart__svg" in html
-    assert "<polyline" in html
-    assert "Backing data" in html
+    assert "plotly-chart__figure" in html
+    assert '"mode":"lines+markers"' in html
+    assert "<polyline" not in html
+    assert "Compact plot data" in html
     assert "time-series-chart__placeholder" not in html
 
 
-def test_build_time_series_chart_preserves_observation_order_and_bucket_context() -> None:
+def test_build_time_series_chart_preserves_order_and_bucket_context() -> None:
     series = MetricTimeSeries(
         metric_name="quoted_spread_bps",
         observations=(
@@ -104,15 +115,16 @@ def test_build_time_series_chart_preserves_observation_order_and_bucket_context(
         "2026-05-22",
         "2026-05-22",
     ]
-    assert [point.time_bucket_text for point in chart.points] == ["AM opening auction", "09:05"]
+    assert [point.time_bucket_text for point in chart.points] == [
+        "AM opening auction",
+        "09:05",
+    ]
     assert [point.series_text for point in chart.points] == ["Venue: TSE", "Venue: ODX"]
     assert chart.points[0].value_text == "12.4000 bps"
     assert chart.points[1].value_text == "not available"
     assert chart.points[0].metadata_text == "Sample size: 120"
     assert chart.points[0].value == 12.4
     assert chart.points[1].value is None
-
-
 
 
 def test_build_intraday_time_bucket_chart_uses_bucket_only_x_axis() -> None:
@@ -206,6 +218,371 @@ def test_build_reference_target_trend_chart_spans_reference_and_target_dates() -
     assert "Period: reference" in chart.points[0].metadata_text
     assert "Period: target" in chart.points[1].metadata_text
 
+
+def test_intraday_profile_chart_embeds_box_stats_and_capped_group_deltas() -> None:
+    reference_series = MetricTimeSeries(
+        metric_name="quoted_spread_bps",
+        observations=(
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 20),
+                time_bucket="AMO",
+                group={"market_cap_bucket": "Large"},
+                value=10.0,
+            ),
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 20),
+                time_bucket="09:00-09:05",
+                group={"market_cap_bucket": "Large"},
+                value=12.0,
+            ),
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 21),
+                time_bucket="AMO",
+                group={"market_cap_bucket": "Large"},
+                value=14.0,
+            ),
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 21),
+                time_bucket="09:00-09:05",
+                group={"market_cap_bucket": "Large"},
+                value=18.0,
+            ),
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 21),
+                time_bucket="AMO",
+                group={"market_cap_bucket": "Small"},
+                value=30.0,
+            ),
+        ),
+    )
+    target_series = MetricTimeSeries(
+        metric_name="quoted_spread_bps",
+        observations=(
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 22),
+                time_bucket="AMO",
+                group={"market_cap_bucket": "Large"},
+                value=13.0,
+            ),
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 22),
+                time_bucket="09:00-09:05",
+                group={"market_cap_bucket": "Large"},
+                value=19.0,
+            ),
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 22),
+                time_bucket="AMO",
+                group={"market_cap_bucket": "Small"},
+                value=31.0,
+            ),
+        ),
+    )
+
+    chart = build_reference_target_intraday_profile_chart(
+        "Quoted Spread intraday profile",
+        reference_series=reference_series,
+        target_series=target_series,
+        metric_definition=QUOTED_SPREAD_BPS,
+        group_by=["market_cap_bucket"],
+        max_groups=1,
+    )
+    traces = chart.figure["data"]
+
+    assert traces[0]["type"] == "box"
+    assert traces[0]["boxpoints"] is False
+    assert "y" not in traces[0]
+    assert traces[0]["q1"] == [13.0, 13.5]
+    assert traces[0]["median"] == [16.0, 15.0]
+    assert traces[0]["q3"] == [19.0, 16.5]
+    assert traces[1]["type"] == "scatter"
+    assert traces[1]["marker"]["symbol"] == "circle"
+    assert traces[1]["y"] == [22.0, 19.0]
+    assert traces[2]["type"] == "bar"
+    assert traces[2]["orientation"] == "h"
+    assert traces[2]["y"] == ["Market cap bucket: Large cap"]
+    assert "Raw observation rows" in chart.compact_data_summary()
+    html = render_plotly_chart(chart)
+    assert "Compact plot data" in html
+    assert "<table" not in html
+
+
+def test_activity_distribution_chart_embeds_compact_plotly_statistics() -> None:
+    reference_series = MetricTimeSeries(
+        metric_name="volume",
+        observations=(
+            MetricObservation(
+                metric_name="volume",
+                date=date(2026, 5, 20),
+                time_bucket="AMO",
+                group={},
+                value=100.0,
+            ),
+            MetricObservation(
+                metric_name="volume",
+                date=date(2026, 5, 20),
+                time_bucket="09:00-09:05",
+                group={},
+                value=300.0,
+            ),
+            MetricObservation(
+                metric_name="volume",
+                date=date(2026, 5, 21),
+                time_bucket="AMO",
+                group={},
+                value=200.0,
+            ),
+            MetricObservation(
+                metric_name="volume",
+                date=date(2026, 5, 21),
+                time_bucket="09:00-09:05",
+                group={},
+                value=200.0,
+            ),
+        ),
+    )
+    target_series = MetricTimeSeries(
+        metric_name="volume",
+        observations=(
+            MetricObservation(
+                metric_name="volume",
+                date=date(2026, 5, 22),
+                time_bucket="AMO",
+                group={},
+                value=150.0,
+            ),
+            MetricObservation(
+                metric_name="volume",
+                date=date(2026, 5, 22),
+                time_bucket="09:00-09:05",
+                group={},
+                value=450.0,
+            ),
+        ),
+    )
+
+    chart = build_activity_intraday_distribution_chart(
+        "Volume activity distribution",
+        reference_series=reference_series,
+        target_series=target_series,
+        metric_definition=VOLUME,
+    )
+    figure = chart.figure
+    traces = figure["data"]
+
+    assert traces[0]["type"] == "box"
+    assert traces[0]["boxpoints"] is False
+    assert "y" not in traces[0]
+    assert traces[0]["q1"] == [31.25, 100.0]
+    assert traces[0]["median"] == [37.5, 100.0]
+    assert traces[0]["q3"] == [43.75, 100.0]
+    assert traces[1]["type"] == "scatter"
+    assert traces[1]["mode"] == "lines+markers"
+    assert traces[1]["marker"]["symbol"] == "circle"
+    assert traces[1]["y"] == [25.0, 100.0]
+    assert any(
+        trace.get("type") == "bar" and trace.get("orientation") == "h"
+        for trace in traces
+    )
+    assert "Raw observation rows" in chart.compact_data_summary()
+    html = render_plotly_chart(chart)
+    assert "Compact plot data" in html
+    assert "<table" not in html
+
+
+
+def test_activity_distribution_current_line_uses_period_mean_and_skips_nulls() -> None:
+    reference_series = MetricTimeSeries(
+        metric_name="volume",
+        observations=(
+            MetricObservation(
+                metric_name="volume",
+                date=date(2026, 5, 20),
+                time_bucket="AMO",
+                group={},
+                value=100.0,
+            ),
+            MetricObservation(
+                metric_name="volume",
+                date=date(2026, 5, 20),
+                time_bucket="09:00-09:05",
+                group={},
+                value=300.0,
+            ),
+            MetricObservation(
+                metric_name="volume",
+                date=date(2026, 5, 21),
+                time_bucket="AMO",
+                group={},
+                value=200.0,
+            ),
+            MetricObservation(
+                metric_name="volume",
+                date=date(2026, 5, 21),
+                time_bucket="09:00-09:05",
+                group={},
+                value=200.0,
+            ),
+            MetricObservation(
+                metric_name="volume",
+                date=date(2026, 5, 22),
+                time_bucket="AMO",
+                group={},
+                value=None,
+            ),
+            MetricObservation(
+                metric_name="volume",
+                date=date(2026, 5, 22),
+                time_bucket="09:00-09:05",
+                group={},
+                value=float("nan"),
+            ),
+        ),
+    )
+    target_series = MetricTimeSeries(
+        metric_name="volume",
+        observations=(
+            MetricObservation(
+                metric_name="volume",
+                date=date(2026, 5, 23),
+                time_bucket="AMO",
+                group={},
+                value=100.0,
+            ),
+            MetricObservation(
+                metric_name="volume",
+                date=date(2026, 5, 23),
+                time_bucket="09:00-09:05",
+                group={},
+                value=300.0,
+            ),
+            MetricObservation(
+                metric_name="volume",
+                date=date(2026, 5, 24),
+                time_bucket="AMO",
+                group={},
+                value=300.0,
+            ),
+            MetricObservation(
+                metric_name="volume",
+                date=date(2026, 5, 24),
+                time_bucket="09:00-09:05",
+                group={},
+                value=100.0,
+            ),
+            MetricObservation(
+                metric_name="volume",
+                date=date(2026, 5, 24),
+                time_bucket="09:00-09:05",
+                group={},
+                value=None,
+            ),
+        ),
+    )
+
+    chart = build_activity_intraday_distribution_chart(
+        "Volume activity distribution",
+        reference_series=reference_series,
+        target_series=target_series,
+        metric_definition=VOLUME,
+    )
+    traces = chart.figure["data"]
+
+    assert traces[0]["q1"] == [31.25, 100.0]
+    assert traces[0]["median"] == [37.5, 100.0]
+    assert traces[0]["q3"] == [43.75, 100.0]
+    assert traces[1]["name"] == "Current mean cumulative %"
+    assert traces[1]["y"] == [50.0, 100.0]
+    assert "null-filtered percentile box statistics" in chart.compact_data_summary()
+    assert "mean cumulative percentages" in chart.compact_data_summary()
+
+
+def test_intraday_profile_current_mean_and_reference_percentiles_skip_nulls() -> None:
+    reference_series = MetricTimeSeries(
+        metric_name="quoted_spread_bps",
+        observations=(
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 20),
+                time_bucket="AMO",
+                group={},
+                value=10.0,
+            ),
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 20),
+                time_bucket="AMO",
+                group={},
+                value=None,
+            ),
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 21),
+                time_bucket="AMO",
+                group={},
+                value=30.0,
+            ),
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 22),
+                time_bucket="AMO",
+                group={},
+                value=float("nan"),
+            ),
+        ),
+    )
+    target_series = MetricTimeSeries(
+        metric_name="quoted_spread_bps",
+        observations=(
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 23),
+                time_bucket="AMO",
+                group={},
+                value=10.0,
+            ),
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 23),
+                time_bucket="AMO",
+                group={},
+                value=20.0,
+            ),
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 23),
+                time_bucket="AMO",
+                group={},
+                value=None,
+            ),
+        ),
+    )
+
+    chart = build_reference_target_intraday_profile_chart(
+        "Quoted Spread intraday profile",
+        reference_series=reference_series,
+        target_series=target_series,
+        metric_definition=QUOTED_SPREAD_BPS,
+    )
+    traces = chart.figure["data"]
+
+    assert traces[0]["q1"] == [15.0]
+    assert traces[0]["median"] == [20.0]
+    assert traces[0]["q3"] == [25.0]
+    assert traces[1]["name"] == "Current mean profile"
+    assert traces[1]["y"] == [15.0]
+    assert "null-filtered percentile box statistics" in chart.compact_data_summary()
+    assert "per-bucket means" in chart.compact_data_summary()
+
+
 def test_report_renders_time_series_charts_and_appendix_collects_definition() -> None:
     document = ReportDocument(
         title="MMSR",
@@ -298,7 +675,8 @@ def test_time_series_chart_parses_numeric_display_text_for_hand_built_points() -
 
     assert chart.points[0].numeric_value() == 1000.0
     assert chart.has_svg_plot()
-    assert "time-series-chart__svg" in render_time_series_chart(chart)
+    assert chart.has_plotly_plot()
+    assert "plotly-chart__figure" in render_time_series_chart(chart)
 
 
 def test_build_time_series_chart_validates_inputs() -> None:

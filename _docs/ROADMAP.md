@@ -587,6 +587,122 @@ layer or requiring live kdb access.
 - Tests cover market-cap, segment, sector, custom key, missing-key, status, and
   symbol-scoped edge cases.
 
+
+## Milestone 9C: compact Plotly report HTML for kdb-scale data
+
+**Goal:** Rework the production HTML report so real kdb-backed runs stay
+readable and compact by default, with Plotly visuals built from aggregated
+report facts instead of large raw backing-data tables.
+
+**Implemented so far:**
+
+- Time-series chart components emit compact Plotly figure specifications instead
+  of inline SVG-only visuals in the default full-report template.
+- The default HTML template loads Plotly once and renders each chart from a
+  colocated JSON specification.
+- Report chart partials expose metric help text and a compact plot-data summary
+  rather than dumping every backing observation into a table.
+- A generic `PlotlyChart` report component supports metric-aware custom figures
+  such as box/whisker distributions and stacked bars.
+- The market monitor report now includes an `Activity Distribution` page when
+  current and reference activity series are present.
+- Turnover, volume, and trade-count activity diagnostics render current
+  cumulative intraday percent as a line with circle markers, historical
+  cumulative percent as per-bucket box/whisker statistics, and reference/current
+  session or auction share as horizontal stacked bars.
+- Activity distribution charts intentionally skip symbol-scoped series so the
+  default report does not generate single-stock plots.
+- The market monitor report now includes a `Displayed Liquidity` page when
+  quoted-spread or top-of-book-depth current/reference series are present.
+- Displayed liquidity diagnostics render historical per-bucket box/whisker
+  statistics, a current-period intraday profile line with circle markers, and a
+  capped horizontal bar of the largest group-level current-minus-reference
+  deltas.
+- Plotly activity and displayed-liquidity visuals now use current-period means
+  for the current line/profile and null-filtered percentile inputs for
+  historical/reference box-and-whisker statistics.
+- Default comparison, symbol-anomaly, and drilldown row limits are capped so
+  tables remain summary diagnostics rather than full report payload dumps.
+- The Cross-Venue Toxicity/Reversion page now renders compact Plotly horizon
+  progression curves with horizon on the x-axis, reversion bps on the y-axis,
+  and one line per venue.
+- Reversion curve visuals carry low-confidence markers and compact hover text
+  built from already-aggregated kdb output rather than raw trade or quote rows.
+- Reversion current-versus-reference diagnostics now default to a capped
+  horizontal Plotly bar chart of current-minus-reference bps by venue/horizon
+  context, with the old comparison table disabled by default and still
+  available only as an explicitly capped opt-in table.
+
+**Remaining backlog items:**
+
+- Validate the rendered HTML size and visual usability with one real kdb-backed
+  production report.
+- Decide whether production deployments should use the Plotly CDN, a packaged
+  local Plotly asset, or an offline self-contained bundle.
+- Add compact production smoke evidence for a real kdb-backed report that
+  includes activity, displayed-liquidity, and reversion pages together.
+
+**Exit criteria:**
+
+- Default market reports do not include full raw observation tables under chart
+  components.
+- Activity metrics have compact current-vs-reference intraday distribution
+  visuals.
+- Displayed liquidity metrics have compact current-vs-reference intraday profile
+  visuals with capped group deltas.
+- Cross-Venue Toxicity/Reversion has compact Plotly horizon curves and capped
+  venue/horizon comparison diagnostics, with no default full comparison table.
+- Report options can disable or cap the activity and displayed-liquidity pages.
+- Tests cover compact figure construction, current-period mean semantics,
+  null-filtered reference percentile statistics, reversion Plotly horizon
+  curves, capped reversion diagnostic bars, report wiring, template rendering,
+  capped table defaults, and no-symbol activity/liquidity chart behavior.
+
+## Milestone 9D: simulated kdb source functions for dev/debug
+
+**Goal:** Let developers and report reviewers run normal remote-kdb
+plan/preflight/render commands without production market-data tables by
+injecting deterministic q source getters into the connected kdb process for that
+run.
+
+**Implemented so far:**
+
+- Added a packaged q library template `mmsr_simulated_sources.q.j2` that defines
+  deterministic dev/debug source functions under a configurable namespace:
+  `getTradingCalendar`, `getRef`, `getTrade`, `getQuote`, `getPtsTrade`,
+  `getPtsQuote`, and `getPrimaryQuote`.
+- Added `render_simulated_source_function_bootstrap()` so the production CLI can
+  render and inject the q source-function library with a chosen namespace and
+  synthetic symbol count.
+- The normal remote-kdb production commands `plan`, `preflight`, and `render`
+  support `--inject-simulated-sources`, `--simulated-source-namespace`, and
+  `--simulated-symbol-count`. When enabled, MMSR sends the simulated source q
+  bootstrap over the existing kdb connection and routes calendar, reference,
+  trade, quote, PTS, and primary quote source-function calls to the injected
+  namespace for that run.
+- Removed the earlier standalone local/offline simulated-source CLI and Python
+  client path so there is one supported simulated-source mechanism: injection
+  into the same kdb process used by normal production commands.
+
+**Remaining backlog items:**
+
+- Validate the injected simulated q source functions in a real remote kdb+
+  process once q is available in the development environment.
+- Add optional knobs beyond symbol count only if developers need to vary venues,
+  bucket grids, or trading-day depth for stress testing.
+
+**Exit criteria:**
+
+- The simulated q functions match the canonical source-function signatures used
+  by the production runner.
+- Existing production commands can inject and use the simulated source getters
+  against a remote kdb process without requiring a separate render/preflight CLI
+  command path.
+- Tests prevent regressions in q bootstrap rendering, namespace validation,
+  source-function routing, and injected-command wiring.
+- CLI helpers let developers choose the simulated universe size for one normal
+  production command invocation without editing q by hand.
+
 ## Later milestone: ppw packaging parity and CLI ergonomics
 
 **Goal:** Align project packaging and command-line ergonomics with the ppw-style

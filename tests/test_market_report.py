@@ -35,6 +35,8 @@ def test_market_monitor_report_is_canonical_production_format() -> None:
     assert document.branding.brand_name == "Example Securities"
     assert [page.title for page in document.pages] == [
         "Market Summary",
+        "Activity Distribution",
+        "Displayed Liquidity",
         "Reference and Target Daily Trends",
         "Symbol Anomalies",
         "Sector, Segment, and Market-Cap Drilldowns",
@@ -43,10 +45,12 @@ def test_market_monitor_report_is_canonical_production_format() -> None:
     ]
 
     summary_page = document.pages[0]
-    trend_page = document.pages[1]
-    symbol_page = document.pages[2]
-    drilldown_page = document.pages[3]
-    detail_page = document.pages[4]
+    activity_page = document.pages[1]
+    liquidity_page = document.pages[2]
+    trend_page = document.pages[3]
+    symbol_page = document.pages[4]
+    drilldown_page = document.pages[5]
+    detail_page = document.pages[6]
 
     assert len(summary_page.html_blocks) == 1
     assert summary_page.html_blocks[0].title == "Executive Market Overview"
@@ -62,6 +66,13 @@ def test_market_monitor_report_is_canonical_production_format() -> None:
     assert summary_page.commentary_blocks[0].comments[0].startswith(
         "Market Summary headline:"
     )
+    assert len(activity_page.plotly_charts) == 1
+    assert activity_page.plotly_charts[0].title == (
+        "Volume cumulative intraday distribution"
+    )
+    assert len(liquidity_page.plotly_charts) == 2
+    assert liquidity_page.plotly_charts[0].title == "Quoted Spread intraday profile"
+    assert liquidity_page.plotly_charts[1].title == "Top-of-Book Depth intraday profile"
     assert len(trend_page.time_series_charts) == 3
     assert trend_page.time_series_charts[0].x_axis_label == "Trading day"
     assert "reference" in trend_page.time_series_charts[0].points[0].metadata_text
@@ -90,6 +101,10 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert "Production Format Acceptance Report" in html
     assert "Market Summary" in html
     assert "Intraday Detail" in html
+    assert "Activity Distribution" in html
+    assert "cumulative intraday distribution" in html
+    assert "Displayed Liquidity" in html
+    assert "intraday profile" in html
     assert "Reference and Target Daily Trends" in html
     assert "daily reference-to-target trend" in html
     assert "Symbol Anomalies" in html
@@ -107,8 +122,8 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert "Displayed liquidity:" in html
     assert "key metrics" in html
     assert "Current versus reference" in html
-    assert "time-series-chart__svg" in html
-    assert "Backing data" in html
+    assert "plotly-chart__figure" in html
+    assert "Compact plot data" in html
     assert "time-series-chart__placeholder" not in html
     assert '<section class="heatmap">' not in html
     assert "heatmap__placeholder" not in html
@@ -134,6 +149,8 @@ def test_market_monitor_report_can_omit_appendix_and_limit_components() -> None:
 
     assert [page.title for page in document.pages] == [
         "Market Summary",
+        "Activity Distribution",
+        "Displayed Liquidity",
         "Reference and Target Daily Trends",
         "Symbol Anomalies",
         "Sector, Segment, and Market-Cap Drilldowns",
@@ -143,10 +160,12 @@ def test_market_monitor_report_can_omit_appendix_and_limit_components() -> None:
     assert len(document.pages[0].metric_cards) == 2
     assert len(document.pages[0].metric_tables[0].rows) == 3
     assert len(document.pages[0].commentary_blocks[0].comments) == 1
-    assert all(len(chart.points) == 1 for chart in document.pages[1].time_series_charts)
-    assert len(document.pages[3].metric_tables[0].rows) == 6
-    assert all(len(chart.points) == 1 for chart in document.pages[4].time_series_charts)
-    assert document.pages[4].heatmaps == []
+    assert len(document.pages[1].plotly_charts) == 1
+    assert len(document.pages[2].plotly_charts) == 2
+    assert all(len(chart.points) == 1 for chart in document.pages[3].time_series_charts)
+    assert len(document.pages[5].metric_tables[0].rows) == 6
+    assert all(len(chart.points) == 1 for chart in document.pages[6].time_series_charts)
+    assert document.pages[6].heatmaps == []
 
 
 def test_market_monitor_report_can_disable_drilldown_page() -> None:
@@ -160,6 +179,8 @@ def test_market_monitor_report_can_disable_drilldown_page() -> None:
 
     assert [page.title for page in document.pages] == [
         "Market Summary",
+        "Activity Distribution",
+        "Displayed Liquidity",
         "Reference and Target Daily Trends",
         "Symbol Anomalies",
         "Intraday Detail",
@@ -196,7 +217,7 @@ def test_market_monitor_report_passes_custom_drilldown_options() -> None:
         ),
     )
 
-    drilldown_page = document.pages[3]
+    drilldown_page = document.pages[5]
     assert drilldown_page.title == "Market-Cap Drilldowns"
     table = drilldown_page.metric_tables[0]
     assert table.title == "Market-cap rows"
@@ -204,8 +225,6 @@ def test_market_monitor_report_passes_custom_drilldown_options() -> None:
     assert len(table.rows) == 2
     assert all("Market cap bucket:" in row.group_text for row in table.rows)
     assert all("Market segment:" in row.group_text for row in table.rows)
-
-
 
 
 def test_market_monitor_report_can_opt_into_intraday_heatmaps() -> None:
@@ -217,9 +236,13 @@ def test_market_monitor_report_can_opt_into_intraday_heatmaps() -> None:
         ),
     )
 
-    detail_page = next(page for page in document.pages if page.title == "Intraday Detail")
+    detail_page = next(
+        page for page in document.pages if page.title == "Intraday Detail"
+    )
     symbol_detail_pages = [
-        page for page in document.pages if page.title.startswith("Symbol ") and page.title.endswith(" Detail")
+        page
+        for page in document.pages
+        if page.title.startswith("Symbol ") and page.title.endswith(" Detail")
     ]
     assert len(detail_page.heatmaps) == 3
     assert all(page.heatmaps for page in symbol_detail_pages)
@@ -258,6 +281,21 @@ def test_market_report_options_validate_text_and_limits() -> None:
 
     with pytest.raises(ValueError, match="summary_scope_label"):
         MarketReportOptions(summary_scope_label=" ")
+
+    with pytest.raises(ValueError, match="displayed_liquidity_page_title"):
+        MarketReportOptions(displayed_liquidity_page_title=" ")
+
+    with pytest.raises(ValueError, match="displayed_liquidity_help_text"):
+        MarketReportOptions(displayed_liquidity_help_text=" ")
+
+    with pytest.raises(ValueError, match="displayed_liquidity_metric_names"):
+        MarketReportOptions(displayed_liquidity_metric_names=("quoted_spread_bps", " "))
+
+    with pytest.raises(ValueError, match="max_displayed_liquidity_charts"):
+        MarketReportOptions(max_displayed_liquidity_charts=-1)
+
+    with pytest.raises(ValueError, match="max_displayed_liquidity_groups"):
+        MarketReportOptions(max_displayed_liquidity_groups=-1)
 
     with pytest.raises(ValueError, match="executive_overview_title"):
         MarketReportOptions(executive_overview_title=" ")

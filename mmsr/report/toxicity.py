@@ -6,6 +6,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, time
+from math import isfinite
 from typing import Literal
 
 from mmsr.analysis.commentary import TemplateCommentaryEngine
@@ -20,9 +21,8 @@ from mmsr.presentation.labels import (
 from mmsr.report.components import (
     CommentaryBlock,
     MetricTable,
+    PlotlyChart,
     ReportPage,
-    TimeSeriesChart,
-    TimeSeriesChartPoint,
 )
 from mmsr.report.sections import build_comparison_metric_table
 from mmsr.visuals.toxicity import (
@@ -93,7 +93,8 @@ class ToxicityReversionPageOptions:
         "changes mean more aggressive-direction primary-quote reversion under "
         "the future-mid denominator convention."
     )
-    max_comparison_rows: int | None = 12
+    max_comparison_rows: int | None = 0
+    max_comparison_diagnostics: int | None = 12
     max_comments: int = 5
     max_commentary_headline_points: int = 3
     max_low_confidence_warnings: int = 3
@@ -122,6 +123,10 @@ class ToxicityReversionPageOptions:
             self.max_comparison_rows,
             "max_comparison_rows",
         )
+        _require_optional_non_negative(
+            self.max_comparison_diagnostics,
+            "max_comparison_diagnostics",
+        )
         _require_non_negative(self.max_comments, "max_comments")
         _require_non_negative(
             self.max_commentary_headline_points,
@@ -149,10 +154,11 @@ def build_toxicity_reversion_page(
     The builder is presentation-only. It consumes normalized reversion
     ``MetricTimeSeries`` rows that production callers should source from
     kdb-backed metric execution, preserves venue/horizon grouping, and renders
-    deterministic SVG line charts through the standard report component model.
+    compact Plotly horizon curves through the standard report component model.
     When supplied, existing normalized ``MetricComparison`` rows for the same
-    metric family are rendered as a current-versus-reference table without
-    recalculating comparisons in Python.
+    metric family are rendered as capped Plotly diagnostics and, only when
+    explicitly requested through ``max_comparison_rows``, a tiny comparison
+    table without recalculating comparisons in Python.
     """
 
     resolved_options = options or ToxicityReversionPageOptions()
@@ -175,7 +181,7 @@ def build_toxicity_reversion_page(
 
     curve_metric = _curve_metric_definition(reversion_series, definitions)
     charts = [
-        _chart_from_context_points(
+        _plotly_chart_from_context_points(
             context_points,
             curve_metric,
             options=resolved_options,
@@ -203,11 +209,19 @@ def build_toxicity_reversion_page(
         definitions,
         options=resolved_options,
     )
+    comparison_diagnostic_chart = _build_reversion_comparison_diagnostic_chart(
+        comparisons,
+        curve_metric,
+        options=resolved_options,
+    )
 
     return ReportPage(
         title=resolved_options.title.strip(),
         metric_tables=[] if comparison_table is None else [comparison_table],
-        time_series_charts=charts,
+        plotly_charts=[
+            *charts,
+            *([] if comparison_diagnostic_chart is None else [comparison_diagnostic_chart]),
+        ],
         commentary_blocks=(
             [CommentaryBlock(title="Toxicity commentary", comments=comments)]
             if comments
@@ -227,7 +241,7 @@ def _build_reversion_comparison_table(
         for comparison in comparisons
         if _is_reversion_metric(comparison.metric_name)
     )
-    if not reversion_comparisons:
+    if not reversion_comparisons or options.max_comparison_rows == 0:
         return None
     return build_comparison_metric_table(
         options.comparison_table_title,
@@ -375,37 +389,259 @@ def _time_bucket_rank(value: time | str | None) -> int:
     return 0
 
 
-def _chart_from_context_points(
+def _plotly_chart_from_context_points(
     points: Sequence[ReversionCurvePoint],
     metric_definition: MetricDefinition,
     *,
     options: ToxicityReversionPageOptions,
-) -> TimeSeriesChart:
+) -> PlotlyChart:
     context = _context_label(points[0])
     selected_points = (
         tuple(points)
         if options.max_points_per_chart is None
         else tuple(points)[: options.max_points_per_chart]
     )
-    return TimeSeriesChart(
-        title=f"{context} reversion curve",
+    return PlotlyChart(
+        title=f"{context} reversion horizon curve",
         metric=metric_definition,
-        points=[
-            TimeSeriesChartPoint(
-                x_text=point.horizon,
-                date_text=None if point.date is None else point.date.isoformat(),
-                time_bucket_text=format_intraday_bucket_label(point.time_bucket),
-                series_text=point.venue,
-                value_text=f"{point.reversion_bps:+.4f} bps",
-                metadata_text=_point_metadata_text(point),
-                value=point.reversion_bps,
-            )
-            for point in selected_points
-        ],
+        figure=_reversion_curve_figure(selected_points, metric_definition),
         x_axis_label="Horizon",
         y_axis_label="Reversion (bps)",
         help_text=options.help_text.strip(),
+        data_summary=_reversion_curve_data_summary(selected_points),
     )
+
+
+def _reversion_curve_figure(
+    points: Sequence[ReversionCurvePoint],
+    metric_definition: MetricDefinition,
+) -> dict[str, object]:
+    return {
+        "data": _reversion_curve_traces(points),
+        "layout": {
+            "template": "plotly_white",
+            "autosize": True,
+            "height": 380,
+            "margin": {"l": 58, "r": 24, "t": 24, "b": 72},
+            "xaxis": {"title": "Horizon", "type": "category"},
+            "yaxis": {"title": metric_definition.unit or "bps", "zeroline": True},
+            "legend": {"orientation": "h", "y": -0.28},
+            "hovermode": "x unified",
+        },
+        "config": {"displaylogo": False, "responsive": True},
+    }
+
+
+def _reversion_curve_traces(
+    points: Sequence[ReversionCurvePoint],
+) -> list[dict[str, object]]:
+    traces: list[dict[str, object]] = []
+    for venue in _ordered_unique(point.venue for point in points):
+        venue_points = [point for point in points if point.venue == venue]
+        traces.append(
+            {
+                "type": "scatter",
+                "mode": "lines+markers",
+                "name": venue,
+                "x": [point.horizon for point in venue_points],
+                "y": [point.reversion_bps for point in venue_points],
+                "text": [_point_hover_text(point) for point in venue_points],
+                "marker": {
+                    "symbol": [
+                        "circle-open" if point.low_confidence else "circle"
+                        for point in venue_points
+                    ]
+                },
+                "hovertemplate": (
+                    "%{text}<br><b>%{y:+.4f} bps</b>"
+                    "<extra>%{fullData.name}</extra>"
+                ),
+            }
+        )
+    return traces
+
+
+def _point_hover_text(point: ReversionCurvePoint) -> str:
+    parts = [
+        f"<b>{point.venue} {point.horizon}</b>",
+        f"Reversion: {point.reversion_bps:+.4f} bps",
+    ]
+    if point.date is not None:
+        parts.append(f"Date: {point.date.isoformat()}")
+    bucket_label = format_intraday_bucket_label(point.time_bucket)
+    if bucket_label is not None:
+        parts.append(f"Bucket: {bucket_label}")
+    metadata = _point_metadata_text(point)
+    if metadata is not None:
+        parts.append(metadata)
+    return "<br>".join(parts)
+
+
+def _reversion_curve_data_summary(points: Sequence[ReversionCurvePoint]) -> str:
+    low_confidence_count = sum(1 for point in points if point.low_confidence)
+    parts = [
+        f"{len(points):,} aggregated venue/horizon points",
+        f"{len(_ordered_unique(point.venue for point in points)):,} venues",
+        f"{len(_ordered_unique(point.horizon for point in points)):,} horizons",
+    ]
+    if low_confidence_count:
+        parts.append(f"{low_confidence_count:,} low-confidence markers")
+    return (
+        "; ".join(parts)
+        + ". Compact Plotly arrays only; raw trade or quote rows are not embedded."
+    )
+
+
+def _build_reversion_comparison_diagnostic_chart(
+    comparisons: Sequence[MetricComparison],
+    metric_definition: MetricDefinition,
+    *,
+    options: ToxicityReversionPageOptions,
+) -> PlotlyChart | None:
+    rows = _selected_reversion_comparisons(
+        comparisons,
+        max_rows=options.max_comparison_diagnostics,
+    )
+    if not rows:
+        return None
+
+    return PlotlyChart(
+        title="Reversion current-minus-reference diagnostics",
+        metric=metric_definition,
+        figure={
+            "data": [
+                {
+                    "type": "bar",
+                    "orientation": "h",
+                    "name": "Current − reference",
+                    "x": [_comparison_delta_bps(comparison) for comparison in rows],
+                    "y": [_comparison_diagnostic_label(comparison) for comparison in rows],
+                    "text": [_comparison_hover_text(comparison) for comparison in rows],
+                    "hovertemplate": (
+                        "%{text}<br><b>%{x:+.4f} bps</b>"
+                        "<extra>Current − reference</extra>"
+                    ),
+                }
+            ],
+            "layout": {
+                "template": "plotly_white",
+                "autosize": True,
+                "height": max(320, 38 * len(rows) + 130),
+                "margin": {"l": 190, "r": 24, "t": 24, "b": 54},
+                "xaxis": {"title": "Current minus reference (bps)", "zeroline": True},
+                "yaxis": {"title": "Venue / horizon context", "automargin": True},
+                "showlegend": False,
+            },
+            "config": {"displaylogo": False, "responsive": True},
+        },
+        x_axis_label="Current minus reference (bps)",
+        y_axis_label="Venue / horizon context",
+        help_text=(
+            "Capped diagnostic view of precomputed reversion comparisons. Bars "
+            "show current minus comparable reference in bps; rows are ranked by "
+            "status severity and absolute delta so the report remains visual and compact."
+        ),
+        data_summary=(
+            f"{len(rows):,} capped reversion comparison diagnostics embedded from "
+            "normalized comparison facts; full comparison rows are not rendered."
+        ),
+    )
+
+
+def _selected_reversion_comparisons(
+    comparisons: Sequence[MetricComparison],
+    *,
+    max_rows: int | None,
+) -> tuple[MetricComparison, ...]:
+    reversion_comparisons = tuple(
+        comparison
+        for comparison in comparisons
+        if _is_reversion_metric(comparison.metric_name)
+        and _finite_number(_comparison_delta_bps(comparison)) is not None
+    )
+    ordered = tuple(sorted(reversion_comparisons, key=_comparison_diagnostic_sort_key))
+    if max_rows is None:
+        return ordered
+    return ordered[:max_rows]
+
+
+def _comparison_diagnostic_sort_key(
+    comparison: MetricComparison,
+) -> tuple[int, float, str]:
+    return (
+        _status_severity_rank(comparison.status),
+        -abs(_comparison_delta_bps(comparison)),
+        _comparison_diagnostic_label(comparison),
+    )
+
+
+def _status_severity_rank(status: str) -> int:
+    if status == "alert":
+        return 0
+    if status == "watch":
+        return 1
+    return 2
+
+
+def _comparison_delta_bps(comparison: MetricComparison) -> float:
+    if comparison.change_abs is not None:
+        return float(comparison.change_abs)
+    if comparison.reference_value is None:
+        return 0.0
+    return float(comparison.value) - float(comparison.reference_value)
+
+
+def _comparison_diagnostic_label(comparison: MetricComparison) -> str:
+    group_label = format_group_label(comparison.group)
+    scope_label = format_comparison_scope_label(
+        observation_date=comparison.date,
+        time_bucket=comparison.time_bucket,
+        group={},
+    )
+    parts = []
+    if group_label is not None:
+        parts.append(group_label)
+    if scope_label is not None:
+        parts.append(scope_label)
+    return " | ".join(parts) if parts else comparison.metric_name
+
+
+def _comparison_hover_text(comparison: MetricComparison) -> str:
+    parts = [
+        f"<b>{_comparison_diagnostic_label(comparison)}</b>",
+        f"Current: {comparison.value:.4f} bps",
+    ]
+    if comparison.reference_value is not None:
+        parts.append(f"Reference: {comparison.reference_value:.4f} bps")
+    parts.append(f"Change: {_comparison_delta_bps(comparison):+.4f} bps")
+    parts.append(f"Status: {comparison.status.replace('_', ' ')}")
+    if comparison.percentile is not None:
+        parts.append(f"Percentile: {comparison.percentile:.1%}")
+    if comparison.z_score is not None:
+        parts.append(f"z-score: {comparison.z_score:+.2f}")
+    return "<br>".join(parts)
+
+
+def _finite_number(value: object) -> float | None:
+    if value is None:
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    return numeric if isfinite(numeric) else None
+
+
+def _ordered_unique(values: Iterable[object]) -> tuple[str, ...]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for value in values:
+        text = str(value)
+        if text in seen:
+            continue
+        seen.add(text)
+        ordered.append(text)
+    return tuple(ordered)
 
 
 def _context_label(point: ReversionCurvePoint) -> str:

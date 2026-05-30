@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from math import isfinite
+from typing import Any
 
 from mmsr.analysis.commentary import (
     CommentaryFact,
@@ -21,6 +23,7 @@ from mmsr.report.components import (
     MetricCard,
     MetricTable,
     MetricTableRow,
+    PlotlyChart,
     ReportPage,
     TimeSeriesChart,
     TimeSeriesChartPoint,
@@ -349,6 +352,895 @@ def build_reference_target_trend_chart(
         y_axis_label=None if y_axis_label is None else y_axis_label.strip(),
         help_text=None if help_text is None else help_text.strip(),
     )
+
+
+def build_activity_intraday_distribution_chart(
+    title: str,
+    *,
+    reference_series: MetricTimeSeries,
+    target_series: MetricTimeSeries,
+    metric_definition: MetricDefinition,
+    help_text: str | None = None,
+) -> PlotlyChart:
+    """Build a compact Plotly activity-distribution diagnostic.
+
+    The visual is designed for high-volume activity metrics such as turnover,
+    volume, and trade count. It emits only derived arrays: current cumulative
+    percent by intraday bucket, historical cumulative-percent box statistics by
+    bucket, and reference/current session-share bars. It does not embed raw
+    metric observation rows or create symbol-level plots.
+    """
+
+    chart_title = title.strip()
+    if not chart_title:
+        raise ValueError("title must not be empty")
+    if target_series.metric_name != metric_definition.name:
+        raise ValueError(
+            "metric_definition.name must match target_series.metric_name: "
+            f"{metric_definition.name} != {target_series.metric_name}"
+        )
+    if reference_series.metric_name != metric_definition.name:
+        raise ValueError(
+            "metric_definition.name must match reference_series.metric_name: "
+            f"{metric_definition.name} != {reference_series.metric_name}"
+        )
+    if help_text is not None and not help_text.strip():
+        raise ValueError("help_text must not be empty when supplied")
+
+    prepared = _prepare_activity_distribution_inputs(
+        target_series=target_series,
+        reference_series=reference_series,
+    )
+    figure = _activity_distribution_figure(
+        title=chart_title,
+        metric_definition=metric_definition,
+        prepared=prepared,
+    )
+    return PlotlyChart(
+        title=chart_title,
+        metric=metric_definition,
+        figure=figure,
+        x_axis_label="Intraday bucket and session share",
+        y_axis_label="Percent",
+        help_text=None if help_text is None else help_text.strip(),
+        data_summary=_activity_distribution_data_summary(prepared, figure),
+    )
+
+
+@dataclass(frozen=True)
+class _ActivityDistributionInputs:
+    bucket_labels: tuple[str, ...]
+    current_cumulative_pct: tuple[float, ...]
+    reference_cumulative_pct_by_bucket: Mapping[str, tuple[float, ...]]
+    current_session_pct: Mapping[str, float]
+    reference_session_pct: Mapping[str, float]
+    reference_date_count: int
+
+
+def _prepare_activity_distribution_inputs(
+    *,
+    target_series: MetricTimeSeries,
+    reference_series: MetricTimeSeries,
+) -> _ActivityDistributionInputs:
+    current_values_by_date_bucket = _sum_observation_values_by_date_bucket(
+        target_series.observations
+    )
+    reference_values_by_date_bucket = _sum_observation_values_by_date_bucket(
+        reference_series.observations
+    )
+    current_bucket_values = _mean_values_by_bucket(current_values_by_date_bucket)
+
+    bucket_labels = _ordered_activity_buckets(
+        [*current_bucket_values.keys()]
+        + [
+            bucket
+            for values_by_bucket in reference_values_by_date_bucket.values()
+            for bucket in values_by_bucket
+        ]
+    )
+    current_cumulative_pct = _cumulative_bucket_percentages(
+        current_bucket_values,
+        bucket_labels,
+    )
+    reference_cumulative_pct_by_bucket = _reference_cumulative_percentages_by_bucket(
+        reference_values_by_date_bucket,
+        bucket_labels,
+    )
+
+    return _ActivityDistributionInputs(
+        bucket_labels=bucket_labels,
+        current_cumulative_pct=current_cumulative_pct,
+        reference_cumulative_pct_by_bucket=reference_cumulative_pct_by_bucket,
+        current_session_pct=_mean_daily_session_share_percentages(
+            target_series.observations
+        ),
+        reference_session_pct=_mean_daily_session_share_percentages(
+            reference_series.observations
+        ),
+        reference_date_count=len(reference_values_by_date_bucket),
+    )
+
+
+def _activity_distribution_figure(
+    *,
+    title: str,
+    metric_definition: MetricDefinition,
+    prepared: _ActivityDistributionInputs,
+) -> dict[str, Any]:
+    q1: list[float | None] = []
+    median: list[float | None] = []
+    q3: list[float | None] = []
+    lower: list[float | None] = []
+    upper: list[float | None] = []
+    for bucket in prepared.bucket_labels:
+        values = prepared.reference_cumulative_pct_by_bucket.get(bucket, ())
+        if values:
+            q1.append(_percentile(values, 25))
+            median.append(_percentile(values, 50))
+            q3.append(_percentile(values, 75))
+            lower.append(min(values))
+            upper.append(max(values))
+        else:
+            q1.append(None)
+            median.append(None)
+            q3.append(None)
+            lower.append(None)
+            upper.append(None)
+
+    traces: list[dict[str, Any]] = [
+        {
+            "type": "box",
+            "name": "Reference cumulative % distribution",
+            "x": list(prepared.bucket_labels),
+            "q1": q1,
+            "median": median,
+            "q3": q3,
+            "lowerfence": lower,
+            "upperfence": upper,
+            "boxpoints": False,
+            "xaxis": "x",
+            "yaxis": "y",
+            "hovertemplate": (
+                "%{x}<br>Q1 %{q1:.2f}%<br>Median %{median:.2f}%"
+                "<br>Q3 %{q3:.2f}%<extra>Reference</extra>"
+            ),
+        },
+        {
+            "type": "scatter",
+            "mode": "lines+markers",
+            "name": "Current mean cumulative %",
+            "x": list(prepared.bucket_labels),
+            "y": list(prepared.current_cumulative_pct),
+            "marker": {"symbol": "circle", "size": 8},
+            "line": {"width": 3},
+            "xaxis": "x",
+            "yaxis": "y",
+            "hovertemplate": "%{x}<br>%{y:.2f}%<extra>Current mean</extra>",
+        },
+    ]
+
+    period_labels = ["Reference period", "Current period"]
+    for session in _ACTIVITY_SESSION_ORDER:
+        reference_pct = prepared.reference_session_pct.get(session, 0.0)
+        current_pct = prepared.current_session_pct.get(session, 0.0)
+        if reference_pct == 0.0 and current_pct == 0.0:
+            continue
+        traces.append(
+            {
+                "type": "bar",
+                "name": session,
+                "orientation": "h",
+                "x": [reference_pct, current_pct],
+                "y": period_labels,
+                "xaxis": "x2",
+                "yaxis": "y2",
+                "hovertemplate": (
+                    "%{y}<br>" + session + ": %{x:.2f}%<extra></extra>"
+                ),
+            }
+        )
+
+    return {
+        "data": traces,
+        "layout": {
+            "template": "plotly_white",
+            "height": 640,
+            "margin": {"l": 80, "r": 24, "t": 24, "b": 104},
+            "barmode": "stack",
+            "showlegend": True,
+            "legend": {"orientation": "h", "y": -0.2},
+            "xaxis": {
+                "domain": [0.0, 1.0],
+                "anchor": "y",
+                "title": "Intraday bucket",
+                "type": "category",
+                "categoryorder": "array",
+                "categoryarray": list(prepared.bucket_labels),
+            },
+            "yaxis": {
+                "domain": [0.42, 1.0],
+                "anchor": "x",
+                "title": "Cumulative percent of " + metric_definition.label,
+                "ticksuffix": "%",
+                "range": [0, 100],
+            },
+            "xaxis2": {
+                "domain": [0.0, 1.0],
+                "anchor": "y2",
+                "title": "Percent of period",
+                "ticksuffix": "%",
+                "range": [0, 100],
+            },
+            "yaxis2": {
+                "domain": [0.0, 0.24],
+                "anchor": "x2",
+                "title": "",
+                "categoryorder": "array",
+                "categoryarray": period_labels,
+            },
+            "annotations": [
+                {
+                    "text": title,
+                    "xref": "paper",
+                    "yref": "paper",
+                    "x": 0,
+                    "y": 1.08,
+                    "showarrow": False,
+                    "font": {"size": 14},
+                    "xanchor": "left",
+                },
+                {
+                    "text": "Session / auction share",
+                    "xref": "paper",
+                    "yref": "paper",
+                    "x": 0,
+                    "y": 0.31,
+                    "showarrow": False,
+                    "font": {"size": 13},
+                    "xanchor": "left",
+                },
+            ],
+        },
+        "config": {"displaylogo": False, "responsive": True},
+    }
+
+
+def _activity_distribution_data_summary(
+    prepared: _ActivityDistributionInputs,
+    figure: Mapping[str, Any],
+) -> str:
+    traces = figure.get("data", ())
+    trace_count = len(traces) if isinstance(traces, Sequence) else 0
+    return (
+        f"{len(prepared.bucket_labels):,} intraday buckets; "
+        f"{prepared.reference_date_count:,} reference dates reduced to "
+        "null-filtered percentile box statistics; current period rendered as "
+        f"mean cumulative percentages; {trace_count:,} Plotly traces embedded. "
+        "Raw observation rows and full value tables are omitted from the HTML."
+    )
+
+
+def build_reference_target_intraday_profile_chart(
+    title: str,
+    *,
+    reference_series: MetricTimeSeries,
+    target_series: MetricTimeSeries,
+    metric_definition: MetricDefinition,
+    group_by: Sequence[str] | None = None,
+    max_groups: int | None = 12,
+    help_text: str | None = None,
+) -> PlotlyChart:
+    """Build a compact current-vs-history intraday profile visual.
+
+    This visual is intended for non-additive market-state metrics such as quoted
+    spread and top-of-book depth. It embeds historical per-bucket box statistics,
+    a current-period bucket profile, and a capped group-level current-minus-
+    reference delta bar. It deliberately avoids raw observation tables.
+    """
+
+    chart_title = title.strip()
+    if not chart_title:
+        raise ValueError("title must not be empty")
+    if target_series.metric_name != metric_definition.name:
+        raise ValueError(
+            "metric_definition.name must match target_series.metric_name: "
+            f"{metric_definition.name} != {target_series.metric_name}"
+        )
+    if reference_series.metric_name != metric_definition.name:
+        raise ValueError(
+            "metric_definition.name must match reference_series.metric_name: "
+            f"{metric_definition.name} != {reference_series.metric_name}"
+        )
+    if max_groups is not None and max_groups < 0:
+        raise ValueError("max_groups must be non-negative")
+    if help_text is not None and not help_text.strip():
+        raise ValueError("help_text must not be empty when supplied")
+
+    prepared = _prepare_intraday_profile_inputs(
+        target_series=target_series,
+        reference_series=reference_series,
+        group_by=group_by,
+        max_groups=max_groups,
+    )
+    figure = _intraday_profile_figure(
+        title=chart_title,
+        metric_definition=metric_definition,
+        prepared=prepared,
+    )
+    return PlotlyChart(
+        title=chart_title,
+        metric=metric_definition,
+        figure=figure,
+        x_axis_label="Intraday bucket and group delta",
+        y_axis_label=metric_definition.unit or metric_definition.label,
+        help_text=None if help_text is None else help_text.strip(),
+        data_summary=_intraday_profile_data_summary(prepared, figure),
+    )
+
+
+@dataclass(frozen=True)
+class _IntradayProfileInputs:
+    bucket_labels: tuple[str, ...]
+    current_values_by_bucket: Mapping[str, float]
+    reference_values_by_bucket: Mapping[str, tuple[float, ...]]
+    group_labels: tuple[str, ...]
+    group_current_values: tuple[float, ...]
+    group_reference_values: tuple[float, ...]
+    reference_date_count: int
+
+
+def _prepare_intraday_profile_inputs(
+    *,
+    target_series: MetricTimeSeries,
+    reference_series: MetricTimeSeries,
+    group_by: Sequence[str] | None,
+    max_groups: int | None,
+) -> _IntradayProfileInputs:
+    current_bucket_values = _mean_observation_values_by_bucket(
+        target_series.observations
+    )
+    reference_values_by_date_bucket = _mean_observation_values_by_date_bucket(
+        reference_series.observations
+    )
+    bucket_labels = _ordered_activity_buckets(
+        [*current_bucket_values.keys()]
+        + [
+            bucket
+            for values_by_bucket in reference_values_by_date_bucket.values()
+            for bucket in values_by_bucket
+        ]
+    )
+    reference_values_by_bucket = _reference_profile_values_by_bucket(
+        reference_values_by_date_bucket,
+        bucket_labels,
+    )
+    group_rows = _profile_group_delta_rows(
+        target_series.observations,
+        reference_series.observations,
+        group_by=() if group_by is None else group_by,
+        max_groups=max_groups,
+    )
+    return _IntradayProfileInputs(
+        bucket_labels=bucket_labels,
+        current_values_by_bucket=current_bucket_values,
+        reference_values_by_bucket=reference_values_by_bucket,
+        group_labels=tuple(row[0] for row in group_rows),
+        group_current_values=tuple(row[1] for row in group_rows),
+        group_reference_values=tuple(row[2] for row in group_rows),
+        reference_date_count=len(reference_values_by_date_bucket),
+    )
+
+
+def _intraday_profile_figure(
+    *,
+    title: str,
+    metric_definition: MetricDefinition,
+    prepared: _IntradayProfileInputs,
+) -> dict[str, Any]:
+    q1: list[float | None] = []
+    median: list[float | None] = []
+    q3: list[float | None] = []
+    lower: list[float | None] = []
+    upper: list[float | None] = []
+    current_values: list[float | None] = []
+    for bucket in prepared.bucket_labels:
+        values = prepared.reference_values_by_bucket.get(bucket, ())
+        if values:
+            q1.append(_percentile(values, 25))
+            median.append(_percentile(values, 50))
+            q3.append(_percentile(values, 75))
+            lower.append(min(values))
+            upper.append(max(values))
+        else:
+            q1.append(None)
+            median.append(None)
+            q3.append(None)
+            lower.append(None)
+            upper.append(None)
+        current_values.append(prepared.current_values_by_bucket.get(bucket))
+
+    traces: list[dict[str, Any]] = [
+        {
+            "type": "box",
+            "name": "Reference percentile distribution",
+            "x": list(prepared.bucket_labels),
+            "q1": q1,
+            "median": median,
+            "q3": q3,
+            "lowerfence": lower,
+            "upperfence": upper,
+            "boxpoints": False,
+            "xaxis": "x",
+            "yaxis": "y",
+            "hovertemplate": (
+                "%{x}<br>Q1 %{q1:.4f}<br>Median %{median:.4f}"
+                "<br>Q3 %{q3:.4f}<extra>Reference</extra>"
+            ),
+        },
+        {
+            "type": "scatter",
+            "mode": "lines+markers",
+            "name": "Current mean profile",
+            "x": list(prepared.bucket_labels),
+            "y": current_values,
+            "marker": {"symbol": "circle", "size": 8},
+            "line": {"width": 3},
+            "xaxis": "x",
+            "yaxis": "y",
+            "hovertemplate": "%{x}<br>%{y:.4f}<extra>Current mean</extra>",
+        },
+    ]
+
+    if prepared.group_labels:
+        deltas = [
+            current - reference
+            for current, reference in zip(
+                prepared.group_current_values,
+                prepared.group_reference_values,
+                strict=True,
+            )
+        ]
+        traces.append(
+            {
+                "type": "bar",
+                "name": "Current − reference",
+                "orientation": "h",
+                "x": deltas,
+                "y": list(prepared.group_labels),
+                "customdata": [
+                    [current, reference]
+                    for current, reference in zip(
+                        prepared.group_current_values,
+                        prepared.group_reference_values,
+                        strict=True,
+                    )
+                ],
+                "xaxis": "x2",
+                "yaxis": "y2",
+                "hovertemplate": (
+                    "%{y}<br>Δ %{x:.4f}<br>Current %{customdata[0]:.4f}"
+                    "<br>Reference %{customdata[1]:.4f}<extra></extra>"
+                ),
+            }
+        )
+
+    axis_unit = metric_definition.unit or metric_definition.label
+    return {
+        "data": traces,
+        "layout": {
+            "template": "plotly_white",
+            "height": 640,
+            "margin": {"l": 96, "r": 24, "t": 24, "b": 104},
+            "showlegend": True,
+            "legend": {"orientation": "h", "y": -0.2},
+            "xaxis": {
+                "domain": [0.0, 1.0],
+                "anchor": "y",
+                "title": "Intraday bucket",
+                "type": "category",
+                "categoryorder": "array",
+                "categoryarray": list(prepared.bucket_labels),
+            },
+            "yaxis": {
+                "domain": [0.42, 1.0],
+                "anchor": "x",
+                "title": axis_unit,
+            },
+            "xaxis2": {
+                "domain": [0.0, 1.0],
+                "anchor": "y2",
+                "title": "Current minus reference (" + axis_unit + ")",
+                "zeroline": True,
+            },
+            "yaxis2": {
+                "domain": [0.0, 0.24],
+                "anchor": "x2",
+                "title": "",
+                "autorange": "reversed",
+            },
+            "annotations": [
+                {
+                    "text": title,
+                    "xref": "paper",
+                    "yref": "paper",
+                    "x": 0,
+                    "y": 1.08,
+                    "showarrow": False,
+                    "font": {"size": 14},
+                    "xanchor": "left",
+                },
+                {
+                    "text": "Largest group deltas",
+                    "xref": "paper",
+                    "yref": "paper",
+                    "x": 0,
+                    "y": 0.31,
+                    "showarrow": False,
+                    "font": {"size": 13},
+                    "xanchor": "left",
+                },
+            ],
+        },
+        "config": {"displaylogo": False, "responsive": True},
+    }
+
+
+def _intraday_profile_data_summary(
+    prepared: _IntradayProfileInputs,
+    figure: Mapping[str, Any],
+) -> str:
+    traces = figure.get("data", ())
+    trace_count = len(traces) if isinstance(traces, Sequence) else 0
+    return (
+        f"{len(prepared.bucket_labels):,} intraday buckets; "
+        f"{prepared.reference_date_count:,} reference dates reduced to "
+        "null-filtered percentile box statistics; current period rendered as "
+        f"per-bucket means; {len(prepared.group_labels):,} capped group "
+        f"deltas; {trace_count:,} Plotly traces embedded. Raw observation rows "
+        "and full value tables are omitted from the HTML."
+    )
+
+
+def _mean_observation_values_by_bucket(
+    observations: Sequence[MetricObservation],
+) -> dict[str, float]:
+    values_by_bucket: dict[str, list[float]] = {}
+    for observation in observations:
+        value = _finite_observation_value(observation)
+        if value is None:
+            continue
+        bucket = _format_bucket_text(observation.time_bucket) or "Full day"
+        values_by_bucket.setdefault(bucket, []).append(value)
+    return {
+        bucket: sum(values) / len(values)
+        for bucket, values in values_by_bucket.items()
+        if values
+    }
+
+
+def _mean_observation_values_by_date_bucket(
+    observations: Sequence[MetricObservation],
+) -> dict[object, dict[str, float]]:
+    values: dict[object, dict[str, list[float]]] = {}
+    for observation in observations:
+        value = _finite_observation_value(observation)
+        if value is None:
+            continue
+        bucket = _format_bucket_text(observation.time_bucket) or "Full day"
+        values.setdefault(observation.date, {}).setdefault(bucket, []).append(value)
+    return {
+        observation_date: {
+            bucket: sum(bucket_values) / len(bucket_values)
+            for bucket, bucket_values in bucket_values_by_bucket.items()
+            if bucket_values
+        }
+        for observation_date, bucket_values_by_bucket in values.items()
+    }
+
+
+def _reference_profile_values_by_bucket(
+    values_by_date_bucket: Mapping[object, Mapping[str, float]],
+    bucket_labels: Sequence[str],
+) -> dict[str, tuple[float, ...]]:
+    values_by_bucket: dict[str, list[float]] = {bucket: [] for bucket in bucket_labels}
+    for bucket_values in values_by_date_bucket.values():
+        for bucket in bucket_labels:
+            value = bucket_values.get(bucket)
+            if value is not None:
+                values_by_bucket[bucket].append(value)
+    return {
+        bucket: tuple(values)
+        for bucket, values in values_by_bucket.items()
+        if values
+    }
+
+
+def _profile_group_delta_rows(
+    target_observations: Sequence[MetricObservation],
+    reference_observations: Sequence[MetricObservation],
+    *,
+    group_by: Sequence[str],
+    max_groups: int | None,
+) -> tuple[tuple[str, float, float], ...]:
+    current_by_group = _mean_observation_values_by_group(target_observations, group_by)
+    reference_by_group = _mean_reference_values_by_group(
+        reference_observations,
+        group_by,
+    )
+    rows = [
+        (group, current_value, reference_by_group[group])
+        for group, current_value in current_by_group.items()
+        if group in reference_by_group
+    ]
+    rows.sort(
+        key=lambda row: (
+            -abs(row[1] - row[2]),
+            row[0],
+        )
+    )
+    if max_groups is None:
+        return tuple(rows)
+    return tuple(rows[:max_groups])
+
+
+def _mean_observation_values_by_group(
+    observations: Sequence[MetricObservation],
+    group_by: Sequence[str],
+) -> dict[str, float]:
+    values_by_group: dict[str, list[float]] = {}
+    for observation in observations:
+        value = _finite_observation_value(observation)
+        if value is None:
+            continue
+        group = _profile_group_label(observation.group, group_by)
+        values_by_group.setdefault(group, []).append(value)
+    return {
+        group: sum(values) / len(values)
+        for group, values in values_by_group.items()
+        if values
+    }
+
+
+def _mean_reference_values_by_group(
+    observations: Sequence[MetricObservation],
+    group_by: Sequence[str],
+) -> dict[str, float]:
+    values_by_date_group: dict[tuple[object, str], list[float]] = {}
+    for observation in observations:
+        value = _finite_observation_value(observation)
+        if value is None:
+            continue
+        group = _profile_group_label(observation.group, group_by)
+        values_by_date_group.setdefault((observation.date, group), []).append(value)
+
+    daily_group_means: dict[str, list[float]] = {}
+    for (_, group), values in values_by_date_group.items():
+        if not values:
+            continue
+        daily_group_means.setdefault(group, []).append(sum(values) / len(values))
+    return {
+        group: sum(values) / len(values)
+        for group, values in daily_group_means.items()
+        if values
+    }
+
+
+def _profile_group_label(group: Mapping[str, str], group_by: Sequence[str]) -> str:
+    selected = {
+        key: group[key]
+        for key in group_by
+        if key in group and str(group[key]).strip()
+    }
+    if selected:
+        return format_group_label(selected)
+    return "Report aggregate"
+
+
+def _finite_observation_value(observation: MetricObservation) -> float | None:
+    if observation.value is None:
+        return None
+    value = float(observation.value)
+    if not isfinite(value):
+        return None
+    return value
+
+
+def _sum_observation_values_by_date_bucket(
+    observations: Sequence[MetricObservation],
+) -> dict[object, dict[str, float]]:
+    values: dict[object, dict[str, float]] = {}
+    for observation in observations:
+        value = _numeric_observation_value(observation)
+        if value is None:
+            continue
+        bucket = _format_bucket_text(observation.time_bucket) or "Full day"
+        date_values = values.setdefault(observation.date, {})
+        date_values[bucket] = date_values.get(bucket, 0.0) + value
+    return values
+
+
+def _mean_values_by_bucket(
+    values_by_date_bucket: Mapping[object, Mapping[str, float]],
+) -> dict[str, float]:
+    values_by_bucket: dict[str, list[float]] = {}
+    for values_by_bucket_for_date in values_by_date_bucket.values():
+        for bucket, value in values_by_bucket_for_date.items():
+            values_by_bucket.setdefault(bucket, []).append(value)
+    return {
+        bucket: sum(values) / len(values)
+        for bucket, values in values_by_bucket.items()
+        if values
+    }
+
+
+def _mean_daily_session_share_percentages(
+    observations: Sequence[MetricObservation],
+) -> dict[str, float]:
+    values_by_date_session: dict[object, dict[str, float]] = {}
+    for observation in observations:
+        value = _numeric_observation_value(observation)
+        if value is None:
+            continue
+        session = _activity_session_label(observation.time_bucket)
+        date_values = values_by_date_session.setdefault(observation.date, {})
+        date_values[session] = date_values.get(session, 0.0) + value
+
+    daily_shares = [
+        _session_share_percentages(values_by_session)
+        for values_by_session in values_by_date_session.values()
+    ]
+    if not daily_shares:
+        return {session: 0.0 for session in _ACTIVITY_SESSION_ORDER}
+
+    return {
+        session: sum(shares[session] for shares in daily_shares) / len(daily_shares)
+        for session in _ACTIVITY_SESSION_ORDER
+    }
+
+
+def _numeric_observation_value(observation: MetricObservation) -> float | None:
+    if observation.value is None:
+        return None
+    value = float(observation.value)
+    if not isfinite(value) or value < 0:
+        return None
+    return value
+
+
+def _ordered_activity_buckets(labels: Sequence[str]) -> tuple[str, ...]:
+    return tuple(sorted(dict.fromkeys(labels), key=_activity_bucket_sort_key))
+
+
+def _cumulative_bucket_percentages(
+    values_by_bucket: Mapping[str, float],
+    bucket_labels: Sequence[str],
+) -> tuple[float, ...]:
+    total = sum(values_by_bucket.values())
+    if total <= 0:
+        return tuple(0.0 for _ in bucket_labels)
+    running = 0.0
+    result: list[float] = []
+    for bucket in bucket_labels:
+        running += values_by_bucket.get(bucket, 0.0)
+        result.append(running / total * 100)
+    return tuple(result)
+
+
+def _reference_cumulative_percentages_by_bucket(
+    values_by_date_bucket: Mapping[object, Mapping[str, float]],
+    bucket_labels: Sequence[str],
+) -> dict[str, tuple[float, ...]]:
+    bucket_values: dict[str, list[float]] = {bucket: [] for bucket in bucket_labels}
+    for values_by_bucket in values_by_date_bucket.values():
+        cumulative = _cumulative_bucket_percentages(values_by_bucket, bucket_labels)
+        for bucket, value in zip(bucket_labels, cumulative, strict=True):
+            bucket_values[bucket].append(value)
+    return {
+        bucket: tuple(values)
+        for bucket, values in bucket_values.items()
+        if values
+    }
+
+
+def _session_share_percentages(
+    values_by_session: Mapping[str, float],
+) -> dict[str, float]:
+    total = sum(values_by_session.values())
+    if total <= 0:
+        return {session: 0.0 for session in _ACTIVITY_SESSION_ORDER}
+    return {
+        session: values_by_session.get(session, 0.0) / total * 100
+        for session in _ACTIVITY_SESSION_ORDER
+    }
+
+
+_ACTIVITY_SESSION_ORDER = (
+    "AM opening auction",
+    "AM continuous session",
+    "AM closing auction",
+    "PM opening auction",
+    "PM continuous session",
+    "PM closing auction",
+    "Other",
+)
+
+
+def _activity_session_label(bucket: object | None) -> str:
+    raw = "" if bucket is None else str(bucket).strip()
+    upper = raw.upper()
+    if upper == "AMO":
+        return "AM opening auction"
+    if upper == "AMC":
+        return "AM closing auction"
+    if upper == "PMO":
+        return "PM opening auction"
+    if upper == "PMC":
+        return "PM closing auction"
+
+    label = _format_bucket_text(bucket) or raw
+    label_lower = label.casefold()
+    if "opening auction" in label_lower:
+        return "AM opening auction" if "am" in label_lower else "PM opening auction"
+    if "closing auction" in label_lower:
+        return "AM closing auction" if "am" in label_lower else "PM closing auction"
+
+    hour_minute = _leading_hour_minute(raw) or _leading_hour_minute(label)
+    if hour_minute is None:
+        return "Other"
+    hour, minute = hour_minute
+    if (hour, minute) < (12, 0):
+        return "AM continuous session"
+    return "PM continuous session"
+
+
+def _leading_hour_minute(text: str) -> tuple[int, int] | None:
+    match = re.match(r"^(?P<hour>[0-2]?[0-9]):(?P<minute>[0-5][0-9])", text)
+    if match is None:
+        return None
+    return (int(match.group("hour")), int(match.group("minute")))
+
+
+def _activity_bucket_sort_key(label: str) -> tuple[int, str]:
+    canonical = label.casefold()
+    if "am opening auction" in canonical:
+        return (0, label)
+    if "am closing auction" in canonical:
+        return (200, label)
+    if "pm opening auction" in canonical:
+        return (300, label)
+    if "pm closing auction" in canonical:
+        return (500, label)
+    hour_minute = _leading_hour_minute(label)
+    if hour_minute is not None:
+        hour, minute = hour_minute
+        return (100 + hour * 60 + minute, label)
+    return (900, label)
+
+
+def _percentile(values: Sequence[float | None], percentile: float) -> float:
+    ordered = sorted(_clean_finite_values(values))
+    if not ordered:
+        raise ValueError("values must contain at least one finite number")
+    if len(ordered) == 1:
+        return ordered[0]
+    position = (len(ordered) - 1) * percentile / 100
+    lower_index = int(position)
+    upper_index = min(lower_index + 1, len(ordered) - 1)
+    fraction = position - lower_index
+    return ordered[lower_index] + (
+        ordered[upper_index] - ordered[lower_index]
+    ) * fraction
+
+
+def _clean_finite_values(values: Sequence[float | None]) -> tuple[float, ...]:
+    cleaned: list[float] = []
+    for value in values:
+        if value is None:
+            continue
+        numeric = float(value)
+        if isfinite(numeric):
+            cleaned.append(numeric)
+    return tuple(cleaned)
 
 
 def build_heatmap(

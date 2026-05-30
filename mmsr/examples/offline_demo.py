@@ -55,11 +55,11 @@ class OfflineDemoReportOptions:
     include_metric_definitions_appendix: bool = True
     max_metric_cards: int = 6
     max_comments: int = 5
-    max_table_rows: int | None = None
+    max_table_rows: int | None = 12
     max_chart_points: int | None = None
     max_heatmap_cells: int | None = None
     include_drilldown_page: bool = True
-    max_drilldown_rows: int | None = 20
+    max_drilldown_rows: int | None = 12
 
     def __post_init__(self) -> None:
         _require_non_empty(self.title, "title")

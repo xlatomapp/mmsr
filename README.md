@@ -281,6 +281,43 @@ poetry run mmsr mock-kdb-demo \
   --include-intraday-heatmaps
 ```
 
+### Simulated kdb source functions for dev/debug
+
+For development without production market-data tables, keep using the normal
+remote-kdb production commands and opt into source-function injection for that
+run. MMSR sends a deterministic q source-function bootstrap over the existing
+PyKX connection, then routes calendar, reference-data, trade, quote, PTS, and
+primary quote source calls to the injected namespace. The kdb process may still
+be remote; only the source getters are swapped for simulated development data.
+
+```bash
+poetry run mmsr preflight \
+  --config config/report.production_minimal.yaml \
+  --kdb-host dev-kdb.example.com \
+  --kdb-port 5001 \
+  --inject-simulated-sources \
+  --simulated-source-namespace .sim.mmsr \
+  --simulated-symbol-count 50
+```
+
+The same flags are available on `mmsr plan` and `mmsr render`. MMSR-owned
+calculation q still runs in the configured `data.kdb.calculation_namespace`;
+the simulated namespace only supplies source getters:
+
+```q
+.sim.mmsr.getTradingCalendar[start;end]
+.sim.mmsr.getRef[date]
+.sim.mmsr.getTrade[date;refs]
+.sim.mmsr.getQuote[date;refs]
+.sim.mmsr.getPtsTrade[date;refs]
+.sim.mmsr.getPtsQuote[date;refs]
+.sim.mmsr.getPrimaryQuote[date;refs]
+```
+
+`--simulated-symbol-count` controls the deterministic synthetic universe size
+for that command invocation. These functions are for layout, report, and q
+integration debugging only; they are not market evidence.
+
 ### Production kdb source-function boundary
 
 Production metric runs call user-owned q functions instead of querying physical
