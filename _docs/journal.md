@@ -10143,3 +10143,65 @@ Removed files:
   - `ruff-format`
   - `mypy`
   - full `pytest` suite
+
+---
+
+## 2026-05-30 — Remove dead batch query code and legacy helpers from query_plan.py
+
+### Implemented
+
+- Removed `RenderedMetricBatchQuery` dataclass — dead after `KdbMetricRunner.run_batch` was removed earlier.
+- Removed `KdbMetricQueryPlanner.render_batch()` — production path uses `render_day()` with the installed `runReportDay` q entry point.
+- Removed batch-only helper functions:
+  - `_batch_source_parameters` — only used by `render_batch`.
+  - `_validate_batch_request_compatibility` — only used by `render_batch`.
+- Removed additional legacy dead helpers discovered by Pylance:
+  - `_source_extra_columns`, `_render_template_with_used_params`, `_metric_function_expression`,
+    `_q_source_loader_expression`, `_day_source_parameters`, `_day_symbol_values`,
+    `_day_chunk_size`, `_required_string_sequence_parameter`, `_q_symbol_filter_vector`,
+    `_q_positive_int_parameter`, `_q_time_vector`, `_q_time`.
+- Removed now-unused `time` import from `datetime`.
+- Removed `run_batch` mock method from `FakeKdbMetricRunner` in test file (defined but never called).
+- Net reduction: **269 lines** across 2 files.
+
+### Files changed
+
+- `mmsr/kdb/query_plan.py`
+- `tests/test_kdb_production_execution.py`
+
+### Validation
+
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache python -m pre_commit run --all-files` passed:
+  - `ruff-check`, `ruff-format`, `mypy`, full `pytest` suite — all green.
+
+### Current milestone
+
+- R0: Slim and stabilize the default product surface
+
+### Estimated milestone completion
+
+- R0: 100% — all exit criteria met:
+  1. Default production config does not request symbol or symbol-bucket rollups.
+  2. Default market report options do not emit symbol anomaly/detail pages.
+  3. q calculation helpers only kept when they provide real policy or reuse.
+  4. Tests assert default report pages and default aggregation levels remain market/group-first.
+  5. No-op q wrappers removed. Dead batch/compat execution paths excised.
+  6. Unused legacy helpers cleaned out.
+
+### Remaining work before next milestone
+
+- R1 (q metric calculation performance pass) is the next milestone.
+- R1 exit criteria require: per-stage q timings surfaced, source loading deduplicated across metric families, reversion family reuses prepared joins, and tests guard against reintroducing redundant wrappers or repeated family prep.
+
+### Best next deterministic step
+
+- Profile the q `runReportDay` per-stage timings on a real or simulated kdb run.
+  Verify that activity and liquidity families each load raw sources at most once per day/chunk,
+  and that the reversion family reuses the prepared `tradeWithPreMid`/`postQuotes` state across
+  all six horizons instead of repeating the full preparation. If any stage shows redundant loads,
+  optimize the q before adding more metrics or report pages.
+
+### Open questions
+
+- Is a real kdb+ endpoint available for R1 profiling, or should profiling use the simulated
+  source injection path (`--inject-simulated-sources`)?

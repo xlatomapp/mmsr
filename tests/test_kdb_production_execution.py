@@ -365,11 +365,6 @@ class FakeRunner:
         self.requests.append(request)
         return self._series_for_request(request)
 
-    def run_batch(self, requests):  # type: ignore[no-untyped-def]
-        self.batch_requests.append(tuple(requests))
-        self.requests.extend(requests)
-        return tuple(self._series_for_request(request) for request in requests)
-
     def plan_day(self, requests):  # type: ignore[no-untyped-def]
         self.planned_requests.extend(requests)
         return KdbMetricQueryPlanner().render_day(requests)
