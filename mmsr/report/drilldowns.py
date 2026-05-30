@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
+from html import escape
 from math import isfinite
 
 from mmsr.metrics.base import MetricDefinition
@@ -19,7 +20,7 @@ from mmsr.presentation.labels import (
     format_group_label,
     format_intraday_bucket_label,
 )
-from mmsr.report.components import MetricTable, MetricTableRow, ReportPage
+from mmsr.report.components import HtmlBlock, MetricTable, MetricTableRow, ReportPage
 from mmsr.report.symbols import DEFAULT_SYMBOL_GROUP_KEYS
 
 DEFAULT_DRILLDOWN_GROUP_KEYS: tuple[str, ...] = (
@@ -97,6 +98,7 @@ def build_drilldown_report_page(
         return None
 
     _require_metric_definitions_for_comparisons(selected, definitions)
+    delta_bars_block = _build_group_delta_bars_block(selected, definitions)
     table = MetricTable(
         title=resolved_options.table_title.strip(),
         rows=[
@@ -111,8 +113,88 @@ def build_drilldown_report_page(
     )
     return ReportPage(
         title=resolved_options.title.strip(),
+        html_blocks=([delta_bars_block] if delta_bars_block is not None else []),
         metric_tables=[table],
     )
+
+
+_DELTA_BAR_MAX_ITEMS = 8
+
+
+def _build_group_delta_bars_block(
+    comparisons: tuple[MetricComparison, ...],
+    definitions: Mapping[str, MetricDefinition],
+) -> HtmlBlock | None:
+    """Build a compact visual block ranking top group-level deltas.
+
+    Renders horizontal CSS bars ordered by |change_pct| so the drilldown page
+    leads with a scannable visual before the metric table.
+    """
+    if not comparisons:
+        return None
+
+    ranked = sorted(
+        comparisons,
+        key=lambda comp: -(abs(comp.change_pct or 0.0)),
+    )[:_DELTA_BAR_MAX_ITEMS]
+
+    if not ranked:
+        return None
+
+    max_abs_pct = max(abs(comp.change_pct or 0.0) for comp in ranked)
+    if max_abs_pct == 0:
+        return None
+
+    rows_html = "\n".join(_delta_bar_row_html(comp, definitions.get(comp.metric_name), max_abs_pct) for comp in ranked)
+
+    body_html = (
+        '<div class="drilldown-delta-bars">\n'
+        "  <p><strong>Top group deltas:</strong> "
+        "current-versus-reference change ranked by magnitude. "
+        "Bars are scaled to the largest absolute percentage change.</p>\n"
+        f"{rows_html}\n"
+        "</div>"
+    )
+    return HtmlBlock(
+        title="Group Delta Overview",
+        body_html=body_html,
+        help_text="Deterministic group-level delta ranking from already-computed comparisons.",
+    )
+
+
+def _delta_bar_row_html(
+    comparison: MetricComparison,
+    definition: MetricDefinition | None,
+    max_abs_pct: float,
+) -> str:
+    metric_label = definition.label if definition is not None else comparison.metric_name
+    group_label = _format_drilldown_group_label(comparison)
+    pct = comparison.change_pct or 0.0
+    bar_width = (abs(pct) / max_abs_pct) * 100 if max_abs_pct > 0 else 0
+    direction_class = "delta-bar--positive" if pct >= 0 else "delta-bar--negative"
+    status_class = f"delta-bar--{comparison.status}"
+    pct_text = f"{pct:+.1%}"
+
+    return (
+        f'  <div class="delta-bar {direction_class} {status_class}">\n'
+        f'    <span class="delta-bar__label">{escape(metric_label)}'
+        f" &mdash; {escape(group_label)}</span>\n"
+        f'    <span class="delta-bar__track">'
+        f'<span class="delta-bar__fill" style="width:{bar_width:.0f}%"></span>'
+        f"</span>\n"
+        f'    <span class="delta-bar__value">{escape(pct_text)}</span>\n'
+        "  </div>"
+    )
+
+
+def _format_drilldown_group_label(comparison: MetricComparison) -> str:
+    parts: list[str] = []
+    for key in ("market_cap_bucket", "sector", "segment", "market_segment"):
+        if key in comparison.group:
+            parts.append(str(comparison.group[key]))
+    if not parts:
+        parts.append(format_group_label(comparison.group))
+    return ", ".join(parts)
 
 
 def select_drilldown_comparisons(

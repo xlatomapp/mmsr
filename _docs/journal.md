@@ -11268,3 +11268,55 @@ dictionary). The simple `select sum ... by ...` form is correct and safer.
 ### Open questions
 
 - None at this time.
+
+---
+
+## 2026-05-30 — D2 report design: visual-first drilldown page
+
+### Implemented
+
+- Reviewed `_docs/report_design_roadmap.md` — new design roadmap with D0-D5
+  milestones specifically for the report surface.
+- **D0 (UX Contract Lock)**: Already satisfied. Tests assert structure order for
+  all default report renders including Report Meta, Market KPI Snapshot,
+  Executive Market Overview, and Primary Intraday Signal.
+- **D1 (Page-1 Story Redesign)**: Already satisfied. Page 1 includes Report
+  Meta strip, KPI Snapshot, narrative key changes + top drivers with |z|
+  mini bars, primary intraday chart, and insight callout.
+- **D2 (Visual Priority Refactor)**: Added `_build_group_delta_bars_block` to
+  the drilldown page — leads with scannable horizontal bar visual (top 8 group
+  deltas ranked by |change_pct|) before the metric table. Sections 2/3/5/6
+  already visual-first.
+- Added `drilldown-delta-bars` CSS class and `Group Delta Overview` html_block
+  to drilldown page output.
+
+### Files changed
+
+- `mmsr/report/drilldowns.py` — +90 lines: new `_build_group_delta_bars_block`,
+  `_delta_bar_row_html`, `_format_drilldown_group_label`; wired into
+  `build_drilldown_report_page`
+- `tests/test_drilldowns.py` — assert html_blocks + delta bars presence
+- `tests/test_market_report.py` — assert Group Delta Overview in HTML
+- `tests/test_offline_demo.py` — assert Group Delta Overview in HTML
+
+### Validation
+
+- `pytest-full`: all 380+ tests pass
+- `ruff-check`, `ruff-format`, `mypy`: all pass
+
+### Current milestones
+
+- Main roadmap: R0-R2 complete → next: R3 (Drilldowns around market questions)
+- Design roadmap: D0-D2 complete → next: D3 (Group Analysis Upgrade)
+
+### Best next deterministic step
+
+- D3: Add a heatmap to the drilldown page and reorder pages to match the
+  target information architecture (Group Analysis before Intraday Detail).
+
+### Open questions
+
+- Should the drilldown page move before Activity Distribution in page order?
+  Target architecture has Group Analysis (Section 3) before intraday
+  diagnostics (Section 2). Current: Activity → Liquidity → Daily Trends →
+  Toxicity → Drilldowns → Intraday Detail.
