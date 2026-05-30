@@ -260,10 +260,11 @@ def _format_change_context(comparison: MetricComparison) -> str:
     """Build context string from group, bucket, venue, and horizon metadata."""
     parts: list[str] = []
     group = comparison.group
-    # Group-level context: iterate all non-sym, non-venue, non-horizon group keys
-    context_group_keys = {k: v for k, v in group.items() if k not in ("sym", "ric", "venue", "horizon")}
-    for _key, value in context_group_keys.items():
-        parts.append(str(value))
+    # Include meaningful classification keys; skip identifiers and raw codes
+    _context_keys = ("topixCapGrp", "market_cap_bucket", "sector", "segment")
+    for key in _context_keys:
+        if key in group:
+            parts.append(str(group[key]))
     # Venue and horizon context for reversion metrics
     if "venue" in group:
         parts.append(str(group["venue"]))
