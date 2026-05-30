@@ -37,7 +37,6 @@ _MARKET_SUMMARY_FAMILIES: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 _NARRATIVE_MAX_CHANGES = 5
-_NARRATIVE_MIN_SEVERITY_SCORE = 0
 
 
 @dataclass(frozen=True)
