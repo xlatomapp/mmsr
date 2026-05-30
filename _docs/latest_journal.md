@@ -16,29 +16,27 @@ Use this file as the **active-step buffer**.
    - Keep it in the same structure used by `_docs/journal.md`.
 
 ## Current Step Entry
-## 2026-05-30 — Liquidity heatmap render recovery and scope correction
+
+## 2026-05-30 — D4 implementation: execution-ease legend thresholds for liquidity heatmap
 
 ### What changed
-- Fixed matrix payload parsing path for both drilldown and symbol-anomaly script payloads so the browser can parse JSON consistently.
-- Restricted metric explorer heatmap to **liquidity metrics only**:
-  - `quoted_spread_bps`
-  - `top_of_book_depth`
-- Removed reversion/activity metrics from this matrix selection path.
-- Added fallback scoring when `z_score` is missing:
-  - use polarity-adjusted `change_pct * 100` as execution-ease score.
-- Kept orientation as requested:
-  - rows = groups
-  - columns = metrics.
-- Updated chart copy/hover text and drilldown tests.
+- Added explicit execution-ease legend text to the liquidity group-metric heatmap panel:
+  - `>= +1.5` easier execution
+  - `-1.5 to +1.5` neutral
+  - `<= -1.5` degraded execution
+- Added dedicated legend styling in the report template for clear visual separation.
+- Added drilldown test assertions to lock legend threshold copy in the generated explorer block.
+- Per workflow, appended previous latest-journal entry into `_docs/journal.md` and reset this buffer before starting implementation.
 
 ### Files changed
 - `mmsr/report/drilldowns.py`
-- `mmsr/report/symbols.py`
 - `mmsr/report/templates/report.html.j2`
 - `tests/test_drilldowns.py`
+- `_docs/journal.md`
+- `_docs/latest_journal.md`
 
 ### Tests updated
-- Added/updated drilldown tests for liquidity-only matrix coverage and change-pct fallback behavior.
+- `tests/test_drilldowns.py` now asserts the threshold legend content in the explorer block.
 
 ### Validation
 - `PRE_COMMIT_HOME=/tmp/pre-commit-cache conda run -n mmsr pre-commit run --all-files` passed.
@@ -47,13 +45,13 @@ Use this file as the **active-step buffer**.
 - D4 in progress.
 
 ### Estimated completion
-- ~92% of D4.
+- ~95% of D4.
 
 ### Remaining work
-- Add explicit visual legend thresholds for execution-ease interpretation.
+- Optional: bind selected anomaly row directly to symbol detail-page anchor and add render assertions.
 
 ### Best next deterministic implementation step
-- Add legend thresholds (+/- bands) in the matrix panel and lock with render assertions.
+- Add deterministic “open detail page” anchor link from selected anomaly row when detail pages are emitted.
 
 ### Open questions
 - None.

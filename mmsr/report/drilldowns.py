@@ -329,6 +329,9 @@ def _build_group_metric_explorer_block(
       <p>Rows are groups, columns are liquidity metrics.
       Positive execution-ease score indicates easier execution; negative indicates worse execution.</p>
       <div class="drilldown-matrix-explorer__chart" data-drilldown-heatmap></div>
+      <p class="drilldown-matrix-explorer__legend">
+        Legend: &ge; +1.5 easier execution, between -1.5 and +1.5 neutral, &le; -1.5 degraded execution.
+      </p>
     </div>
     <div class="drilldown-matrix-explorer__panel">
       <h4>Selected Group Daily Trend</h4>

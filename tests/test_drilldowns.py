@@ -223,6 +223,8 @@ def test_build_drilldown_report_page_formats_rows_with_metric_help() -> None:
     assert "drilldown-delta-bars" in page.html_blocks[0].body_html
     assert page.html_blocks[1].title == "Metric Explorer & Group Analysis"
     assert "data-drilldown-matrix-spec" in page.html_blocks[1].body_html
+    assert "&ge; +1.5 easier execution" in page.html_blocks[1].body_html
+    assert "&le; -1.5 degraded execution" in page.html_blocks[1].body_html
     # Heatmaps require at least 2 groups per metric — sparse test data
     # may produce 0 heatmaps. Integration tests cover the populated case.
     assert isinstance(page.heatmaps, list)
