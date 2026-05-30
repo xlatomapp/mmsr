@@ -71,11 +71,10 @@
     / families pass through unchanged.
     if[0=count facts; :0!facts];
     byCols: (`date`time_bucket`topixCapGrp) inter cols facts;
-    additiveSpec: `turnover`volume`trade_count!3#{(sum;x)};
-    aggCols: key[additiveSpec] inter cols facts;
-    $[0<count aggCols;
-        ?[facts;();{x!x}byCols;additiveSpec aggCols];
-        facts]
+    aggCols: `turnover`volume`trade_count inter cols facts;
+    if[0=count aggCols; :facts];
+    aggDict: aggCols!{(sum;x)} each aggCols;
+    0!?[facts;();{x!x}byCols;aggDict]
     };
 
 {{ calculation_namespace }}.calcActivity:{[rawTrades;refs;params]
@@ -398,7 +397,7 @@
     rollupStartTs: .z.p;
     rolledMetricDict: metricNames!({[chunkResults;requestedAggregationLevels;metricName]
             {{ calculation_namespace }}.rollupMetricResult[
-                raze {[metricName;chunkResult] (x 2)[metricName]}[metricName] each chunkResults;
+                raze {[metricName;chunkResult] chunkResult[2][metricName]}[metricName] each chunkResults;
                 requestedAggregationLevels]
             }[chunkResults;requestedAggregationLevels] each metricNames);
     rollupEndTs: .z.p;
