@@ -111,6 +111,9 @@ def test_build_symbol_anomaly_page_renders_metric_table_with_scope_and_help() ->
     assert 'aria-live="polite"' in page.html_blocks[0].body_html
     assert 'data-symbol-anomaly-index="0"' in page.html_blocks[0].body_html
     assert 'aria-label="Select anomaly 7203 Quoted Spread status Alert"' in page.html_blocks[0].body_html
+    assert 'class="symbol-anomaly-explorer__left explorer-panel"' in page.html_blocks[0].body_html
+    assert "Anomaly List" in page.html_blocks[0].body_html
+    assert "Selected Anomaly Detail" in page.html_blocks[0].body_html
     assert '"detail_anchor":"symbol-detail-7203-' in page.html_blocks[0].body_html
     assert "7203" in page.html_blocks[0].body_html
     assert len(page.metric_tables) == 1
@@ -567,6 +570,8 @@ def test_market_report_adds_symbol_detail_index_when_detail_pages_exist() -> Non
     assert ".symbol-anomaly-explorer__rows {" in html
     assert ".symbol-anomaly-explorer__detail-item {" in html
     assert "padding-bottom: 5px;" in html
+    assert ".explorer-panel {" in html
+    assert ".explorer-panel__subtitle {" in html
     assert ".symbol-anomaly-explorer__detail-value {" in html
     assert "font-size: 12px;" in html
     assert "Open detail page" in html

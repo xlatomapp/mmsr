@@ -335,11 +335,22 @@
       gap: 10px;
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
-    .drilldown-matrix-explorer__panel {
+    .explorer-panel {
       background: #fff;
       border: 1px solid var(--mmsr-border);
       border-radius: 12px;
       padding: 8px 10px;
+    }
+    .explorer-panel__title {
+      font-size: 13px;
+      line-height: 1.35;
+      margin: 0 0 3px;
+    }
+    .explorer-panel__subtitle {
+      color: var(--mmsr-muted);
+      font-size: 11px;
+      line-height: 1.4;
+      margin: 0 0 6px;
     }
     .drilldown-matrix-explorer__panel h4 {
       font-size: 13px;
@@ -365,12 +376,6 @@
       display: grid;
       gap: 12px;
       grid-template-columns: minmax(220px, 0.42fr) 1fr;
-    }
-    .symbol-anomaly-explorer__left, .symbol-anomaly-explorer__right {
-      background: #fff;
-      border: 1px solid var(--mmsr-border);
-      border-radius: 12px;
-      padding: 8px 10px;
     }
     .symbol-anomaly-explorer__left h4, .symbol-anomaly-explorer__right h4 {
       font-size: 13px;

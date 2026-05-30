@@ -227,6 +227,9 @@ def test_build_drilldown_report_page_formats_rows_with_metric_help() -> None:
     assert 'aria-label="Liquidity group-metric heatmap"' in page.html_blocks[1].body_html
     assert "data-drilldown-trend" in page.html_blocks[1].body_html
     assert 'aria-label="Selected group daily trend chart"' in page.html_blocks[1].body_html
+    assert 'class="drilldown-matrix-explorer__panel explorer-panel"' in page.html_blocks[1].body_html
+    assert 'class="explorer-panel__title"' in page.html_blocks[1].body_html
+    assert 'class="explorer-panel__subtitle"' in page.html_blocks[1].body_html
     assert "Cells show mean % change" in page.html_blocks[1].body_html
     assert "Cell format: mean % change (z-score reference)." in page.html_blocks[1].body_html
     # Heatmaps require at least 2 groups per metric — sparse test data

@@ -118,6 +118,8 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert ".drilldown-matrix-explorer__panel h4 {" in html
     assert "font-size: 13px;" in html
     assert "line-height: 1.35;" in html
+    assert ".explorer-panel__title {" in html
+    assert ".explorer-panel__subtitle {" in html
     assert "Executive Market Overview" in html
     assert "Market KPI Snapshot" in html
     assert "Report Meta" in html

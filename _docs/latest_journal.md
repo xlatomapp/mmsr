@@ -17,43 +17,47 @@ Use this file as the **active-step buffer**.
 
 ## Current Step Entry
 
-## 2026-05-31 — D5 implementation: compact drilldown/anomaly panel polish with render-lock assertions
+## 2026-05-31 — D5 implementation: summary-to-drilldown visual continuity pass
 
 ### What changed
-- Implemented compact spacing and typography polish for D5 in report template:
-  - tightened drilldown matrix panel padding/gaps and heading/body text scale
-  - tightened symbol anomaly explorer row/detail spacing and text scale
-  - preserved existing structural semantics and interactivity; this is presentation-focused compaction.
-- Added deterministic render assertions to lock the style contract:
-  - market report render test now verifies compact drilldown CSS selectors/properties are present
-  - symbol anomaly render test now verifies compact anomaly detail/row style selectors/properties are present.
+- Implemented continuity styling primitives across drilldown and anomaly explorers:
+  - added shared explorer panel classes (`explorer-panel`, `explorer-panel__title`, `explorer-panel__subtitle`) in report template CSS
+  - applied those shared classes in drilldown matrix panel markup and symbol anomaly explorer markup.
+- Standardized explorer microcopy/header casing for consistency:
+  - `Anomaly list` -> `Anomaly List`
+  - `Selected anomaly detail` -> `Selected Anomaly Detail`.
+- Added deterministic tests that lock both structural class usage and shared CSS style hook presence in rendered HTML.
 
 ### Files changed
 - `mmsr/report/templates/report.html.j2`
+- `mmsr/report/drilldowns.py`
+- `mmsr/report/symbols.py`
+- `tests/test_drilldowns.py`
 - `tests/test_market_report.py`
 - `tests/test_symbol_anomaly_pages.py`
 - `_docs/journal.md`
 - `_docs/latest_journal.md`
 
 ### Tests updated
+- `tests/test_drilldowns.py`
 - `tests/test_market_report.py`
 - `tests/test_symbol_anomaly_pages.py`
 
 ### Validation
-- `conda run -n mmsr pytest -q tests/test_market_report.py tests/test_symbol_anomaly_pages.py` passed.
+- `conda run -n mmsr pytest -q tests/test_drilldowns.py tests/test_market_report.py tests/test_symbol_anomaly_pages.py` passed.
 - `PRE_COMMIT_HOME=/tmp/pre-commit-cache conda run -n mmsr pre-commit run --all-files` passed.
 
 ### Current milestone
 - D5 in progress.
 
 ### Estimated completion
-- ~68% of D5.
+- ~78% of D5.
 
 ### Remaining work
-- Finalize D5 with UX-level polish for summary/drilldown flow consistency against design roadmap targets.
+- Final D5 cleanup for summary/drilldown narrative alignment and closeout docs.
 
 ### Best next deterministic implementation step
-- Implement summary-to-drilldown visual continuity pass (consistent panel headers, spacing rhythm, and section microcopy hierarchy) and lock with render-level assertions.
+- Add drilldown lead narrative block (1-2 deterministic bullets summarizing largest group shifts) directly above matrix explorer and lock with render assertions.
 
 ### Open questions
 - None.

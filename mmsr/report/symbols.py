@@ -258,13 +258,13 @@ def _build_symbol_anomaly_explorer_block(
     body_html = (
         '<div class="symbol-anomaly-explorer" data-symbol-anomaly-explorer>'
         '<div class="symbol-anomaly-explorer__grid">'
-        '<div class="symbol-anomaly-explorer__left">'
-        "<h4>Anomaly list</h4>"
-        "<p>Select a row to update the detail panel.</p>"
+        '<div class="symbol-anomaly-explorer__left explorer-panel">'
+        '<h4 class="explorer-panel__title">Anomaly List</h4>'
+        '<p class="explorer-panel__subtitle">Select a row to update the detail panel.</p>'
         f'<div class="symbol-anomaly-explorer__rows">{row_items}</div>'
         "</div>"
-        '<div class="symbol-anomaly-explorer__right">'
-        "<h4>Selected anomaly detail</h4>"
+        '<div class="symbol-anomaly-explorer__right explorer-panel">'
+        '<h4 class="explorer-panel__title">Selected Anomaly Detail</h4>'
         '<div class="symbol-anomaly-explorer__detail" data-symbol-anomaly-detail '
         'role="status" aria-live="polite"></div>'
         "</div>"
