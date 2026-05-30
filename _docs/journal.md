@@ -11307,16 +11307,57 @@ dictionary). The simple `select sum ... by ...` form is correct and safer.
 ### Current milestones
 
 - Main roadmap: R0-R2 complete → next: R3 (Drilldowns around market questions)
-- Design roadmap: D0-D2 complete → next: D3 (Group Analysis Upgrade)
+- Design roadmap: D0-D3 complete → next: D3b (page reorder) + D4 (Symbol UX)
 
 ### Best next deterministic step
 
-- D3: Add a heatmap to the drilldown page and reorder pages to match the
-  target information architecture (Group Analysis before Intraday Detail).
+- Reorder report pages to match target information architecture: move
+  drilldown/group-analysis page before intraday detail page.
 
 ### Open questions
 
-- Should the drilldown page move before Activity Distribution in page order?
-  Target architecture has Group Analysis (Section 3) before intraday
-  diagnostics (Section 2). Current: Activity → Liquidity → Daily Trends →
-  Toxicity → Drilldowns → Intraday Detail.
+- None at this time.
+
+---
+
+## 2026-05-30 — D3: Group Comparison Matrix + direction-aware coloring
+
+### Implemented
+
+- Added `_build_group_comparison_matrix_block` to `drilldowns.py` — a
+  color-coded metric × group grid rendered as an HTML table with CSS
+  background color intensity.
+- Direction-aware cell coloring: green (`rgba(25,135,84,...)`) for favorable
+  moves, red (`rgba(220,53,69,...)`) for adverse moves, respecting
+  `MetricDefinition.higher_is_better`. Intensity scales with |change_pct|.
+- `_pivot_comparison_matrix` groups comparisons into (metric, group_value) cells,
+  selecting the best representative per cell.
+- `_primary_group_value` extracts the most meaningful drilldown dimension for
+  matrix columns (market_cap_bucket → sector → segment → topixCapGrp).
+- Fixed `higher_is_better=None` handling: neutral metrics (volume, trade_count)
+  default to `True` so increases are colored as favorable.
+- Replaced `title=` attribute with `data-pct=` to avoid help-control anti-pattern.
+- Drilldown page visual order: Delta Bars → Comparison Matrix → Metric Table.
+
+### Files changed
+
+- `mmsr/report/drilldowns.py` — +130 lines: matrix builder + pivot + cell HTML
+- `tests/test_drilldowns.py` — assert 2 html_blocks with matrix presence
+- `tests/test_market_report.py` — assert matrix in HTML
+- `tests/test_offline_demo.py` — assert matrix + favorable cells in HTML
+
+### Validation
+
+- `pytest-full`: all 380+ tests pass
+- `ruff-check`, `ruff-format`, `mypy`: all pass
+- Offline demo: verified 2 favorable + 4 adverse cells with correct coloring
+
+### Current milestones
+
+- Main roadmap: R0-R2 complete → next: R3 (Drilldowns around market questions)
+- Design roadmap: D0-D3 complete → next: page reorder to target architecture
+
+### Best next deterministic step
+
+- Reorder report pages: move drilldown page before intraday detail per the
+  target information architecture (Group Analysis → Intraday Detail).

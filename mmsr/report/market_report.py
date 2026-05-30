@@ -380,16 +380,13 @@ def build_market_monitor_report(
     )
     if toxicity_reversion_page is not None:
         pages.append(toxicity_reversion_page)
-    detail_series = _detail_current_series(
-        report_input.current_series,
-        options=resolved_options,
-        toxicity_reversion_page_present=toxicity_reversion_page is not None,
-    )
-    detail_page = _build_detail_page(
-        detail_series,
+    drilldown_page = _build_drilldown_page(
+        report_input,
         definitions,
         options=resolved_options,
     )
+    if drilldown_page is not None:
+        pages.append(drilldown_page)
     symbol_detail_pages = _build_symbol_detail_pages(
         report_input,
         definitions,
@@ -404,13 +401,16 @@ def build_market_monitor_report(
     if symbol_anomaly_page is not None:
         pages.append(symbol_anomaly_page)
     pages.extend(symbol_detail_pages)
-    drilldown_page = _build_drilldown_page(
-        report_input,
+    detail_series = _detail_current_series(
+        report_input.current_series,
+        options=resolved_options,
+        toxicity_reversion_page_present=toxicity_reversion_page is not None,
+    )
+    detail_page = _build_detail_page(
+        detail_series,
         definitions,
         options=resolved_options,
     )
-    if drilldown_page is not None:
-        pages.append(drilldown_page)
     pages.append(detail_page)
 
     document = ReportDocument(
