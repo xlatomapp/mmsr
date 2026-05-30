@@ -10,6 +10,7 @@ __pycache__/
 build/
 dist/
 *.egg-info/
+_output/
 
 # Virtual environments
 .venv/
@@ -23,3 +24,9 @@ venv/
 # Local report outputs
 reports/
 output/
+
+# Potential AI agent config directories
+.agents/
+.claude/
+.codex/
+.superpowers/
