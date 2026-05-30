@@ -572,36 +572,7 @@ class KdbProductionExecutor:
         """Run one trading day with q-side chunking and rollups."""
 
         requests = tuple(step.request for step in steps)
-        run_day = getattr(self.runner, "run_day", None)
-        if callable(run_day):
-            return tuple(run_day(requests))
-
-        # Offline fakes from earlier iterations only implement run_batch/run.
-        # Preserve their chunk-by-chunk calls, then combine them into the same
-        # one-series-per-metric shape returned by the real day runner.
-        observations_by_metric: dict[str, list[MetricObservation]] = defaultdict(list)
-        for batch_steps in _metric_step_batches(steps):
-            for series in self._run_metric_step_batch(batch_steps):
-                observations_by_metric[series.metric_name].extend(series.observations)
-        return tuple(
-            MetricTimeSeries.from_observations(
-                observations_by_metric[step.metric_name],
-                metric_name=step.metric_name,
-            )
-            for step in _representative_steps_by_metric(steps)
-        )
-
-    def _run_metric_step_batch(
-        self,
-        steps: Sequence[ProductionMetricRunStep],
-    ) -> tuple[MetricTimeSeries, ...]:
-        """Run one date/chunk batch, falling back only for non-batch test doubles."""
-
-        requests = tuple(step.request for step in steps)
-        run_batch = getattr(self.runner, "run_batch", None)
-        if callable(run_batch):
-            return tuple(run_batch(requests))
-        return tuple(self.runner.run(request) for request in requests)
+        return tuple(self.runner.run_day(requests))
 
 
 def _metric_step_day_batches(
@@ -641,22 +612,6 @@ def _symbols_for_day_steps(steps: Sequence[ProductionMetricRunStep]) -> tuple[st
     for step in steps:
         symbols.extend(step.symbols)
     return _dedupe_strings(symbols)
-
-
-def _metric_step_batches(
-    steps: Sequence[ProductionMetricRunStep],
-) -> tuple[tuple[ProductionMetricRunStep, ...], ...]:
-    """Group ordered metric steps into one batch per trading day/symbol chunk."""
-
-    batches: list[list[ProductionMetricRunStep]] = []
-    current_key: tuple[date, int] | None = None
-    for step in steps:
-        key = (step.trading_day, step.symbol_chunk_id)
-        if current_key != key:
-            batches.append([])
-            current_key = key
-        batches[-1].append(step)
-    return tuple(tuple(batch) for batch in batches)
 
 
 class KdbProductionPreflight:

@@ -10041,3 +10041,29 @@ Removed files:
   - `ruff-format`
   - `mypy`
   - full `pytest` suite
+
+---
+
+## 2026-05-30 — Remove legacy production executor batch/run fallback path
+
+### Implemented
+
+- Simplified `KdbProductionExecutor` execution flow to one production path:
+  `run_day`.
+- Removed legacy fallback logic that attempted `run_batch` and then
+  per-request `run` when `run_day` was unavailable.
+- Removed now-unused helper `_metric_step_batches`.
+
+### Files changed
+
+- `mmsr/kdb/production.py`
+- `_docs/journal.md`
+
+### Validation
+
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache python -m pre_commit run --all-files`
+  passed:
+  - `ruff-check`
+  - `ruff-format`
+  - `mypy`
+  - full `pytest` suite
