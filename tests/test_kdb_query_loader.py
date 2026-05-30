@@ -236,3 +236,20 @@ def test_q_library_excludes_removed_legacy_metric_functions() -> None:
     )
     for term in legacy_terms:
         assert term not in template
+
+
+def test_q_library_run_report_day_includes_timing_instrumentation() -> None:
+    template = load_q_library_template("mmsr_calculations.q.j2")
+
+    assert ".runReportDay:{[runDate;reportConfig]" in template
+    assert ".elapsedMs:{[startTs;endTs]" in template
+    assert "reportStartTs: .z.p;" in template
+    assert "refLoadStartTs: .z.p;" in template
+    assert "chunkCalcStartTs: .z.p;" in template
+    assert "rollupStartTs: .z.p;" in template
+    assert "report_ref_load_ms" in template
+    assert "report_chunk_calc_ms" in template
+    assert "report_rollup_ms" in template
+    assert "report_total_ms" in template
+    assert "report_chunk_count" in template
+    assert "report_symbol_count" in template

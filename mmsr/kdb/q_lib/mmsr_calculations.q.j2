@@ -298,6 +298,10 @@
     string[metricName] like "primary_quote_reversion_*_bps"
     };
 
+{{ calculation_namespace }}.elapsedMs:{[startTs;endTs]
+    `long$((endTs - startTs) % 0D00:00:00.001)
+    };
+
 {{ calculation_namespace }}.runMetric:{[metricName;rawSources;metricParams]
     if[metricName in `turnover`volume`trade_count;
         :{{ calculation_namespace }}.calcActivity[rawSources`trades;rawSources`refs;metricParams]
@@ -317,6 +321,7 @@
     };
 
 {{ calculation_namespace }}.runReportDay:{[runDate;reportConfig]
+    reportStartTs: .z.p;
     sourceFunctions: reportConfig`sourceFunctions;
     metricNames: reportConfig`metricNames;
     metricParams: reportConfig`metricParams;
@@ -324,13 +329,16 @@
     requestedAggregationLevels: reportConfig`aggregationLevels;
     chunkSize: reportConfig`chunkSize;
 
+    refLoadStartTs: .z.p;
     rawRefs: sourceFunctions[`reference_data][runDate];
     refs: `sym xkey {{ calculation_namespace }}.applyUniverseFilters[rawRefs;universeFilters];
     allSyms: exec sym from 0!refs;
+    refLoadEndTs: .z.p;
 
     chunks: enlist 0#`;
     if[0<count allSyms; chunks: chunkSize cut allSyms];
 
+    chunkCalcStartTs: .z.p;
     chunkResults: { [runDate;refs;sourceFunctions;metricNames;metricParams;chunkSyms]
             chunkRefs: `sym xkey select from 0!refs where sym in chunkSyms;
             rawSources: {{ calculation_namespace }}.loadReportSources[runDate;chunkRefs;sourceFunctions];
@@ -353,10 +361,31 @@
                 ];
             resultDict
         }[runDate;refs;sourceFunctions;metricNames;metricParams] each chunks;
+    chunkCalcEndTs: .z.p;
 
-    metricNames!({[chunkResults;requestedAggregationLevels;metricName]
-        {{ calculation_namespace }}.rollupMetricResult[
-            raze {[metricName;chunkResult] chunkResult[metricName]}[metricName] each chunkResults;
-            requestedAggregationLevels]
-        }[chunkResults;requestedAggregationLevels] each metricNames)
+    rollupStartTs: .z.p;
+    rolledMetricDict: metricNames!({[chunkResults;requestedAggregationLevels;metricName]
+            {{ calculation_namespace }}.rollupMetricResult[
+                raze {[metricName;chunkResult] chunkResult[metricName]}[metricName] each chunkResults;
+                requestedAggregationLevels]
+            }[chunkResults;requestedAggregationLevels] each metricNames);
+    rollupEndTs: .z.p;
+
+    refLoadMs: {{ calculation_namespace }}.elapsedMs[refLoadStartTs;refLoadEndTs];
+    chunkCalcMs: {{ calculation_namespace }}.elapsedMs[chunkCalcStartTs;chunkCalcEndTs];
+    rollupMs: {{ calculation_namespace }}.elapsedMs[rollupStartTs;rollupEndTs];
+    totalMs: {{ calculation_namespace }}.elapsedMs[reportStartTs;rollupEndTs];
+    chunkCount: count chunks;
+    symbolCount: count allSyms;
+
+    metricNames!({[rolledMetricDict;refLoadMs;chunkCalcMs;rollupMs;totalMs;chunkCount;symbolCount;metricName]
+            update
+                report_ref_load_ms: refLoadMs,
+                report_chunk_calc_ms: chunkCalcMs,
+                report_rollup_ms: rollupMs,
+                report_total_ms: totalMs,
+                report_chunk_count: chunkCount,
+                report_symbol_count: symbolCount
+            from rolledMetricDict[metricName]
+            }[rolledMetricDict;refLoadMs;chunkCalcMs;rollupMs;totalMs;chunkCount;symbolCount] each metricNames)
     };

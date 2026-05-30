@@ -9911,3 +9911,73 @@ Removed files:
 - Should offline-demo expose an explicit symbol-escalation flag, or should symbol
   fixtures remain test-only until product review asks for demo-visible symbol
   pages again?
+
+
+---
+
+## 2026-05-30 — Add q timing instrumentation to runReportDay
+
+### Implemented
+
+- Added q-side timing instrumentation in `runReportDay` inside
+  `mmsr/kdb/q_lib/mmsr_calculations.q.j2`.
+- Added reusable q helper `elapsedMs` and captured timestamp boundaries for:
+  - reference-data load/filter phase;
+  - chunk calculation phase;
+  - rollup phase;
+  - total run duration.
+- Attached timing and run-shape metadata columns to each returned metric table:
+  - `report_ref_load_ms`
+  - `report_chunk_calc_ms`
+  - `report_rollup_ms`
+  - `report_total_ms`
+  - `report_chunk_count`
+  - `report_symbol_count`
+- Added a focused template test to lock the instrumentation contract in
+  `tests/test_kdb_query_loader.py`.
+
+### Files changed
+
+- `mmsr/kdb/q_lib/mmsr_calculations.q.j2`
+- `tests/test_kdb_query_loader.py`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- Added `test_q_library_run_report_day_includes_timing_instrumentation`.
+
+### Validation
+
+- `python -m compileall mmsr tests` passed.
+- Template text-level checks confirmed timing markers and output columns are
+  present.
+- `git diff --check` passed.
+- Could not run pytest in this environment because `pytest`, `uvx`, and
+  `poetry` are not installed in PATH.
+
+### Current milestone
+
+- Milestone R0: Slim and stabilize the default product surface.
+
+### Estimated milestone completion
+
+- 50%. Default market-first behavior and first q slimming pass are complete;
+  timing instrumentation is now in place.
+
+### Remaining work before milestone completion
+
+- Run focused pytest coverage once a test runner environment is available.
+- Review whether legacy single-metric/batch runner paths can be reduced without
+  breaking compatibility.
+- Continue removing or isolating non-essential compatibility/developer paths
+  from default production behavior.
+
+### Best next deterministic step
+
+- Add a small Python-side preflight/report summary hook that surfaces the
+  new q timing columns in operator logs without changing report output shape.
+
+### Open questions
+
+- Should timing columns remain embedded in every metric table, or should a
+  dedicated optional diagnostics table be returned by q in a future iteration?
