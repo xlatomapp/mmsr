@@ -17,42 +17,41 @@ Use this file as the **active-step buffer**.
 
 ## Current Step Entry
 
-## 2026-05-31 — D5 implementation: keyboard-focus and semantic row labels for anomaly explorer
+## 2026-05-31 — Complexity reduction: removed report budget subsystem
 
 ### What changed
-- Added explicit semantic labels for anomaly explorer row buttons in `mmsr/report/symbols.py`:
-  - each row button now has deterministic `aria-label` including symbol, metric, and status.
-- Added keyboard focus-visible styling for anomaly explorer buttons in `mmsr/report/templates/report.html.j2`:
-  - `.symbol-anomaly-explorer__row:focus-visible` outline for non-pointer navigation.
-- Added/updated regression assertions in `tests/test_symbol_anomaly_pages.py`:
-  - validates button `aria-label` text in anomaly block HTML
-  - validates focus-visible CSS rule appears in rendered report HTML.
+- Removed report budget functionality to reduce repo complexity:
+  - deleted `mmsr/report/budgets.py`
+  - deleted `tests/test_report_budgets.py`
+- Removed budget integration from CLI render flow:
+  - dropped budget imports from `mmsr/cli.py`
+  - removed budget snapshot/evaluation logging branch from production render command.
+- Verified no remaining code references to budget helpers.
 
 ### Files changed
-- `mmsr/report/symbols.py`
-- `mmsr/report/templates/report.html.j2`
-- `tests/test_symbol_anomaly_pages.py`
+- `mmsr/cli.py`
+- `mmsr/report/budgets.py` (deleted)
+- `tests/test_report_budgets.py` (deleted)
 - `_docs/journal.md`
 - `_docs/latest_journal.md`
 
 ### Tests updated
-- `tests/test_symbol_anomaly_pages.py`
+- Removed budget-specific test module as part of subsystem removal.
 
 ### Validation
 - `PRE_COMMIT_HOME=/tmp/pre-commit-cache conda run -n mmsr pre-commit run --all-files` passed.
 
 ### Current milestone
-- D5 in progress.
+- D5 in progress (ongoing polish stream); budget subsystem removed by user direction.
 
 ### Estimated completion
-- ~35% of D5.
+- ~45% of D5.
 
 ### Remaining work
-- Add additional accessibility coverage for drilldown matrix controls where keyboard semantics rely on Plotly.
-- Continue budget/polish assertions and update milestone docs when D5 exit criteria are met.
+- Continue accessibility and visual polish tasks without budget guardrails.
 
 ### Best next deterministic implementation step
-- Add deterministic report-budget snapshot assertions for the redesigned interactive layout (including drilldown/anomaly blocks) and wire that status into D5 closeout docs.
+- Add final accessibility assertions for interactive drilldown/anomaly components and update D5 status docs.
 
 ### Open questions
 - None.
