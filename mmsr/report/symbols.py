@@ -223,6 +223,7 @@ def _build_symbol_anomaly_explorer_block(
         rows.append(
             {
                 "symbol": symbol,
+                "detail_anchor": symbol_detail_anchor_id(symbol),
                 "metric_label": definition.label,
                 "status": comparison.status.replace("_", " ").title(),
                 "value_text": _format_metric_value(comparison.value, unit),

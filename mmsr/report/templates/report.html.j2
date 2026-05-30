@@ -885,7 +885,8 @@
             '<div class="symbol-anomaly-explorer__detail-item"><div class="symbol-anomaly-explorer__detail-label">Current</div><div class="symbol-anomaly-explorer__detail-value">' + row.value_text + "</div></div>" +
             '<div class="symbol-anomaly-explorer__detail-item"><div class="symbol-anomaly-explorer__detail-label">Reference</div><div class="symbol-anomaly-explorer__detail-value">' + row.reference_text + "</div></div>" +
             '<div class="symbol-anomaly-explorer__detail-item"><div class="symbol-anomaly-explorer__detail-label">Change</div><div class="symbol-anomaly-explorer__detail-value">' + row.change_text + "</div></div>" +
-            '<div class="symbol-anomaly-explorer__detail-item"><div class="symbol-anomaly-explorer__detail-label">Scope</div><div class="symbol-anomaly-explorer__detail-value">' + row.scope_text + "</div></div>";
+            '<div class="symbol-anomaly-explorer__detail-item"><div class="symbol-anomaly-explorer__detail-label">Scope</div><div class="symbol-anomaly-explorer__detail-value">' + row.scope_text + "</div></div>" +
+            (row.detail_anchor ? '<div class="symbol-anomaly-explorer__detail-item"><div class="symbol-anomaly-explorer__detail-label">Detail</div><div class="symbol-anomaly-explorer__detail-value"><a href="#' + row.detail_anchor + '">Open detail page</a></div></div>' : "");
         };
         rowButtons.forEach(function (button) {
           button.addEventListener("click", function () {
