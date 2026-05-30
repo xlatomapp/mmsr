@@ -378,7 +378,7 @@
     chunkCount: count chunks;
     symbolCount: count allSyms;
 
-    metricNames!({[rolledMetricDict;refLoadMs;chunkCalcMs;rollupMs;totalMs;chunkCount;symbolCount;metricName]
+    timingResult: metricNames!({[rolledMetricDict;refLoadMs;chunkCalcMs;rollupMs;totalMs;chunkCount;symbolCount;metricName]
             update
                 report_ref_load_ms: refLoadMs,
                 report_chunk_calc_ms: chunkCalcMs,
@@ -387,5 +387,8 @@
                 report_chunk_count: chunkCount,
                 report_symbol_count: symbolCount
             from rolledMetricDict[metricName]
-            }[rolledMetricDict;refLoadMs;chunkCalcMs;rollupMs;totalMs;chunkCount;symbolCount] each metricNames)
+            }[rolledMetricDict;refLoadMs;chunkCalcMs;rollupMs;totalMs;chunkCount;symbolCount] each metricNames);
+
+    -1 "MMSR runReportDay ",string[runDate]," ref:",string[refLoadMs],"ms calc:",string[chunkCalcMs],"ms rollup:",string[rollupMs],"ms total:",string[totalMs],"ms chunks:",string[chunkCount]," syms:",string[symbolCount];
+    timingResult
     };

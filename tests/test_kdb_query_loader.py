@@ -253,3 +253,5 @@ def test_q_library_run_report_day_includes_timing_instrumentation() -> None:
     assert "report_total_ms" in template
     assert "report_chunk_count" in template
     assert "report_symbol_count" in template
+    assert '-1 "MMSR runReportDay "' in template
+    assert "timingResult" in template
