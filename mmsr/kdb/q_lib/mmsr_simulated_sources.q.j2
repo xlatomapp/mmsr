@@ -66,7 +66,7 @@
     };
 
 {{ source_namespace }}.simMid:{[rows;offset]
-    1000f + offset + (0.25 * rows mod 41)
+    1000f + offset + (0.25 * (rows mod 41))
     };
 
 {{ source_namespace }}.getTrade:{[runDate;refs]
@@ -79,14 +79,15 @@
 
 {{ source_namespace }}.quoteFromGrid:{[runDate;refs;venue]
     q:{{ source_namespace }}.withRowNumber {{ source_namespace }}.symTimeGrid[runDate;refs];
-    mid:{{ source_namespace }}.simMid[q`row;0.5f];
-    spread:0.5f + 0.05f * q`row mod 10;
+    rows:q`row;
+    mid:{{ source_namespace }}.simMid[rows;0.5f];
+    spread:0.5f + 0.05f * (rows mod 10);
     update
         venue:venue,
         bidPrice:mid - spread % 2,
         askPrice:mid + spread % 2,
-        bidSize:1000 * 1 + row mod 30,
-        askSize:1000 * 1 + (row + 7) mod 30
+        bidSize:1000 * 1 + rows mod 30,
+        askSize:1000 * 1 + (rows + 7) mod 30
     from q
     };
 
@@ -109,13 +110,14 @@
 
 {{ source_namespace }}.getPtsQuote:{[runDate;refs]
     q:{{ source_namespace }}.withRowNumber {{ source_namespace }}.symTimeGrid[runDate;refs];
-    mid:{{ source_namespace }}.simMid[q`row;1.25f];
-    spread:0.65f + 0.06f * q`row mod 12;
+    rows:q`row;
+    mid:{{ source_namespace }}.simMid[rows;1.25f];
+    spread:0.65f + 0.06f * (rows mod 12);
     update
         venue:(count q)#{{ source_namespace }}.venues,
         bidPrice:mid - spread % 2,
         askPrice:mid + spread % 2,
-        bidSize:900 * 1 + row mod 28,
-        askSize:900 * 1 + (row + 5) mod 28
+        bidSize:900 * 1 + rows mod 28,
+        askSize:900 * 1 + (rows + 5) mod 28
     from q
     };

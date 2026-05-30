@@ -187,7 +187,7 @@
     tradeForHorizon:
         update
             aggressorSide: {{ calculation_namespace }}.inferAggressorSide[tradePrice; ptsMid],
-            horizonTime: time + params`horizon,
+            horizonTime: `time$(time + params`horizon),
             ptsQuoteAge: time - ptsQuoteTime,
             primaryQuoteAge: time - primaryQuoteTime
         from tradeWithPreMid;

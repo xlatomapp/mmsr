@@ -117,6 +117,7 @@ def test_toxicity_reversion_installed_function_uses_future_mid_denominator() -> 
     assert "% primaryMid" not in template
     assert "`date`sym`venue`time xasc ptsQuotes" in template
     assert "inferAggressorSide[tradePrice; ptsMid]" in template
+    assert "horizonTime: `time$(time + params`horizon)" in template
 
 
 def test_render_calculation_function_bootstrap_installs_helpers_in_namespace() -> None:
@@ -142,6 +143,9 @@ def test_render_simulated_source_function_bootstrap_installs_kdb_sources() -> No
     assert ".dev.mmsr.getPtsTrade" in rendered
     assert ".dev.mmsr.getPtsQuote" in rendered
     assert ".dev.mmsr.getPrimaryQuote" in rendered
+    assert "rows:q`row;" in rendered
+    assert "0.05f * (rows mod 10)" in rendered
+    assert "0.06f * (rows mod 12)" in rendered
     assert "date" in rendered
     assert "sym" in rendered
     assert "tradePrice" in rendered

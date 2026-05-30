@@ -10067,3 +10067,47 @@ Removed files:
   - `ruff-format`
   - `mypy`
   - full `pytest` suite
+
+---
+
+## 2026-05-30 — Fix simulated-source q type errors and validate live kdb commands
+
+### Implemented
+
+- Fixed simulated quote source generation in
+  `mmsr/kdb/q_lib/mmsr_simulated_sources.q.j2` by binding `rows:q\`row` and
+  using `rows` in spread/size expressions. This removes runtime `type` errors
+  seen in `.sim.mmsr.getQuote` and `.sim.mmsr.getPtsQuote`.
+- Fixed reversion horizon join-key typing in
+  `mmsr/kdb/q_lib/mmsr_calculations.q.j2` by casting:
+  - `horizonTime: \`time$(time + params\`horizon)`
+  so `aj` key types match between trade/post-quote tables.
+- Updated template assertions in `tests/test_kdb_query_loader.py` for both
+  fixes.
+
+### Live kdb validation (conda env `mmsr`)
+
+- Host/port used: `192.168.3.99:5001`.
+- Verified TCP connectivity and executed:
+  - `mmsr preflight` with simulated source injection: passed.
+  - metric-isolated preflight:
+    - `quoted_spread_bps`: passed.
+    - `primary_quote_reversion_10ms_bps`: passed.
+  - full `mmsr render` with simulated source injection: passed and wrote:
+    - `/tmp/mmsr_live_simulated.html`
+
+### Files changed
+
+- `mmsr/kdb/q_lib/mmsr_simulated_sources.q.j2`
+- `mmsr/kdb/q_lib/mmsr_calculations.q.j2`
+- `tests/test_kdb_query_loader.py`
+- `_docs/journal.md`
+
+### Validation
+
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache python -m pre_commit run --all-files`
+  passed:
+  - `ruff-check`
+  - `ruff-format`
+  - `mypy`
+  - full `pytest` suite
