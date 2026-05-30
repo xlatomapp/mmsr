@@ -10011,3 +10011,33 @@ Removed files:
 - `python -m compileall mmsr tests` passed.
 - Could not run pytest in this environment because `pytest` and `uvx` are not
   available in PATH.
+
+---
+
+## 2026-05-30 — Slim query planning by unifying metric metadata assembly
+
+### Implemented
+
+- Refactored `mmsr/kdb/query_plan.py` to avoid repeated single-metric query
+  rendering work in day/batch planning paths.
+- Added `_rendered_metric_query_for_request(...)` as the shared metadata and
+  contract builder used by:
+  - `KdbMetricQueryPlanner.render(...)`
+  - `KdbMetricQueryPlanner.render_day(...)`
+  - `KdbMetricQueryPlanner.render_batch(...)`
+- `render_day` and `render_batch` now construct metric contracts directly
+  without generating unused single-metric q text for each metric.
+
+### Files changed
+
+- `mmsr/kdb/query_plan.py`
+- `_docs/journal.md`
+
+### Validation
+
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache python -m pre_commit run --all-files`
+  passed:
+  - `ruff-check`
+  - `ruff-format`
+  - `mypy`
+  - full `pytest` suite

@@ -190,48 +190,14 @@ class KdbMetricQueryPlanner:
     def render(self, request: MetricRunRequest) -> RenderedMetricQuery:
         """Render ``request`` into a deterministic query plan."""
 
-        template_name = template_for_metric(request.metric.name)
-        query_group_by = _query_group_by_for_template(template_name, request.group_by)
-        result_group_by = group_by_for_metric_result(
-            request.metric.name,
-            request.group_by,
-        )
-
         params = _template_parameters_for_request(request)
-
         query = _single_metric_execution_block(
-            template_name=template_name,
+            template_name=template_for_metric(request.metric.name),
             metric_name=request.metric.name,
             params=params,
             request=request,
         )
-        return RenderedMetricQuery(
-            metric_name=request.metric.name,
-            template_name=template_name,
-            query=query,
-            requested_group_by=tuple(request.group_by),
-            result_group_by=tuple(result_group_by),
-            table_names=tuple(sorted(request.table_names.items())),
-            source_functions=tuple(sorted(request.source_functions.items())),
-            calculation_namespace=_q_namespace(
-                request.calculation_namespace,
-                "calculation_namespace",
-            ),
-            input_contracts=tuple(
-                _input_contracts_for_template(
-                    template_name=template_name,
-                    table_names=request.table_names,
-                    source_functions=request.source_functions,
-                    query_group_by=query_group_by,
-                    parameters=request.parameters,
-                )
-            ),
-            output_contract=output_schema_contract_for_template(
-                template_name=template_name,
-                metric_name=request.metric.name,
-                group_by=result_group_by,
-            ),
-        )
+        return _rendered_metric_query_for_request(request, query=query)
 
     def render_day(
         self,
@@ -246,7 +212,9 @@ class KdbMetricQueryPlanner:
         _validate_day_request_compatibility(clean_requests)
 
         representative_requests = _representative_metric_requests(clean_requests)
-        metric_queries = tuple(self.render(request) for request in representative_requests)
+        metric_queries = tuple(
+            _rendered_metric_query_for_request(request, query="") for request in representative_requests
+        )
         calculation_namespace = _q_namespace(
             clean_requests[0].calculation_namespace,
             "calculation_namespace",
@@ -307,7 +275,7 @@ class KdbMetricQueryPlanner:
         if not clean_requests:
             raise KdbMetricQueryPlanError("batch query requires at least one request")
 
-        metric_queries = tuple(self.render(request) for request in clean_requests)
+        metric_queries = tuple(_rendered_metric_query_for_request(request, query="") for request in clean_requests)
         _validate_batch_request_compatibility(clean_requests)
 
         batch_params = _batch_source_parameters(clean_requests)
@@ -339,6 +307,46 @@ class KdbMetricQueryPlanner:
             query="\n".join(body_lines),
             metric_queries=metric_queries,
         )
+
+
+def _rendered_metric_query_for_request(
+    request: MetricRunRequest,
+    *,
+    query: str,
+) -> RenderedMetricQuery:
+    template_name = template_for_metric(request.metric.name)
+    query_group_by = _query_group_by_for_template(template_name, request.group_by)
+    result_group_by = group_by_for_metric_result(
+        request.metric.name,
+        request.group_by,
+    )
+    return RenderedMetricQuery(
+        metric_name=request.metric.name,
+        template_name=template_name,
+        query=query,
+        requested_group_by=tuple(request.group_by),
+        result_group_by=tuple(result_group_by),
+        table_names=tuple(sorted(request.table_names.items())),
+        source_functions=tuple(sorted(request.source_functions.items())),
+        calculation_namespace=_q_namespace(
+            request.calculation_namespace,
+            "calculation_namespace",
+        ),
+        input_contracts=tuple(
+            _input_contracts_for_template(
+                template_name=template_name,
+                table_names=request.table_names,
+                source_functions=request.source_functions,
+                query_group_by=query_group_by,
+                parameters=request.parameters,
+            )
+        ),
+        output_contract=output_schema_contract_for_template(
+            template_name=template_name,
+            metric_name=request.metric.name,
+            group_by=result_group_by,
+        ),
+    )
 
 
 def template_for_metric(metric_name: str) -> str:
