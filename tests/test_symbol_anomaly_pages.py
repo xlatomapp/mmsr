@@ -560,6 +560,9 @@ def test_market_report_adds_symbol_detail_index_when_detail_pages_exist() -> Non
     assert "data-symbol-anomaly-explorer" in html
     assert "data-symbol-anomaly-detail" in html
     assert "data-symbol-anomaly-spec" in html
+    assert 'role="status"' in html
+    assert 'aria-live="polite"' in html
+    assert 'aria-label="Select anomaly 7203 Quoted Spread status Alert"' in html
     assert ".symbol-anomaly-explorer__row:focus-visible" in html
     assert "Open detail page" in html
 

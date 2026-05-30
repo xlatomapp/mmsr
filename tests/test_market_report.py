@@ -111,6 +111,8 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert "Group Delta Overview" in html
     assert "data-drilldown-matrix-spec" in html
     assert "data-drilldown-heatmap" in html
+    assert 'aria-label="Liquidity group-metric heatmap"' in html
+    assert 'aria-label="Selected group daily trend chart"' in html
     assert "Executive Market Overview" in html
     assert "Market KPI Snapshot" in html
     assert "Report Meta" in html

@@ -17,6 +17,46 @@ Use this file as the **active-step buffer**.
 
 ## Current Step Entry
 
+## 2026-05-31 — D5 continuation: render-level accessibility assertions + budgetless D5 doc scope
+
+### What changed
+- Added render-level accessibility assertions for interactive components:
+  - `tests/test_market_report.py` now asserts drilldown matrix/trend `aria-label` attributes in rendered HTML.
+  - `tests/test_symbol_anomaly_pages.py` now asserts anomaly detail live-region semantics (`role="status"`, `aria-live="polite"`) and row `aria-label` presence in rendered HTML.
+- Updated design roadmap D5 scope to remove budget framing after budget subsystem removal:
+  - renamed section to `D5 — Polish + Accessibility`
+  - removed budget-related scope/deliverables/exit-criteria bullets
+  - updated immediate deterministic step wording accordingly.
+
+### Files changed
+- `tests/test_market_report.py`
+- `tests/test_symbol_anomaly_pages.py`
+- `_docs/report_design_roadmap.md`
+- `_docs/journal.md`
+- `_docs/latest_journal.md`
+
+### Tests updated
+- `tests/test_market_report.py`
+- `tests/test_symbol_anomaly_pages.py`
+
+### Validation
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache conda run -n mmsr pre-commit run --all-files` passed.
+
+### Current milestone
+- D5 in progress.
+
+### Estimated completion
+- ~55% of D5.
+
+### Remaining work
+- Continue visual polish and finalize D5 closeout criteria/documentation.
+
+### Best next deterministic implementation step
+- Implement compact spacing/typography polish for drilldown/anomaly panels and lock with deterministic render assertions.
+
+### Open questions
+- None.
+
 ## 2026-05-31 — Complexity reduction: removed report budget subsystem
 
 ### What changed

@@ -205,21 +205,18 @@ Exit criteria:
 - default report remains market-first
 - symbol details remain accessible with explicit opt-in/escalation.
 
-## D5 — Polish + Accessibility + Budget
+## D5 — Polish + Accessibility
 
 Scope:
 - visual polish (spacing, contrast, typographic hierarchy)
 - accessibility pass (keyboard, focus, labels, semantics)
-- performance/size budget lock
 
 Deliverables:
 - CSS polish pass
 - a11y checklist + fixes
-- report budget assertions
 
 Exit criteria:
 - pre-commit + tests pass
-- budget tests pass
 - no layout overlap across target viewport sizes.
 
 ## Acceptance Criteria (Global)
@@ -252,7 +249,7 @@ Exit criteria:
 
 ## Immediate Next Deterministic Implementation Step
 
-Implement D5 polish/a11y/budget hardening:
+Implement D5 polish/a11y hardening:
 - finalize accessibility attributes and live-region semantics for interactive panels
 - lock render assertions for interactive panel accessibility hooks
-- keep report budget checks green for default offline/mock runs.
+- keep interactive panel semantics stable across default offline/mock renders.
