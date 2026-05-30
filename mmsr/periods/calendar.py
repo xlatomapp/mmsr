@@ -44,8 +44,7 @@ class KdbTradingCalendarSource:
             raise ValueError("start must be on or before end")
 
         function_name = _q_function_identifier(self.function)
-        calculation_namespace = _q_namespace_identifier(self.calculation_namespace)
-        query = f"{{[start;end] {calculation_namespace}.callTradingCalendar[{function_name};start;end]}}"
+        query = f"{{[start;end] {function_name}[start;end]}}"
         LOGGER.info(
             "Calling kdb trading calendar function %s for %s..%s",
             self.function,

@@ -441,7 +441,10 @@ plan = KdbMetricQueryPlanner().render(
         metric=registry.get("quoted_spread_bps"),
         period=period,
         group_by=["sector"],
-        table_names={"quotes": "quote_l1"},
+        source_functions={
+            "reference_data": ".sb.mmsr.getRef",
+            "quotes": ".sb.mmsr.getQuote",
+        },
     )
 )
 

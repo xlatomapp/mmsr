@@ -59,6 +59,7 @@ def test_executive_market_overview_summarizes_status_and_key_metrics() -> None:
     assert block.title == "Executive Market Overview"
     assert block.help_text is not None
     assert "Overall:</strong> Alert" in block.body_html
+    assert 'class="executive-overview__kpis"' in block.body_html
     assert "1 alerts, 1 watch items, 0 comparison-only items, and 1 normal items" in block.body_html
     assert "2 key metrics and 3 comparisons" in block.body_html
     assert "Key changes this period" in block.body_html
@@ -219,6 +220,37 @@ def test_select_top_changes_excludes_symbol_scoped_comparisons() -> None:
             percentile=None,
             status="alert",
             group={"sym": "7203"},
+        ),
+        MetricComparison(
+            metric_name="volume",
+            value=200,
+            reference_value=150,
+            change_abs=50.0,
+            change_pct=0.33,
+            z_score=2.0,
+            percentile=None,
+            status="alert",
+            group={"topixCapGrp": "Large"},
+        ),
+    )
+
+    selected = _select_top_changes(changes)
+    assert len(selected) == 1
+    assert selected[0].metric_name == "volume"
+
+
+def test_select_top_changes_excludes_alternate_symbol_identifier_keys() -> None:
+    changes = (
+        MetricComparison(
+            metric_name="turnover",
+            value=100,
+            reference_value=80,
+            change_abs=20.0,
+            change_pct=0.25,
+            z_score=3.5,
+            percentile=None,
+            status="alert",
+            group={"ticker": "7203"},
         ),
         MetricComparison(
             metric_name="volume",

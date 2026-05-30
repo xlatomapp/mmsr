@@ -116,7 +116,6 @@ class MetricDayCacheKey:
     group_by: tuple[str, ...]
     parameters: tuple[tuple[str, str], ...]
     source_functions: tuple[tuple[str, str], ...]
-    table_names: tuple[tuple[str, str], ...]
     calculation_namespace: str
 
     @classmethod
@@ -130,7 +129,6 @@ class MetricDayCacheKey:
             group_by=tuple(request.group_by),
             parameters=_stable_items(request.parameters),
             source_functions=tuple(sorted((str(k), str(v)) for k, v in request.source_functions.items())),
-            table_names=tuple(sorted((str(k), str(v)) for k, v in request.table_names.items())),
             calculation_namespace=request.calculation_namespace,
         )
 
@@ -149,7 +147,6 @@ class MetricDayCacheKey:
             self.group_by,
             self.parameters,
             self.source_functions,
-            self.table_names,
             self.calculation_namespace,
         )
 

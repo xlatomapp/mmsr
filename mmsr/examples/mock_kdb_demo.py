@@ -34,9 +34,10 @@ _MOCK_KDB_METRIC_NAMES: tuple[str, ...] = (
     "top_of_book_depth",
 )
 _MOCK_GROUP_BY: list[str] = ["market_cap_bucket"]
-_MOCK_TABLE_NAMES = {
-    "trades": "mock_trade",
-    "quotes": "mock_quote",
+_MOCK_SOURCE_FUNCTIONS = {
+    "reference_data": ".mock.getRef",
+    "trades": ".mock.getTrade",
+    "quotes": ".mock.getQuote",
 }
 
 
@@ -229,7 +230,7 @@ def _run_metric_series(
                 metric=definitions[metric_name],
                 period=period,
                 group_by=list(_MOCK_GROUP_BY),
-                table_names=dict(_MOCK_TABLE_NAMES),
+                source_functions=dict(_MOCK_SOURCE_FUNCTIONS),
             )
         )
         series.append(
@@ -289,9 +290,9 @@ def _japan_cash_sessions() -> list[TradingSession]:
 
 def _mock_rows_for_query(query: str) -> list[dict[str, Any]]:
     role = _query_role(query)
-    if "mock_trade" in query:
+    if ".mock.getTrade" in query:
         return _activity_rows(role)
-    if "mock_quote" in query:
+    if ".mock.getQuote" in query:
         return _liquidity_rows(role)
     raise ValueError("mock kdb client received an unsupported query")
 

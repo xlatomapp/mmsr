@@ -141,6 +141,7 @@ def _overview_html(
 
     # Narrative highlights: top 3-5 specific changes with context
     highlights_html = _narrative_highlights_html(comparisons, definitions)
+    kpi_html = _status_kpi_strip_html(status_counts)
 
     # Compact status summary below the narrative
     status_text = _status_count_sentence(status_counts)
@@ -151,6 +152,7 @@ def _overview_html(
     return (
         f'<section class="executive-overview executive-overview--{escape(overall_status)}">\n'
         f"{highlights_html}"
+        f"{kpi_html}"
         '  <p class="executive-overview__status">'
         f"<strong>Overall:</strong> {_status_label(overall_status)} — "
         f"{escape(status_text)} across {len(_unique_metric_names(comparisons))} "
@@ -159,6 +161,20 @@ def _overview_html(
         f"{family_html}"
         "</section>"
     )
+
+
+def _status_kpi_strip_html(status_counts: Counter[str]) -> str:
+    ordered_statuses = ("alert", "watch", "comparison_only", "normal")
+    items = "\n".join(
+        (
+            '    <li class="executive-overview__kpi">'
+            f'<span class="executive-overview__kpi-label">{escape(_status_label(status))}</span>'
+            f'<span class="executive-overview__kpi-value">{status_counts.get(status, 0)}</span>'
+            "</li>"
+        )
+        for status in ordered_statuses
+    )
+    return f'  <ul class="executive-overview__kpis">\n{items}\n  </ul>\n'
 
 
 def _narrative_highlights_html(
@@ -192,7 +208,7 @@ def _select_top_changes(
 ) -> tuple[MetricComparison, ...]:
     """Return the top N comparison rows ranked by severity and magnitude."""
     # Only consider market-level rows (not symbol-level)
-    market_comparisons = tuple(comp for comp in comparisons if "sym" not in comp.group)
+    market_comparisons = tuple(comp for comp in comparisons if not _is_symbol_scoped_group(comp.group))
     if not market_comparisons:
         return ()
 
@@ -206,6 +222,11 @@ def _select_top_changes(
     )
     # Return top N, but only those with meaningful deviation
     return tuple(comp for comp in ranked[:_NARRATIVE_MAX_CHANGES] if comp.status in ("alert", "watch"))
+
+
+def _is_symbol_scoped_group(group: Mapping[str, object]) -> bool:
+    symbol_keys = {"sym", "symbol", "ticker", "ric", "isin"}
+    return any(str(key).casefold() in symbol_keys for key in group)
 
 
 def _change_narrative_sentence(

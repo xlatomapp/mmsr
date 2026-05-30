@@ -33,8 +33,7 @@ def test_kdb_trading_calendar_source_calls_configured_calendar_function() -> Non
 
     assert result == [date(2026, 5, 1), date(2026, 5, 7)]
     assert len(client.queries) == 1
-    assert ".mmsr.callTradingCalendar[.sb.mmsr.getTradingCalendar;start;end]" in client.query
-    assert ".sb.mmsr.getTradingCalendar[start;end]" not in client.query
+    assert ".sb.mmsr.getTradingCalendar[start;end]" in client.query
     assert client.args == (date(2026, 5, 1), date(2026, 5, 10))
 
 

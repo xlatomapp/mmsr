@@ -24,6 +24,17 @@ class FakeKdbClient:
         return self.result
 
 
+def _default_source_functions() -> dict[str, str]:
+    return {
+        "reference_data": ".sb.mmsr.getRef",
+        "trades": ".sb.mmsr.getTrade",
+        "quotes": ".sb.mmsr.getQuote",
+        "pts_trades": ".sb.mmsr.getPtsTrade",
+        "pts_quotes": ".sb.mmsr.getPtsQuote",
+        "primary_quotes": ".sb.mmsr.getQuote",
+    }
+
+
 def _period() -> ReportPeriod:
     return ReportPeriod(
         start_date=date(2026, 5, 1),
@@ -45,7 +56,7 @@ def test_query_planner_exposes_activity_input_and_output_contracts() -> None:
             metric=registry.get("turnover"),
             period=_period(),
             group_by=["market_segment"],
-            table_names={"trades": "trade_l1"},
+            source_functions=_default_source_functions(),
             parameters={"symbol": "7203"},
         )
     )
@@ -54,7 +65,6 @@ def test_query_planner_exposes_activity_input_and_output_contracts() -> None:
     assert plan.template_name == "activity"
     assert plan.requested_group_by == ("market_segment",)
     assert plan.result_group_by == ("market_segment",)
-    assert plan.table_names == (("trades", "trade_l1"),)
     assert plan.required_output_columns == (
         "date",
         "time_bucket",
@@ -64,7 +74,7 @@ def test_query_planner_exposes_activity_input_and_output_contracts() -> None:
         "trade_count",
     )
     assert plan.optional_output_columns == ()
-    assert plan.input_contracts[0].table_name == "trade_l1"
+    assert plan.input_contracts[0].table_name == ".sb.mmsr.getTrade"
     assert plan.input_contracts[0].required_columns == (
         "date",
         "time",
@@ -85,7 +95,7 @@ def test_query_planner_exposes_activity_input_and_output_contracts() -> None:
     )
     assert ".mmsr.calcActivity[rawTrades;refs;" in plan.query
     assert "calcActivity[rawTrades;refs;" in plan.query
-    assert "rawTrades: trade_l1;" in plan.query
+    assert "rawTrades: (.sb.mmsr.getTrade[2026.05.01;0!refs]);" in plan.query
     assert ".mmsr.calcActivity[rawTrades;refs;" in plan.query
     assert 'sym = `$"7203"' in plan.query
 
@@ -99,7 +109,7 @@ def test_query_planner_exposes_liquidity_quote_contracts() -> None:
             metric=registry.get("quoted_spread_bps"),
             period=_period(),
             group_by=["sector"],
-            table_names={"quotes": "quote_l1"},
+            source_functions=_default_source_functions(),
         )
     )
 
@@ -147,11 +157,7 @@ def test_query_planner_exposes_reversion_optional_metadata_contract() -> None:
             metric=registry.get(metric_name),
             period=_period(),
             group_by=["sym"],
-            table_names={
-                "pts_trades": "pts_trade_l1",
-                "pts_quotes": "quote_l1",
-                "primary_quotes": "primary_quote_l1",
-            },
+            source_functions=_default_source_functions(),
             parameters=config.metric_parameters_for(metric_name),
         )
     )
@@ -201,7 +207,7 @@ def test_rendered_query_plan_validates_result_schema_before_normalization() -> N
             metric=registry.get("volume"),
             period=_period(),
             group_by=[],
-            table_names={"trades": "trade_l1"},
+            source_functions=_default_source_functions(),
         )
     )
 
@@ -237,7 +243,7 @@ def test_runner_uses_query_plan_metadata_in_normalized_series() -> None:
             metric=registry.get("volume"),
             period=_period(),
             group_by=[],
-            table_names={"trades": "trade_l1"},
+            source_functions=_default_source_functions(),
         )
     )
 
@@ -270,7 +276,6 @@ def test_query_planner_can_call_user_defined_trade_source_function() -> None:
         )
     )
 
-    assert plan.table_names == ()
     assert plan.source_functions == (
         ("reference_data", ".sb.mmsr.getRef"),
         ("trades", ".sb.mmsr.getTrade"),
@@ -393,7 +398,7 @@ def test_query_planner_rejects_invalid_group_identifier_before_execution() -> No
                 metric=registry.get("turnover"),
                 period=_period(),
                 group_by=["bad-column"],
-                table_names={"trades": "trade_l1"},
+                source_functions=_default_source_functions(),
             )
         )
 

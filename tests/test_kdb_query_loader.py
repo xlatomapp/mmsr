@@ -20,7 +20,7 @@ def test_load_q_library_template_reads_single_calculation_library() -> None:
     template = load_q_library_template("mmsr_calculations.q.j2")
 
     assert ".calcLiquidity" in template
-    assert ".callTradingCalendar" in template
+    assert ".callTradingCalendar" not in template
 
 
 def test_load_q_library_template_reads_simulated_source_library() -> None:
@@ -116,19 +116,19 @@ def test_toxicity_reversion_installed_function_uses_future_mid_denominator() -> 
     assert "postMid > 0" in template
     assert "% primaryMid" not in template
     assert "`date`sym`venue`time xasc ptsQuotes" in template
-    assert "inferAggressorSide[tradePrice; ptsMid]" in template
+    assert "aggressorSide: ?[tradePrice>ptsMid;1;?[tradePrice<ptsMid;-1;0]]" in template
     assert "horizonTime: `time$(time + params`horizon)" in template
 
 
 def test_render_calculation_function_bootstrap_installs_helpers_in_namespace() -> None:
     rendered = render_calculation_function_bootstrap(".desk.mmsr")
 
-    assert ".desk.mmsr.sumNotional" in rendered
-    assert ".desk.mmsr.medianQuotedSpreadBps" in rendered
+    assert "sum tradePrice * tradeSize" in rendered
+    assert "med 10000 * (askPrice - bidPrice)" in rendered
     assert ".desk.mmsr.weightedAverage" not in rendered
     assert ".desk.mmsr.sumSize" not in rendered
     assert ".desk.mmsr.rowCount" not in rendered
-    assert ".desk.mmsr.callTradingCalendar" in rendered
+    assert ".desk.mmsr.callTradingCalendar" not in rendered
     assert "{{" not in rendered
 
 

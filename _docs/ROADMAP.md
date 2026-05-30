@@ -224,6 +224,45 @@ lock in practical runtime and HTML-size budgets.
 - Remaining live-only risks are documented with concrete dates, configs, and
   observed runtime numbers.
 
+### Milestone R7: Market-first default shape lock
+
+**Goal:** Make the default report behavior unambiguous and regression-proof for
+desk-first market monitoring.
+
+**Required changes:**
+
+- Add explicit tests that default report output stays market/group-first even
+  when symbol-scoped comparison rows exist.
+- Keep symbol anomaly/detail pages opt-in by config only.
+- Verify default page ordering remains stable and market-first.
+- Tighten report-option/help text to avoid wording that implies symbol-first
+  default behavior.
+
+**Exit criteria:**
+
+- Regression tests prove symbol rows do not trigger symbol pages by default.
+- Default page set/order tests are explicit and passing.
+- Docs/help wording consistently describes symbol pages as optional escalation.
+
+### Milestone R8: Visible summary storytelling polish
+
+**Goal:** Improve first-page readability so desk users can identify key changes
+quickly without table scanning.
+
+**Required changes:**
+
+- Add visible executive-summary hierarchy improvements (highlight container,
+  spacing, status emphasis).
+- Improve comparison-status readability with compact visual markers/chips.
+- Add HTML-level regression checks for summary-storytelling UI elements.
+- Keep data semantics unchanged; this is presentation-only.
+
+**Exit criteria:**
+
+- Market Summary visibly separates narrative highlights from detail sections.
+- Status presentation is visually scannable in the default table.
+- Rendering tests confirm expected summary UI structure/classes.
+
 **Recommended first implementation PR:**
 
 1. Remove no-op q wrappers around native q functions.

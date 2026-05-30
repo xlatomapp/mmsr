@@ -199,7 +199,7 @@ def test_summarize_production_report_plan_queries_calendar_not_metrics(
     assert summary.reference_step_count == 2
     assert summary.metric_contracts[0].template_name == "activity"
     assert len(FakeProductionKdbClient.queries) == 3
-    assert "callTradingCalendar" in FakeProductionKdbClient.queries[0]
+    assert any("getTradingCalendar" in query for query in FakeProductionKdbClient.queries)
     assert all("getTradingCalendar" in query for query in FakeProductionKdbClient.queries[1:])
     assert "Reference-data universe function: .sb.mmsr.getRef" in "\n".join(summary.summary_lines())
     assert ".sb.mmsr.getTrade" in "\n".join(summary.summary_lines())
@@ -227,7 +227,7 @@ def test_summarize_production_report_plan_can_inject_simulated_sources(
 
     assert ".dev.mmsr.symbolCount:11;" in FakeProductionKdbClient.queries[0]
     assert ".dev.mmsr.getTrade" in FakeProductionKdbClient.queries[0]
-    assert "callTradingCalendar" in FakeProductionKdbClient.queries[1]
+    assert any("getTradingCalendar" in query for query in FakeProductionKdbClient.queries)
     assert all(".dev.mmsr.getTradingCalendar" in query for query in FakeProductionKdbClient.queries[2:])
     lines = "\n".join(summary.summary_lines())
     assert "Reference-data universe function: .dev.mmsr.getRef" in lines
@@ -287,7 +287,7 @@ def test_preflight_production_report_executes_one_bounded_metric_step(
     assert any(check.name == "sample_q_timing" for check in result.checks)
     assert "Sample q timings (ms):" in "\n".join(result.summary_lines())
     assert len(FakeProductionKdbClient.queries) == 3
-    assert "callTradingCalendar" in FakeProductionKdbClient.queries[0]
+    assert any("getTradingCalendar" in query for query in FakeProductionKdbClient.queries)
     assert "getTradingCalendar" in FakeProductionKdbClient.queries[1]
     assert ".sb.mmsr.getTrade" in FakeProductionKdbClient.queries[2]
 
@@ -486,7 +486,7 @@ def test_main_plan_command_prints_summary_without_metric_execution(
     assert "Symbol chunks per trading day: 1" in output
     assert "Total metric steps: 3" in output
     assert ".sb.mmsr.getTrade" in output
-    assert "callTradingCalendar" in FakeProductionKdbClient.queries[0]
+    assert any("getTradingCalendar" in query for query in FakeProductionKdbClient.queries)
     assert all("getTradingCalendar" in query for query in FakeProductionKdbClient.queries[1:])
 
 

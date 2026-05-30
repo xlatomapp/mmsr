@@ -36,6 +36,7 @@ from mmsr.metrics.registry import build_default_registry
 from mmsr.metrics.results import MetricComparison, MetricObservation, MetricTimeSeries
 from mmsr.periods.calendar import KdbTradingCalendarSource
 from mmsr.periods.symbols import KdbSymbolUniverseSource
+from mmsr.report.budgets import ReportBudgetLimits, evaluate_report_budget, snapshot_report_budget
 from mmsr.report.market_report import (
     MarketReportInput,
     MarketReportOptions,
@@ -914,6 +915,21 @@ def render_production_report_file(
     )
     LOGGER.info("Rendering HTML report")
     html = render_report(document, template_dir=template_dir)
+    budget_snapshot = snapshot_report_budget(document, html)
+    budget_violations = evaluate_report_budget(
+        budget_snapshot,
+        ReportBudgetLimits(),
+    )
+    if budget_violations:
+        LOGGER.warning("Report budget warnings: %s", "; ".join(budget_violations))
+    else:
+        LOGGER.info(
+            "Report budget ok: pages=%s html_bytes=%s charts=%s rows=%s",
+            budget_snapshot.page_count,
+            budget_snapshot.html_size_bytes,
+            budget_snapshot.total_chart_count,
+            budget_snapshot.metric_row_count,
+        )
 
     resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
     resolved_output_path.write_text(html, encoding="utf-8")

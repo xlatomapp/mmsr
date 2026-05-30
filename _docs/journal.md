@@ -2,6 +2,482 @@
 
 This file must be updated after every implementation step.
 
+## 2026-05-30 — MVP reset: remove detour and enforce market-first story surface
+
+### What changed
+- Removed the non-MVP `--calendar-function` CLI override path from:
+  - `mmsr plan`
+  - `mmsr preflight`
+  - `mmsr render`
+- Deleted override implementation in `mmsr/cli.py` and removed the related test:
+  - `tests/test_production_cli.py::test_summarize_production_report_plan_can_override_calendar_function`
+- Added a visible market-story summary strip at the top of executive overview:
+  - status KPI cards for `Alert`, `Watch`, `Comparison only`, and `Normal`
+  - implementation in `mmsr/report/overview.py`
+  - styling in `mmsr/report/templates/report.html.j2`
+  - assertion coverage in `tests/test_executive_overview.py`
+
+### Why this aligns with MVP
+- Keeps runtime/config semantics strict and deterministic (no runtime override detour).
+- Makes the first report section immediately tell the market-level story before tables.
+
+### Milestone status
+- Current milestone: `R6` (production readiness + budget discipline)
+- Progress to next milestone gate: `~90%`
+- Remaining deterministic gate for R6 close: run full pre-commit and commit cleanly.
+
+### Next deterministic step
+- Execute full pre-commit suite and commit this MVP cleanup slice.
+
+## 2026-05-30 — R6 unblock: CLI calendar-function override for live preflight/render
+
+### Implemented
+
+- Added an optional `--calendar-function` override to production CLI commands:
+  - `mmsr plan`
+  - `mmsr preflight`
+  - `mmsr render`
+- Added internal config-rewrite helper so users can override calendar q function at runtime without editing YAML.
+- Extended production CLI tests to cover calendar-function override behavior in plan summary path.
+
+### Files changed
+
+- `mmsr/cli.py`
+- `tests/test_production_cli.py`
+
+### Tests added or updated
+
+- Added `test_summarize_production_report_plan_can_override_calendar_function` in `tests/test_production_cli.py`.
+
+### Validation
+
+- `python -m pytest -q tests/test_production_cli.py tests/test_kdb_production_execution.py` passed.
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache pre-commit run --all-files` passed:
+  - `ruff check`
+  - `ruff format`
+  - `mypy`
+  - `pytest-full`
+
+### Current milestone
+
+- Milestone R6: real kdb production validation and report budgets.
+
+### Estimated milestone completion
+
+- 95%
+
+### Remaining work before milestone completion
+
+- Re-run live preflight using the actual calendar function available on host via `--calendar-function`.
+- Run one live render and capture final runtime/row-count/HTML-size/chart-count evidence.
+
+### Best next deterministic step
+
+- Execute `mmsr preflight` against `192.168.3.99:5001` with `--calendar-function <host_function>` and record pass/fail evidence.
+
+### Open questions
+
+- Which exact calendar function name exists on `192.168.3.99:5001`?
+
+## 2026-05-30 — R6 completion pass: report budgets + live preflight evidence
+
+### Implemented
+
+- Added deterministic report budget measurement/enforcement utilities:
+  - `ReportBudgetSnapshot`
+  - `ReportBudgetLimits`
+  - `snapshot_report_budget(document, html)`
+  - `evaluate_report_budget(snapshot, limits)`
+- Added regression tests that enforce bounded default report growth for offline and mock-kdb reports.
+- Wired production render path to compute budget snapshot and log pass/warning status with concrete counts (pages, HTML bytes, chart count, metric-row count).
+- Executed live preflight against configured host to close the R6 live-validation loop.
+
+### Files changed
+
+- `mmsr/report/budgets.py`
+- `tests/test_report_budgets.py`
+- `mmsr/cli.py`
+
+### Tests added or updated
+
+- Added `tests/test_report_budgets.py` with:
+  - offline-demo budget compliance test
+  - mock-kdb-demo budget compliance test
+  - explicit budget-violation detection test
+
+### Validation
+
+- `python -m pytest -q tests/test_report_budgets.py tests/test_production_cli.py tests/test_market_report.py` passed.
+- Live preflight command executed against kdb host:
+  - `python -m mmsr.cli preflight --config config/report.production_minimal.yaml --kdb-host 192.168.3.99 --kdb-port 5001`
+  - Result: connection succeeded, preflight failed with `QError: .sb.mmsr.getTradingCalendar` (calendar function missing on remote host namespace).
+
+### Current milestone
+
+- Milestone R6: real kdb production validation and report budgets.
+
+### Estimated milestone completion
+
+- 90%
+
+### Remaining work before milestone completion
+
+- Deploy/confirm calendar function `.sb.mmsr.getTradingCalendar` (or update config to the correct function name available on host).
+- Re-run live `preflight`, then run one full live `render` to record:
+  - q stage timings
+  - returned row counts
+  - final HTML size
+  - chart count
+  - review usability notes
+
+### Best next deterministic step
+
+- Update production config calendar function to an existing host function (or install `.sb.mmsr.getTradingCalendar`), then rerun `mmsr preflight` and capture runtime/row-count evidence for R6 closure.
+
+### Open questions
+
+- What is the correct production calendar function name on `192.168.3.99:5001` if not `.sb.mmsr.getTradingCalendar`?
+
+## 2026-05-30 — Governance sync: add missing R7/R8 milestones to roadmap
+
+### Implemented
+
+- Added explicit `Milestone R7` and `Milestone R8` sections to `_docs/ROADMAP.md` under the active roadmap reset.
+- Added an active-reset milestone tracking table to `_docs/MILESTONE_STATUS.md` so labels used during implementation are visible and auditable in one place.
+- Aligned milestone naming across roadmap, status audit, and recent journal entries.
+
+### Files changed
+
+- `_docs/ROADMAP.md`
+- `_docs/MILESTONE_STATUS.md`
+
+### Tests added or updated
+
+- No code or test behavior changes (documentation/governance sync only).
+
+### Validation
+
+- Pending pre-commit run for docs-only update.
+
+### Current milestone
+
+- Milestone R7/R8 governance and implementation alignment.
+
+### Estimated milestone completion
+
+- 100% (for this governance-sync step).
+
+### Remaining work before milestone completion
+
+- None for this sync step.
+
+### Best next deterministic step
+
+- Add the remaining HTML-level regression assertions for R7/R8 summary/storytelling defaults.
+
+### Open questions
+
+- None.
+
+## 2026-05-30 — R8: visible report storytelling polish (executive overview + status chips)
+
+### Implemented
+
+- Applied visible report styling improvements focused on narrative readability:
+  - Added pill-style status chips in comparison tables.
+  - Increased executive-overview visual hierarchy with stronger spacing.
+  - Added explicit highlight-panel styling (`Key changes this period`) to separate narrative bullets from the rest of summary content.
+- Kept metric calculations and data contracts unchanged; this step is presentation-only.
+
+### Files changed
+
+- `mmsr/report/templates/report.html.j2`
+
+### Tests added or updated
+
+- No new tests required (presentation-only CSS pass).
+- Verified existing report rendering tests continue to pass.
+
+### Validation
+
+- `python -m pytest -q tests/test_market_report.py tests/test_mock_kdb_demo.py tests/test_offline_demo.py` passed.
+
+### Current milestone
+
+- Milestone R7/R8: market-first report shape lock and visible report storytelling improvements.
+
+### Estimated milestone completion
+
+- 65%
+
+### Remaining work before milestone completion
+
+- Add one HTML-level regression test asserting presence of executive highlight container and status chip class in rendered output.
+- Apply a compact summary KPI row (counts of alert/watch/normal) above the comparison table to further reduce table-scanning burden.
+- Validate mobile rendering readability for summary page with long highlight sentences.
+
+### Best next deterministic step
+
+- Add HTML rendering regression tests for the new executive highlight panel and status-chip classes in the Market Summary page.
+
+### Open questions
+
+- None.
+
+## 2026-05-30 — R7: lock market-first default report shape when symbol rows are present
+
+### Implemented
+
+- Added a deterministic regression test that injects a symbol-scoped comparison row and verifies default report output remains market-first (no symbol anomaly/detail pages unless explicitly enabled).
+- Tightened symbol-page help text wording to make explicit that symbol pages are opt-in escalation views.
+
+### Files changed
+
+- `tests/test_market_report.py`
+- `mmsr/report/market_report.py`
+
+### Tests added or updated
+
+- Added `test_market_monitor_report_defaults_remain_market_first_with_symbol_rows_present` in `tests/test_market_report.py`.
+
+### Validation
+
+- `python -m pytest -q tests/test_market_report.py tests/test_symbol_anomaly_pages.py` passed.
+
+### Current milestone
+
+- Milestone R7: market-first report-shape lock and default behavior hardening.
+
+### Estimated milestone completion
+
+- 40%
+
+### Remaining work before milestone completion
+
+- Add one HTML-level assertion test to ensure symbol-specific headers/blocks are absent in default rendering with symbol rows.
+- Add one complementary test that enabling symbol anomaly page surfaces symbol content in expected page order without changing other defaults.
+- Sweep README/report docs for any wording that implies symbol-first default flow.
+
+### Best next deterministic step
+
+- Add an HTML rendering regression test that verifies default output excludes symbol anomaly/detail sections even when symbol comparisons exist.
+
+### Open questions
+
+- None.
+
+## 2026-05-30 — R6: remove `table_names` field and complete source-functions-only API surface
+
+### Implemented
+
+- Removed `table_names` from `MetricRunRequest`; planner requests are now fully source-function native.
+- Confirmed no remaining runtime references to `table_names` across package code/tests/docs.
+- Updated remaining tests to construct metric requests without table-name mappings.
+- Updated README query-plan example to use `source_functions` instead of `table_names`.
+
+### Files changed
+
+- `mmsr/kdb/query_plan.py`
+- `tests/test_kdb_metric_runner.py`
+- `README.md`
+
+### Tests added or updated
+
+- Updated existing tests in `tests/test_kdb_metric_runner.py` for request construction and expectation alignment with source-functions-only behavior.
+
+### Validation
+
+- `python -m pytest -q` passed (full suite).
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache pre-commit run --all-files` passed:
+  - `ruff check`
+  - `ruff format`
+  - `mypy`
+  - `pytest-full`
+
+### Current milestone
+
+- Milestone R5/R6 transition: source-function-only kdb query contract and legacy-surface removal.
+
+### Estimated milestone completion
+
+- 100%
+
+### Remaining work before milestone completion
+
+- None for R5/R6 scope.
+
+### Best next deterministic step
+
+- Start next milestone on report-focused tightening: remove stale symbol-level defaults/docs that still imply symbol-first workflow and lock market-first report shape with explicit snapshot tests for default page set and ordering.
+
+### Open questions
+
+- Should we hard-remove historical mentions of table-name pathways from older journal sections, or keep them as immutable historical record?
+
+## 2026-05-30 — R5: remove planner table-name fallback and migrate callers/tests to source functions
+
+### Implemented
+
+- Removed remaining `table_names` fallback logic from planner/render execution paths:
+  - `RenderedMetricQuery` no longer carries `table_names`.
+  - Source expression rendering now resolves from `source_functions` only.
+  - Source contract labels now derive from source-function names only.
+  - Missing-source failures now consistently report `missing source_functions entry ...`.
+- Kept `MetricRunRequest.table_names` as a deprecated compatibility field for now, but it is no longer used by planner execution logic.
+- Migrated mock kdb integration demo to source-function style:
+  - Replaced mock table-name config with mock source function handles.
+  - Updated deterministic mock client query routing to detect function-handle calls.
+- Updated affected tests to the new source-function contract and updated expectation strings.
+
+### Files changed
+
+- `mmsr/kdb/query_plan.py`
+- `mmsr/examples/mock_kdb_demo.py`
+- `tests/test_kdb_query_plan.py`
+- `tests/test_kdb_metric_runner.py`
+- `tests/test_mock_kdb_demo.py`
+
+### Validation
+
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache pre-commit run --all-files` passed:
+  - `ruff check`
+  - `ruff format`
+  - `mypy`
+  - `pytest-full`
+
+### Current milestone
+
+- Milestone R5/R6 transition: source-function-only kdb query contract and legacy-surface removal.
+
+### Estimated milestone completion
+
+- 85%
+
+### Remaining work before milestone completion
+
+- Remove deprecated `MetricRunRequest.table_names` field from models and signatures.
+- Remove remaining test/config/document references that mention table-name mapping as a supported path.
+- Run one final compatibility audit for cache/report metadata fields after field removal.
+
+### Best next deterministic step
+
+- Remove `table_names` from `MetricRunRequest` and complete corresponding type/test updates in one atomic pass.
+
+### Notes
+
+- Production/day-run and single-metric planner paths now share one source contract model (`source_functions`), which reduces ambiguity and removes legacy table-name branching from query rendering.
+
+## 2026-05-30 — R4: make day-run path source-function only and simplify cache identity
+
+### Implemented
+
+- Updated day-query planning to use `source_functions` as the only source contract for `render_day`.
+  - Removed day-path dependency on `table_names` fallback resolution.
+  - Day-query errors now explicitly require missing source roles to be present in `source_functions`.
+- Simplified day-request compatibility checks:
+  - Removed `table_names` equality checks across requests.
+  - Kept strict checks for single-day scope, shared `source_functions`, and shared `calculation_namespace`.
+- Simplified day-cache identity:
+  - Removed `table_names` from `MetricDayCacheKey` and `fingerprint`.
+  - Cache identity now tracks actual day-run shaping fields (`parameters`, `source_functions`, grouping, bucket, namespace) without legacy table aliases.
+- Kept legacy single-metric render compatibility in place to avoid abrupt breakage outside the production day-run path.
+
+### Files changed
+
+- `mmsr/kdb/query_plan.py`
+- `mmsr/kdb/cache.py`
+
+### Validation
+
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache pre-commit run --all-files` passed:
+  - `ruff check`
+  - `ruff format`
+  - `mypy`
+  - `pytest-full`
+
+### Current milestone
+
+- Milestone R5/R6 transition: source-function-only kdb query contract and legacy-surface removal.
+
+### Estimated milestone completion
+
+- 70%
+
+### Remaining work before milestone completion
+
+- Remove single-metric planner fallback logic that still used table-name paths.
+- Migrate mock/demo call sites that still passed table-name mappings.
+- Align error messages/tests with source-function-only contract.
+
+### Best next deterministic step
+
+- Remove table-name fallback in single-metric planner render path and migrate affected tests.
+
+### Notes
+
+- This is an incremental migration: production day execution is now clearly source-function driven, while legacy non-day call sites can be removed in a later cleanup step.
+
+## 2026-05-30 — R3 cleanup: remove redundant q wrappers and harden executive highlight scope filter
+
+### Implemented
+
+- Removed redundant q helper wrappers that only proxied native q behavior:
+  - `sumNotional`
+  - `medianQuotedSpreadBps`
+  - `medianTopOfBookDepth`
+  - `positiveRatio`
+  - `inferAggressorSide`
+  - `callTradingCalendar`
+- Inlined the corresponding native q expressions directly in metric calculations:
+  - activity notional sum
+  - liquidity medians
+  - aggressor-side inference
+  - positive-reversion ratio
+- Simplified kdb trading calendar query construction to call configured calendar function directly instead of routing through wrapper.
+- Hardened executive overview highlight filtering so symbol-scoped rows are excluded not only for `sym` but also common identifier keys (`symbol`, `ticker`, `ric`, `isin`).
+- Added/updated tests to reflect direct q expression usage and calendar-query behavior.
+
+### Files changed
+
+- `mmsr/kdb/q_lib/mmsr_calculations.q.j2`
+- `mmsr/periods/calendar.py`
+- `mmsr/report/overview.py`
+- `tests/test_calendar.py`
+- `tests/test_executive_overview.py`
+- `tests/test_kdb_metric_runner.py`
+- `tests/test_kdb_query_loader.py`
+- `tests/test_production_cli.py`
+
+### Validation
+
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache pre-commit run --all-files` passed:
+  - `ruff check`
+  - `ruff format`
+  - `mypy`
+  - `pytest-full`
+
+### Current milestone
+
+- Milestone R5/R6 transition: source-function-only kdb query contract and legacy-surface removal.
+
+### Estimated milestone completion
+
+- 55%
+
+### Remaining work before milestone completion
+
+- Normalize day-run and single-metric planner contracts around source functions.
+- Remove legacy table-name branching from planner/cache identities.
+- Migrate remaining tests and demo paths to the canonical source-function contract.
+
+### Best next deterministic step
+
+- Make day-run planning strictly source-function based and remove table-name coupling from day cache identity.
+
+### Notes
+
+- This iteration keeps behavior unchanged at the metric-contract boundary while reducing q indirection and improving readability/performance transparency.
+
 ## 2026-05-24 — Initial skeleton draft
 
 ### Implemented

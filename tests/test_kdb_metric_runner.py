@@ -33,6 +33,17 @@ class FakeKdbClient:
         return self.result
 
 
+def _default_source_functions() -> dict[str, str]:
+    return {
+        "reference_data": ".sb.mmsr.getRef",
+        "trades": ".sb.mmsr.getTrade",
+        "quotes": ".sb.mmsr.getQuote",
+        "pts_trades": ".sb.mmsr.getPtsTrade",
+        "pts_quotes": ".sb.mmsr.getPtsQuote",
+        "primary_quotes": ".sb.mmsr.getQuote",
+    }
+
+
 def _period() -> ReportPeriod:
     return ReportPeriod(
         start_date=date(2026, 5, 1),
@@ -151,7 +162,7 @@ def test_kdb_metric_runner_renders_activity_query_and_normalizes_column_result()
             metric=registry.get("turnover"),
             period=_period(),
             group_by=["market_segment"],
-            table_names={"trades": "trade"},
+            source_functions=_default_source_functions(),
         )
     )
 
@@ -167,7 +178,7 @@ def test_kdb_metric_runner_renders_activity_query_and_normalizes_column_result()
     }
 
     query = client.queries[0]
-    assert "rawTrades: trade;" in query
+    assert "rawTrades: (.sb.mmsr.getTrade[2026.05.01;0!refs]);" in query
     assert (
         ".mmsr.calcActivity[rawTrades;refs;(`bucket;`start_date;`end_date)!(0D00:05:00.000;2026.05.01;2026.05.02)]"
         in query
@@ -197,7 +208,7 @@ def test_kdb_metric_runner_can_bound_starter_query_to_single_symbol() -> None:
             metric=registry.get("turnover"),
             period=_period(),
             group_by=["sym"],
-            table_names={"trades": "trade"},
+            source_functions=_default_source_functions(),
             parameters={"symbol": "7203"},
         )
     )
@@ -223,14 +234,14 @@ def test_kdb_metric_runner_renders_liquidity_query_without_group_columns() -> No
             metric=registry.get("quoted_spread_bps"),
             period=_period(),
             group_by=[],
-            table_names={"quotes": "quote"},
+            source_functions=_default_source_functions(),
         )
     )
 
     assert series.values == (12.5,)
     assert series.observations[0].group == {}
     query = client.queries[0]
-    assert "rawQuotes: quote;" in query
+    assert "rawQuotes: (.sb.mmsr.getQuote[2026.05.01;0!refs]);" in query
     assert (
         ".mmsr.calcLiquidity[rawQuotes;refs;(`bucket;`start_date;`end_date)!(0D00:05:00.000;2026.05.01;2026.05.02)]"
         in query
@@ -337,11 +348,7 @@ def test_kdb_metric_runner_renders_reversion_query_and_normalizes_venue_horizon(
             metric=registry.get(metric_name),
             period=_period(),
             group_by=["sym"],
-            table_names={
-                "pts_trades": "pts_trade",
-                "pts_quotes": "pts_quote",
-                "primary_quotes": "quote",
-            },
+            source_functions=_default_source_functions(),
             parameters=config.metric_parameters_for(metric_name),
         )
     )
@@ -365,9 +372,9 @@ def test_kdb_metric_runner_renders_reversion_query_and_normalizes_venue_horizon(
     assert series.metadata["group_by"] == ("venue", "horizon", "sym")
 
     query = client.queries[0]
-    assert "rawPtsTradeRows: pts_trade;" in query
-    assert "rawPtsQuoteRows: pts_quote;" in query
-    assert "rawPrimaryQuoteRows: quote;" in query
+    assert "rawPtsTradeRows: (.sb.mmsr.getPtsTrade[2026.05.01;0!refs]);" in query
+    assert "rawPtsQuoteRows: (.sb.mmsr.getPtsQuote[2026.05.01;0!refs]);" in query
+    assert "rawPrimaryQuoteRows: (.sb.mmsr.getQuote[2026.05.01;0!refs]);" in query
     assert "`venues" in query and "`TSE`SBIJ" in query
     assert "`primary_venue" in query and "`TSE" in query
     assert "0D00:00:00.100" in query
@@ -399,7 +406,7 @@ def test_activity_runner_validates_output_schema_before_normalization() -> None:
                 metric=registry.get("volume"),
                 period=_period(),
                 group_by=[],
-                table_names={"trades": "trade"},
+                source_functions=_default_source_functions(),
             )
         )
 
@@ -423,7 +430,7 @@ def test_liquidity_runner_validates_output_schema_before_normalization() -> None
                 metric=registry.get("quoted_spread_bps"),
                 period=_period(),
                 group_by=[],
-                table_names={"quotes": "quote"},
+                source_functions=_default_source_functions(),
             )
         )
 
@@ -460,11 +467,7 @@ def test_reversion_runner_validates_output_schema_before_normalization() -> None
                 metric=registry.get(metric_name),
                 period=_period(),
                 group_by=[],
-                table_names={
-                    "pts_trades": "pts_trade",
-                    "pts_quotes": "pts_quote",
-                    "primary_quotes": "quote",
-                },
+                source_functions=_default_source_functions(),
                 parameters=config.metric_parameters_for(metric_name),
             )
         )
@@ -481,14 +484,11 @@ def test_reversion_runner_requires_venue_parameters_before_execution() -> None:
                 metric=registry.get("primary_quote_reversion_10ms_bps"),
                 period=_period(),
                 group_by=[],
-                table_names={
-                    "pts_trades": "pts_trade",
-                    "pts_quotes": "pts_quote",
-                    "primary_quotes": "quote",
-                },
                 source_functions={
                     "reference_data": ".sb.mmsr.getRef",
-                    "quotes": ".sb.mmsr.getQuote",
+                    "pts_trades": ".sb.mmsr.getPtsTrade",
+                    "pts_quotes": ".sb.mmsr.getPtsQuote",
+                    "primary_quotes": ".sb.mmsr.getQuote",
                 },
             )
         )
@@ -521,7 +521,6 @@ def test_runner_rejects_unsupported_metrics_before_query_execution() -> None:
                 metric=metric,
                 period=_period(),
                 group_by=[],
-                table_names={"quotes": "quote"},
             )
         )
 
@@ -533,13 +532,12 @@ def test_runner_requires_metric_source_mapping() -> None:
     client = FakeKdbClient({})
     runner = KdbMetricRunner(client)  # type: ignore[arg-type]
 
-    with pytest.raises(KdbMetricRunnerError, match="missing source_functions or table_names entry"):
+    with pytest.raises(KdbMetricRunnerError, match="missing source_functions entry"):
         runner.run(
             MetricRunRequest(
                 metric=registry.get("quoted_spread_bps"),
                 period=_period(),
                 group_by=[],
-                table_names={"trades": "trade"},
             )
         )
 
@@ -555,7 +553,7 @@ def test_runner_rejects_invalid_group_by_identifier() -> None:
                 metric=registry.get("turnover"),
                 period=_period(),
                 group_by=["bad-column"],
-                table_names={"trades": "trade"},
+                source_functions=_default_source_functions(),
             )
         )
 
@@ -624,8 +622,8 @@ def test_kdb_metric_runner_installs_calculation_functions() -> None:
     runner.install_calculation_functions(".desk.mmsr")
 
     assert len(client.queries) == 1
-    assert ".desk.mmsr.sumNotional" in client.queries[0]
-    assert ".desk.mmsr.medianTopOfBookDepth" in client.queries[0]
+    assert "sum tradePrice * tradeSize" in client.queries[0]
+    assert "med bidSize + askSize" in client.queries[0]
 
 
 def test_day_runner_normalizes_keyed_table_mapping_metric_result() -> None:
@@ -662,14 +660,6 @@ def test_day_runner_normalizes_keyed_table_mapping_metric_result() -> None:
                     bucket=_period().bucket,
                 ),
                 group_by=["sym", "topixCapGrp"],
-                table_names={
-                    "quotes": "quote",
-                    "reference_data": "ref",
-                    "trades": "trade",
-                    "pts_trades": "ptsTrade",
-                    "pts_quotes": "ptsQuote",
-                    "primary_quotes": "quote",
-                },
                 source_functions={
                     "reference_data": ".sb.mmsr.getRef",
                     "quotes": ".sb.mmsr.getQuote",
@@ -732,10 +722,6 @@ def test_day_runner_uses_cached_metric_day_result_without_kdb_execution() -> Non
                 metric=registry.get("quoted_spread_bps"),
                 period=_single_day_period(),
                 group_by=["sym"],
-                table_names={
-                    "quotes": "quote",
-                    "reference_data": "ref",
-                },
                 source_functions={
                     "reference_data": ".sb.mmsr.getRef",
                     "quotes": ".sb.mmsr.getQuote",
@@ -799,10 +785,6 @@ def test_day_runner_persists_metric_day_cache_misses_after_execution() -> None:
                 metric=registry.get("quoted_spread_bps"),
                 period=_single_day_period(),
                 group_by=["sym"],
-                table_names={
-                    "quotes": "quote",
-                    "reference_data": "ref",
-                },
                 source_functions={
                     "reference_data": ".sb.mmsr.getRef",
                     "quotes": ".sb.mmsr.getQuote",
@@ -870,11 +852,6 @@ def test_day_runner_runs_only_uncached_metrics_and_preserves_request_order() -> 
     common = {
         "period": _single_day_period(),
         "group_by": ["sym"],
-        "table_names": {
-            "trades": "trade",
-            "quotes": "quote",
-            "reference_data": "ref",
-        },
         "source_functions": {
             "reference_data": ".sb.mmsr.getRef",
             "trades": ".sb.mmsr.getTrade",
@@ -964,11 +941,6 @@ def test_day_runner_loads_stock_metrics_once_and_computes_only_missing_metrics()
     common = {
         "period": _single_day_period(),
         "group_by": ["sym"],
-        "table_names": {
-            "trades": "trade",
-            "quotes": "quote",
-            "reference_data": "ref",
-        },
         "source_functions": {
             "reference_data": ".sb.mmsr.getRef",
             "trades": ".sb.mmsr.getTrade",
@@ -1057,11 +1029,6 @@ def test_day_runner_persists_computed_misses_as_one_stock_metrics_batch() -> Non
     common = {
         "period": _single_day_period(),
         "group_by": ["sym"],
-        "table_names": {
-            "trades": "trade",
-            "quotes": "quote",
-            "reference_data": "ref",
-        },
         "source_functions": {
             "reference_data": ".sb.mmsr.getRef",
             "trades": ".sb.mmsr.getTrade",
@@ -1128,10 +1095,6 @@ def test_day_runner_rejects_cached_series_for_wrong_metric_or_day() -> None:
                     metric=registry.get("quoted_spread_bps"),
                     period=_single_day_period(),
                     group_by=[],
-                    table_names={
-                        "quotes": "quote",
-                        "reference_data": "ref",
-                    },
                     source_functions={
                         "reference_data": ".sb.mmsr.getRef",
                         "quotes": ".sb.mmsr.getQuote",
@@ -1147,7 +1110,6 @@ def test_stock_metrics_rows_use_time_bucket_and_bucket_size_only() -> None:
             metric=build_default_registry().get("quoted_spread_bps"),
             period=_single_day_period(),
             group_by=["sym"],
-            table_names={"quotes": "quote", "reference_data": "ref"},
         )
     )
     series = MetricTimeSeries.from_observations(

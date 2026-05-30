@@ -1,6 +1,7 @@
 import pytest
 
 from mmsr.examples import build_offline_sample_metrics
+from mmsr.metrics.results import MetricComparison
 from mmsr.report import (
     MarketReportInput,
     MarketReportOptions,
@@ -186,6 +187,42 @@ def test_market_monitor_report_skips_drilldown_page_without_group_rows() -> None
         "Market Summary",
         "Intraday Detail",
     ]
+
+
+def test_market_monitor_report_defaults_remain_market_first_with_symbol_rows_present() -> None:
+    sample = build_offline_sample_metrics()
+    symbol_comparison = MetricComparison(
+        metric_name="quoted_spread_bps",
+        value=25.0,
+        reference_value=15.0,
+        change_abs=10.0,
+        change_pct=10.0 / 15.0,
+        z_score=3.2,
+        percentile=None,
+        status="alert",
+        group={"sym": "7203"},
+        time_bucket="09:00-09:05",
+    )
+    document = build_market_monitor_report(
+        MarketReportInput(
+            metric_definitions=sample.metric_definitions,
+            current_series=sample.current_series,
+            comparisons=tuple(sample.comparisons) + (symbol_comparison,),
+            reference_series=sample.reference_series,
+        ),
+        options=MarketReportOptions(include_metric_definitions_appendix=False),
+    )
+
+    assert [page.title for page in document.pages] == [
+        "Market Summary",
+        "Activity Distribution",
+        "Displayed Liquidity",
+        "Reference and Target Daily Trends",
+        "Sector, Segment, and Market-Cap Drilldowns",
+        "Intraday Detail",
+    ]
+    assert "Symbol Anomalies" not in [page.title for page in document.pages]
+    assert all(not page.title.startswith("Symbol ") for page in document.pages)
 
 
 def test_market_monitor_report_passes_custom_drilldown_options() -> None:

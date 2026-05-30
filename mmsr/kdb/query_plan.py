@@ -68,8 +68,8 @@ class KdbMetricQueryPlanError(RuntimeError):
 class MetricRunRequest:
     """Request to run one metric over a period and grouping.
 
-    Production requests should prefer ``source_functions`` over direct
-    ``table_names``. The reference-data function is a user-defined q function that
+    Production requests use ``source_functions``. The reference-data function is
+    a user-defined q function that
     accepts ``date`` and returns the active universe/reference table. Raw trade
     and quote functions accept ``date`` plus that filtered reference table; MMSR-
     owned q then performs the metric aggregation inside ``calculation_namespace``.
@@ -82,7 +82,6 @@ class MetricRunRequest:
     metric: MetricDefinition
     period: ReportPeriod
     group_by: list[str]
-    table_names: dict[str, str] = field(default_factory=dict)
     parameters: dict[str, Any] = field(default_factory=dict)
     source_functions: dict[str, str] = field(default_factory=dict)
     calculation_namespace: str = ".mmsr"
@@ -97,7 +96,6 @@ class RenderedMetricQuery:
     query: str
     requested_group_by: tuple[str, ...]
     result_group_by: tuple[str, ...]
-    table_names: tuple[tuple[str, str], ...]
     source_functions: tuple[tuple[str, str], ...]
     calculation_namespace: str
     input_contracts: tuple[QTemplateInputTableSchemaContract, ...]
@@ -203,7 +201,6 @@ class KdbMetricQueryPlanner:
         source_roles = _batch_source_roles(representative_requests)
         source_functions = _source_function_dictionary(
             ("reference_data", *source_roles),
-            clean_requests[0].table_names,
             clean_requests[0].source_functions,
         )
         metric_params = _metric_parameter_dictionary(representative_requests)
@@ -257,7 +254,6 @@ def _rendered_metric_query_for_request(
         query=query,
         requested_group_by=tuple(request.group_by),
         result_group_by=tuple(result_group_by),
-        table_names=tuple(sorted(request.table_names.items())),
         source_functions=tuple(sorted(request.source_functions.items())),
         calculation_namespace=_q_namespace(
             request.calculation_namespace,
@@ -266,7 +262,6 @@ def _rendered_metric_query_for_request(
         input_contracts=tuple(
             _input_contracts_for_template(
                 template_name=template_name,
-                table_names=request.table_names,
                 source_functions=request.source_functions,
                 query_group_by=query_group_by,
                 parameters=request.parameters,
@@ -315,7 +310,6 @@ def group_by_for_metric_result(metric_name: str, group_by: Sequence[str]) -> lis
 def _input_contracts_for_template(
     *,
     template_name: str,
-    table_names: Mapping[str, str],
     source_functions: Mapping[str, str],
     query_group_by: Sequence[str],
     parameters: Mapping[str, Any],
@@ -325,13 +319,12 @@ def _input_contracts_for_template(
         ref_extra = _reference_extra_columns(query_group_by)
         return (
             activity_input_schema_contract(
-                trades_table=_source_label("trades", table_names, source_functions),
+                trades_table=_source_label("trades", source_functions),
                 extra_required_columns=raw_extra,
             ),
             reference_data_input_schema_contract(
                 reference_table=_source_label(
                     "reference_data",
-                    table_names,
                     source_functions,
                 ),
                 extra_required_columns=ref_extra,
@@ -343,13 +336,12 @@ def _input_contracts_for_template(
         ref_extra = _reference_extra_columns(query_group_by)
         return (
             liquidity_input_schema_contract(
-                quotes_table=_source_label("quotes", table_names, source_functions),
+                quotes_table=_source_label("quotes", source_functions),
                 extra_required_columns=raw_extra,
             ),
             reference_data_input_schema_contract(
                 reference_table=_source_label(
                     "reference_data",
-                    table_names,
                     source_functions,
                 ),
                 extra_required_columns=ref_extra,
@@ -360,22 +352,18 @@ def _input_contracts_for_template(
         return toxicity_reversion_input_schema_contracts(
             pts_trades_table=_source_label(
                 "pts_trades",
-                table_names,
                 source_functions,
             ),
             pts_quotes_table=_source_label(
                 "pts_quotes",
-                table_names,
                 source_functions,
             ),
             primary_quotes_table=_source_label(
                 "primary_quotes",
-                table_names,
                 source_functions,
             ),
             reference_table=_source_label(
                 "reference_data",
-                table_names,
                 source_functions,
             ),
             extra_required_columns=_reference_extra_columns(query_group_by),
@@ -409,7 +397,6 @@ def _template_parameters_for_request(request: MetricRunRequest) -> dict[str, str
     params = {
         **_source_parameters(
             template_name=template_name,
-            table_names=request.table_names,
             source_functions=request.source_functions,
             request=request,
         ),
@@ -593,26 +580,20 @@ def _q_function_dictionary(
 
 def _source_function_dictionary(
     roles: Sequence[str],
-    table_names: Mapping[str, str],
     source_functions: Mapping[str, str],
 ) -> str:
     """Return q dictionary of configured source function handles.
 
-    Production report-day execution is kdb-owned; Python only passes handles for
-    user-owned source functions. Direct table-name fallbacks remain for older
-    single/batch callers and are not supported by the report-day runner.
+    Production report-day execution is kdb-owned; Python passes handles for
+    user-owned source functions only.
     """
 
     keys: list[str] = []
     values: list[str] = []
     for role in roles:
-        resolved_role = _resolve_source_key(role, table_names, source_functions)
+        resolved_role = _resolve_source_key(role, source_functions)
         if resolved_role not in source_functions:
-            raise KdbMetricQueryPlanError(
-                "day query requires source_functions for role "
-                f"{role!r}; table-name execution is only supported by legacy "
-                "single/batch query paths"
-            )
+            raise KdbMetricQueryPlanError(f"day query requires source_functions for role {role!r}")
         keys.append(role)
         values.append(
             _q_function_identifier(
@@ -767,15 +748,12 @@ def _validate_day_request_compatibility(
     first = requests[0]
     first_day = first.period.start_date
     first_source_functions = dict(first.source_functions)
-    first_table_names = dict(first.table_names)
     first_namespace = first.calculation_namespace
     for request in requests:
         if request.period.start_date != first_day or request.period.end_date != first_day:
             raise KdbMetricQueryPlanError("day query requests must be single-day")
         if dict(request.source_functions) != first_source_functions:
             raise KdbMetricQueryPlanError("day query requests must share source_functions")
-        if dict(request.table_names) != first_table_names:
-            raise KdbMetricQueryPlanError("day query requests must share table_names")
         if request.calculation_namespace != first_namespace:
             raise KdbMetricQueryPlanError("day query requests must share calculation_namespace")
 
@@ -783,7 +761,6 @@ def _validate_day_request_compatibility(
 def _source_parameters(
     *,
     template_name: str,
-    table_names: Mapping[str, str],
     source_functions: Mapping[str, str],
     request: MetricRunRequest,
 ) -> dict[str, str]:
@@ -791,7 +768,6 @@ def _source_parameters(
     for source_key, template_parameter in _METRIC_TABLE_PARAMETER_MAP[template_name]:
         params[template_parameter] = _q_source_expression(
             source_key=source_key,
-            table_names=table_names,
             source_functions=source_functions,
             request=request,
         )
@@ -801,11 +777,10 @@ def _source_parameters(
 def _q_source_expression(
     *,
     source_key: str,
-    table_names: Mapping[str, str],
     source_functions: Mapping[str, str],
     request: MetricRunRequest,
 ) -> str:
-    resolved_source_key = _resolve_source_key(source_key, table_names, source_functions)
+    resolved_source_key = _resolve_source_key(source_key, source_functions)
     if resolved_source_key in source_functions:
         function_name = _q_function_identifier(
             source_functions[resolved_source_key],
@@ -815,43 +790,34 @@ def _q_source_expression(
             return f"({function_name}[{_q_date(request.period.start_date)}])"
         return f"({function_name}[{_q_date(request.period.start_date)};0!refs])"
 
-    if resolved_source_key in table_names:
-        return _q_identifier(table_names[resolved_source_key], "table name")
-
     if source_key == "reference_data":
         return "([]date:0#0Nd;sym:`symbol$();ric:`symbol$();topixCapGrp:`symbol$();lotSize:0#0N)"
 
-    raise KdbMetricQueryPlanError(
-        f"missing source_functions or table_names entry {source_key!r} for metric {request.metric.name!r}"
-    )
+    raise KdbMetricQueryPlanError(f"missing source_functions entry {source_key!r} for metric {request.metric.name!r}")
 
 
 def _source_label(
     source_key: str,
-    table_names: Mapping[str, str],
     source_functions: Mapping[str, str],
 ) -> str:
-    resolved_source_key = _resolve_source_key(source_key, table_names, source_functions)
+    resolved_source_key = _resolve_source_key(source_key, source_functions)
     if resolved_source_key in source_functions:
         return source_functions[resolved_source_key]
-    if resolved_source_key in table_names:
-        return table_names[resolved_source_key]
     return source_key
 
 
 def _resolve_source_key(
     source_key: str,
-    table_names: Mapping[str, str],
     source_functions: Mapping[str, str],
 ) -> str:
-    if source_key in source_functions or source_key in table_names:
+    if source_key in source_functions:
         return source_key
     legacy_aliases = {
         "pts_trades": "venue_trades",
         "pts_quotes": "venue_quotes",
     }
     alias = legacy_aliases.get(source_key)
-    if alias is not None and (alias in source_functions or alias in table_names):
+    if alias is not None and alias in source_functions:
         return alias
     return source_key
 

@@ -157,6 +157,15 @@
     .metric-table__status {
       text-transform: capitalize;
       white-space: nowrap;
+      align-items: center;
+      border: 1px solid var(--mmsr-border);
+      border-radius: 999px;
+      display: inline-flex;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      padding: 2px 8px;
+      background: #fff;
     }
     .commentary-block, .html-block, .time-series-chart, .plotly-chart, .heatmap {
       border-top: 1px solid var(--mmsr-border);
@@ -324,12 +333,57 @@
     .executive-overview {
       border: 1px solid var(--mmsr-border);
       border-radius: 16px;
-      padding: 14px;
+      padding: 16px;
       background: #fff;
     }
     .executive-overview--watch { background: var(--mmsr-watch); }
     .executive-overview--alert { background: var(--mmsr-alert); }
-    .executive-overview__status { margin: 0 0 10px; }
+    .executive-overview__kpis {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      list-style: none;
+      margin: 0 0 12px;
+      padding: 0;
+    }
+    .executive-overview__kpi {
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid var(--mmsr-border);
+      border-radius: 10px;
+      display: grid;
+      gap: 2px;
+      padding: 8px 10px;
+    }
+    .executive-overview__kpi-label {
+      color: var(--mmsr-muted);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .executive-overview__kpi-value {
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1.15;
+    }
+    .executive-overview__status { margin: 0 0 12px; }
+    .executive-overview__highlights {
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid var(--mmsr-border);
+      border-radius: 12px;
+      margin: 0 0 12px;
+      padding: 10px 12px;
+    }
+    .executive-overview__highlights p {
+      margin: 0 0 8px;
+    }
+    .executive-overview__highlights ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+    .executive-overview__highlight {
+      margin: 5px 0;
+      line-height: 1.45;
+    }
     .executive-overview__families {
       display: grid;
       gap: 8px;
@@ -367,6 +421,9 @@
     .metric-definition__fields dd { margin: 0; }
     .metric-definition__fields ul { margin: 0; padding-left: 18px; }
     .brand-footer { color: var(--mmsr-muted); font-size: 13px; }
+    @media (max-width: 900px) {
+      .executive-overview__kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
   </style>
 </head>
 <body>

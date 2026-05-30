@@ -162,7 +162,7 @@ class MarketReportOptions:
     symbol_anomaly_table_title: str = "Top symbol-level anomalies"
     symbol_anomaly_help_text: str = (
         "Symbol-level anomaly rows are selected from already-computed "
-        "comparison facts. The default page shows the worst comparison per "
+        "comparison facts. When enabled, the page shows the worst comparison per "
         "symbol using status, adverse-tail diagnostics, z-score magnitude, and "
         "absolute percentage change as deterministic ranking inputs."
     )
@@ -179,7 +179,7 @@ class MarketReportOptions:
     symbol_detail_page_title_template: str = "Symbol {symbol} Detail"
     symbol_detail_help_text: str = (
         "Per-symbol detail pages render existing symbol-scoped metric time "
-        "series for selected anomaly symbols. Production runs should provide "
+        "series for selected anomaly symbols when explicitly enabled. Production runs should provide "
         "these rows from normalized kdb-backed metric output; the report layer "
         "does not fetch or calculate additional metrics."
     )

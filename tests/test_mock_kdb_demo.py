@@ -43,8 +43,8 @@ def test_mock_kdb_demo_executes_q_templates_and_builds_report() -> None:
     assert len(result.executed_queries) == 6
     assert all("select" in query for query in result.executed_queries)
     assert all("calc" in query or "MMSR reusable q calculation library" in query for query in result.executed_queries)
-    assert any("mock_trade" in query for query in result.executed_queries)
-    assert any("mock_quote" in query for query in result.executed_queries)
+    assert any(".mock.getTrade" in query for query in result.executed_queries)
+    assert any(".mock.getQuote" in query for query in result.executed_queries)
     assert any("2026.05.22;2026.05.22" in query for query in result.executed_queries)
     assert any("2026.04.06;2026.05.21" in query for query in result.executed_queries)
 
@@ -67,7 +67,7 @@ def test_mock_kdb_demo_executes_q_templates_and_builds_report() -> None:
     assert result.current_series[0].metadata["template"] == "liquidity"
     assert result.current_series[1].metadata["template"] == "activity"
     assert result.current_series[0].metadata["role"] == "current"
-    assert "mock_quote" in result.current_series[0].metadata["query"]
+    assert ".mock.getQuote" in result.current_series[0].metadata["query"]
 
 
 def test_mock_kdb_demo_report_renders_canonical_report_visuals_and_labels() -> None:

@@ -2,6 +2,20 @@
 
 This audit validates the implementation against `_docs/ROADMAP.md` as of 2026-05-25.
 
+## Active reset milestone tracking (2026-05-30 update)
+
+| Milestone | Status | Notes |
+| --- | --- | --- |
+| R0 | Complete | Default surface slimmed and market-first defaults established. |
+| R1 | Complete | q-side performance and source-load/family preparation hardening implemented. |
+| R2 | Complete | Executive narrative summary implemented from deterministic comparison facts. |
+| R3 | Complete | Drilldown/report structure aligned to market questions; symbol remains opt-in. |
+| R4 | Complete | Generic source-function/day-run aggregation contract enforced. |
+| R5 | Complete | stockMetrics cache behavior validated for hit/partial/miss/persist flows. |
+| R6 | Complete (code path); live validation pending | Live-kdb runtime budget capture remains environment-gated. |
+| R7 | In progress | Default market-first shape lock tests added; final HTML-level coverage pending. |
+| R8 | In progress | Visible summary storytelling polish landed; final UI regression assertions pending. |
+
 ## Summary
 
 | Milestone | Validation status | Result |
