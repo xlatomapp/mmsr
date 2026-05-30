@@ -127,7 +127,8 @@ aligned to the default report scope.
 - D1: Complete
 - D2: In progress
 - D3: Complete (matrix + linked trend explorer landed)
-- D4: In progress
+- D4: Complete
+- D5: In progress
 
 ## D0 — UX Contract Lock
 
@@ -251,7 +252,7 @@ Exit criteria:
 
 ## Immediate Next Deterministic Implementation Step
 
-Implement D4 anomaly-panel linkage:
-- wire anomaly-table row selection to the right-side detail panel state
-- keep default compact top-N anomaly list with deterministic selected row
-- add deterministic tests for initial selection and row-to-detail binding.
+Implement D5 polish/a11y/budget hardening:
+- finalize accessibility attributes and live-region semantics for interactive panels
+- lock render assertions for interactive panel accessibility hooks
+- keep report budget checks green for default offline/mock runs.

@@ -17,81 +17,49 @@ Use this file as the **active-step buffer**.
 
 ## Current Step Entry
 
-## 2026-05-30 — D4 implementation: anomaly selector now links to symbol detail anchors
+## 2026-05-30 — D5 implementation start: accessibility hooks for interactive drilldown/anomaly panels
 
 ### What changed
-- Added deterministic detail-anchor binding to anomaly selector payload in `mmsr/report/symbols.py`:
-  - each row now includes `detail_anchor = symbol_detail_anchor_id(symbol)`.
-- Updated anomaly detail panel rendering in `report.html.j2`:
-  - detail pane now shows `Open detail page` link to `#<detail_anchor>` for the selected symbol.
-- Added/updated tests to lock this behavior:
-  - payload includes `detail_anchor`
-  - rendered report includes `Open detail page`.
-
-### Files changed
-- `mmsr/report/symbols.py`
-- `mmsr/report/templates/report.html.j2`
-- `tests/test_symbol_anomaly_pages.py`
-- `_docs/journal.md`
-- `_docs/latest_journal.md`
-
-### Tests updated
-- `tests/test_symbol_anomaly_pages.py` assertions expanded for anchor payload + rendered link presence.
-
-### Validation
-- `PRE_COMMIT_HOME=/tmp/pre-commit-cache conda run -n mmsr pre-commit run --all-files` passed.
-
-### Current milestone
-- D4 in progress.
-
-### Estimated completion
-- ~99% of D4.
-
-### Remaining work
-- D4 functional scope is complete; remaining work is final visual polish and roadmap milestone closeout.
-
-### Best next deterministic implementation step
-- Close D4 in design roadmap/milestone docs and start D5 polish/a11y/budget assertions.
-
-### Open questions
-- None.
-
-## 2026-05-30 — Liquidity matrix semantics update: mean % change with z-score reference
-
-### What changed
-- Removed inaccurate threshold interpretation legend.
-- Updated liquidity matrix semantics to factual display:
-  - heatmap value uses **mean % change**
-  - cell label includes **mean z-score in parentheses** as reference
-- Updated panel copy and legend text to reflect data semantics only.
-- Updated Plotly hover and colorbar labeling:
-  - hover: `% Change / Z`
-  - colorbar: `Mean % change`
+- Added explicit accessibility attributes for interactive visuals:
+  - drilldown liquidity heatmap container now has `role="img"` and `aria-label="Liquidity group-metric heatmap"`.
+  - selected-group trend chart container now has `role="img"` and `aria-label="Selected group daily trend chart"`.
+  - anomaly detail panel now has `role="status"` and `aria-live="polite"` for deterministic screen-reader updates after row selection.
+- Added regression assertions:
+  - `tests/test_drilldowns.py` now checks ARIA hooks in matrix explorer HTML block.
+  - `tests/test_symbol_anomaly_pages.py` now checks live-region attributes in anomaly detail block.
+- Updated design roadmap status:
+  - D4 marked complete
+  - D5 marked in progress
+  - immediate next deterministic step switched to D5 polish/a11y/budget hardening.
 
 ### Files changed
 - `mmsr/report/drilldowns.py`
-- `mmsr/report/templates/report.html.j2`
+- `mmsr/report/symbols.py`
 - `tests/test_drilldowns.py`
+- `tests/test_symbol_anomaly_pages.py`
+- `_docs/report_design_roadmap.md`
 - `_docs/journal.md`
 - `_docs/latest_journal.md`
 
 ### Tests updated
-- Updated drilldown assertions for new factual matrix copy and legend text.
+- `tests/test_drilldowns.py`
+- `tests/test_symbol_anomaly_pages.py`
 
 ### Validation
 - `PRE_COMMIT_HOME=/tmp/pre-commit-cache conda run -n mmsr pre-commit run --all-files` passed.
 
 ### Current milestone
-- D4 in progress.
+- D5 in progress (D4 closed).
 
 ### Estimated completion
-- ~97% of D4.
+- ~25% of D5.
 
 ### Remaining work
-- Optional: row-to-symbol-detail anchor binding from anomaly selector.
+- Add further accessibility assertions for focus/keyboard semantics where applicable.
+- Keep report budget guard tests green while polishing visual hierarchy.
 
 ### Best next deterministic implementation step
-- Add deterministic link from selected anomaly row to emitted symbol detail anchor and cover with render assertions.
+- Add keyboard-focus-visible styling and semantic label checks for interactive buttons in anomaly explorer, with render assertions.
 
 ### Open questions
 - None.

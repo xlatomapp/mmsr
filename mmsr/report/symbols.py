@@ -263,7 +263,8 @@ def _build_symbol_anomaly_explorer_block(
         "</div>"
         '<div class="symbol-anomaly-explorer__right">'
         "<h4>Selected anomaly detail</h4>"
-        '<div class="symbol-anomaly-explorer__detail" data-symbol-anomaly-detail></div>'
+        '<div class="symbol-anomaly-explorer__detail" data-symbol-anomaly-detail '
+        'role="status" aria-live="polite"></div>'
         "</div>"
         "</div>"
         f'<script type="application/json" data-symbol-anomaly-spec>{payload_json}</script>'

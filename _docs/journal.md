@@ -11474,6 +11474,45 @@ dictionary). The simple `select sum ... by ...` form is correct and safer.
 ### Open questions
 - None.
 
+## 2026-05-30 — D4 implementation: anomaly selector now links to symbol detail anchors
+
+### What changed
+- Added deterministic detail-anchor binding to anomaly selector payload in `mmsr/report/symbols.py`:
+  - each row now includes `detail_anchor = symbol_detail_anchor_id(symbol)`.
+- Updated anomaly detail panel rendering in `report.html.j2`:
+  - detail pane now shows `Open detail page` link to `#<detail_anchor>` for the selected symbol.
+- Added/updated tests to lock this behavior:
+  - payload includes `detail_anchor`
+  - rendered report includes `Open detail page`.
+
+### Files changed
+- `mmsr/report/symbols.py`
+- `mmsr/report/templates/report.html.j2`
+- `tests/test_symbol_anomaly_pages.py`
+- `_docs/journal.md`
+- `_docs/latest_journal.md`
+
+### Tests updated
+- `tests/test_symbol_anomaly_pages.py` assertions expanded for anchor payload + rendered link presence.
+
+### Validation
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache conda run -n mmsr pre-commit run --all-files` passed.
+
+### Current milestone
+- D4 in progress.
+
+### Estimated completion
+- ~99% of D4.
+
+### Remaining work
+- D4 functional scope is complete; remaining work is final visual polish and roadmap milestone closeout.
+
+### Best next deterministic implementation step
+- Close D4 in design roadmap/milestone docs and start D5 polish/a11y/budget assertions.
+
+### Open questions
+- None.
+
 ## 2026-05-30 — D4 implementation: execution-ease legend thresholds for liquidity heatmap
 
 ### What changed

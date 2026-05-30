@@ -330,7 +330,12 @@ def _build_group_metric_explorer_block(
       <h4>Group-Metric Heatmap</h4>
       <p>Rows are groups, columns are liquidity metrics.
       Cells show mean % change, with mean z-score in parentheses for reference.</p>
-      <div class="drilldown-matrix-explorer__chart" data-drilldown-heatmap></div>
+      <div
+        class="drilldown-matrix-explorer__chart"
+        data-drilldown-heatmap
+        role="img"
+        aria-label="Liquidity group-metric heatmap">
+      </div>
       <p class="drilldown-matrix-explorer__legend">
         Cell format: mean % change (z-score reference).
       </p>
@@ -338,7 +343,12 @@ def _build_group_metric_explorer_block(
     <div class="drilldown-matrix-explorer__panel">
       <h4>Selected Group Daily Trend</h4>
       <p data-drilldown-selected-group></p>
-      <div class="drilldown-matrix-explorer__chart" data-drilldown-trend></div>
+      <div
+        class="drilldown-matrix-explorer__chart"
+        data-drilldown-trend
+        role="img"
+        aria-label="Selected group daily trend chart">
+      </div>
     </div>
   </div>
   <script type="application/json" data-drilldown-matrix-spec>{payload_json}</script>
