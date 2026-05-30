@@ -123,6 +123,12 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert "Executive Market Overview" in html
     assert "Market KPI Snapshot" in html
     assert "Report Meta" in html
+    assert 'class="report-page__header"' in html
+    assert 'class="report-page__index">1<' in html
+    assert 'class="report-page__title">Market Summary<' in html
+    assert "--mmsr-heading: #0b3a67;" in html
+    assert ".report-page__title {" in html
+    assert "font-size: 30px;" in html
     assert "Primary Intraday Signal" in html
     assert "report-page--summary" in html
     assert 'data-block-title="Report Meta"' in html
