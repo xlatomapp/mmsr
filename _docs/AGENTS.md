@@ -77,15 +77,31 @@ The first recommended implementation sequence is:
 Before modifying code, tests, config, docs, or roadmap, read these files in order:
 
 1. `_docs/AGENTS.md`
-2. `_docs/ROADMAP.md`
-3. `_docs/journal.md`
-4. Relevant source files and tests for the current task
+2. `_docs/latest_journal.md`
+3. `_docs/ROADMAP.md`
+4. `_docs/journal.md`
+5. Relevant source files and tests for the current task
 
 Do not proceed without checking the current milestone and previous journal entries.
 
 ## 3. Mandatory journal update after every step
 
-After every implementation step, update `_docs/journal.md` with:
+After every implementation step, use this two-file journal workflow:
+
+### 3A. Start-of-task journal handoff (mandatory)
+
+- Read `_docs/latest_journal.md` first.
+- If `_docs/latest_journal.md` contains a completed step entry, append it to the
+  **very bottom** of `_docs/journal.md` before starting new work.
+- After appending, reset `_docs/latest_journal.md` back to its template.
+
+### 3B. End-of-task journal write (mandatory)
+
+- Write the current completed step entry to `_docs/latest_journal.md`.
+- Do not write the new step directly to `_docs/journal.md` during the same task.
+- The next task start performs the append-to-`journal.md` handoff.
+
+Each completed step entry must include:
 
 - Date/time of the step.
 - Summary of what was implemented.
@@ -98,7 +114,9 @@ After every implementation step, update `_docs/journal.md` with:
 - The single best next deterministic step.
 - Open questions, if any.
 
-The journal is part of the implementation contract. A change is incomplete if `_docs/journal.md` is not updated.
+The journal workflow is part of the implementation contract. A change is
+incomplete if `_docs/latest_journal.md` is not updated at task finish, or if
+the next task does not perform the append handoff into `_docs/journal.md`.
 
 ## 4. Deterministic implementation rule
 
@@ -257,14 +275,14 @@ opt-in only and should stay marked with `kdb_integration`.
 For local live-kdb smoke testing, the currently available endpoint is:
 
 ```text
-host: 192.163.3.99
+host: 192.168.3.99
 port: 5001
 ```
 
 Use the endpoint through CLI flags or environment variables, for example:
 
 ```bash
-MMSR_KDB_HOST=192.163.3.99 MMSR_KDB_PORT=5001 poetry run pytest -m kdb_integration
+MMSR_KDB_HOST=192.168.3.99 MMSR_KDB_PORT=5001 poetry run pytest -m kdb_integration
 ```
 
 or:
@@ -272,7 +290,7 @@ or:
 ```bash
 poetry run mmsr preflight \
   --config config/report.production_minimal.yaml \
-  --kdb-host 192.163.3.99 \
+  --kdb-host 192.168.3.99 \
   --kdb-port 5001
 ```
 

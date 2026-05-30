@@ -119,7 +119,7 @@ class MarketReportOptions:
         "volume",
         "trade_count",
     )
-    max_activity_distribution_charts: int | None = None
+    max_activity_distribution_charts: int | None = 1
     displayed_liquidity_page_title: str = "Displayed Liquidity"
     displayed_liquidity_help_text: str = (
         "Compact Plotly diagnostics for displayed liquidity metrics. Historical "
@@ -133,7 +133,7 @@ class MarketReportOptions:
         "quoted_spread_bps",
         "top_of_book_depth",
     )
-    max_displayed_liquidity_charts: int | None = None
+    max_displayed_liquidity_charts: int | None = 1
     max_displayed_liquidity_groups: int | None = 12
     include_daily_trend_page: bool = True
     include_intraday_heatmaps: bool = False
@@ -165,7 +165,7 @@ class MarketReportOptions:
         "line is one execution venue. Positive values indicate adverse movement "
         "in the aggressive-trade direction."
     )
-    max_toxicity_reversion_charts: int | None = 6
+    max_toxicity_reversion_charts: int | None = 1
     max_toxicity_reversion_points_per_chart: int | None = None
     toxicity_reversion_context_ranking: ToxicityContextRanking = DEFAULT_TOXICITY_CONTEXT_RANKING
     toxicity_reversion_venue_order: tuple[str, ...] = DEFAULT_REVERSION_VENUE_ORDER
