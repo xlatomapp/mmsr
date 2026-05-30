@@ -10111,3 +10111,35 @@ Removed files:
   - `ruff-format`
   - `mypy`
   - full `pytest` suite
+
+---
+
+## 2026-05-30 — Remove legacy runner batch API and migrate tests to day path
+
+### Implemented
+
+- Removed legacy batch-oriented runner APIs from `KdbMetricRunner`:
+  - `plan_batch(...)`
+  - `run_batch(...)`
+- Kept production-aligned APIs:
+  - `plan_day(...)`
+  - `run_day(...)`
+  - `run(...)` (single metric)
+- Updated runner imports to drop now-unused `RenderedMetricBatchQuery`.
+- Migrated batch-focused test coverage in `tests/test_kdb_metric_runner.py` to
+  validate the day-query interface instead of removed batch methods.
+
+### Files changed
+
+- `mmsr/kdb/runner.py`
+- `tests/test_kdb_metric_runner.py`
+- `_docs/journal.md`
+
+### Validation
+
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache python -m pre_commit run --all-files`
+  passed:
+  - `ruff-check`
+  - `ruff-format`
+  - `mypy`
+  - full `pytest` suite

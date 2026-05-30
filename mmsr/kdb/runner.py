@@ -21,7 +21,6 @@ from mmsr.kdb.query_plan import (
     KdbMetricQueryPlanError,
     KdbMetricQueryPlanner,
     MetricRunRequest,
-    RenderedMetricBatchQuery,
     RenderedMetricDayQuery,
     RenderedMetricQuery,
     metric_family_for_metric,
@@ -79,14 +78,6 @@ class KdbMetricRunner:
         """Render q and expose required/optional kdb table schema without IO."""
 
         return self.query_planner.render(request)
-
-    def plan_batch(
-        self,
-        requests: Sequence[MetricRunRequest],
-    ) -> RenderedMetricBatchQuery:
-        """Render one day/chunk q query for multiple metric requests."""
-
-        return self.query_planner.render_batch(requests)
 
     def plan_day(
         self,
@@ -262,51 +253,6 @@ class KdbMetricRunner:
 
         for key, request, series in zip(keys, requests, series_items, strict=True):
             self.cache_hooks.persist(key, request, series)
-
-    def run_batch(
-        self,
-        requests: Sequence[MetricRunRequest],
-    ) -> tuple[MetricTimeSeries, ...]:
-        """Run one day/chunk batch query and normalize each returned metric table."""
-
-        plan = self.plan_batch(requests)
-        LOGGER.info("Running kdb batch query: metrics=%s", ", ".join(plan.metric_names))
-        self.ensure_calculation_functions(plan.metric_queries[0].calculation_namespace)
-        raw_result = self.client.execute(plan.query)
-        LOGGER.info("Received kdb batch result for metrics=%s", ", ".join(plan.metric_names))
-        result_by_metric = _coerce_batch_result(
-            raw_result,
-            fallback_metric_name=plan.metric_names[0] if len(plan.metric_names) == 1 else None,
-        )
-        series_by_metric: list[MetricTimeSeries] = []
-        for metric_query in plan.metric_queries:
-            if metric_query.metric_name not in result_by_metric:
-                available = ", ".join(sorted(result_by_metric)) or "none"
-                raise KdbMetricRunnerError(
-                    f"batch result is missing metric {metric_query.metric_name!r}; available metrics: {available}"
-                )
-            metric_result = result_by_metric[metric_query.metric_name]
-            metric_query.validate_result_schema(metric_result)
-            LOGGER.debug("Validated batch result schema for metric=%s", metric_query.metric_name)
-            series_by_metric.append(
-                normalize_metric_result(
-                    metric_name=metric_query.metric_name,
-                    result=metric_result,
-                    group_by=metric_query.result_group_by,
-                    metadata={
-                        "metric_family": metric_family_for_metric(metric_query.metric_name),
-                        "query": plan.query,
-                        "requested_group_by": metric_query.requested_group_by,
-                        "group_by": metric_query.result_group_by,
-                        "required_output_columns": metric_query.required_output_columns,
-                        "optional_output_columns": metric_query.optional_output_columns,
-                        "source_functions": metric_query.source_functions,
-                        "calculation_namespace": metric_query.calculation_namespace,
-                        "batch_metrics": plan.metric_names,
-                    },
-                )
-            )
-        return tuple(series_by_metric)
 
     def run(self, request: MetricRunRequest) -> MetricTimeSeries:
         """Run a supported metric request and return normalized observations.

@@ -1,4 +1,3 @@
-import re
 from datetime import date, time
 
 import pytest
@@ -213,7 +212,7 @@ def test_kdb_metric_runner_renders_liquidity_query_without_group_columns() -> No
     assert ".calcLiquidity" in query
 
 
-def test_kdb_metric_runner_batch_loads_sources_once_and_returns_metric_tables() -> None:
+def test_kdb_metric_runner_day_query_returns_metric_tables() -> None:
     registry = build_default_registry()
     client = FakeKdbClient(
         {
@@ -236,13 +235,25 @@ def test_kdb_metric_runner_batch_loads_sources_once_and_returns_metric_tables() 
     )
     runner = KdbMetricRunner(client)  # type: ignore[arg-type]
     common = {
-        "period": _period(),
+        "period": ReportPeriod(
+            start_date=date(2026, 5, 1),
+            end_date=date(2026, 5, 1),
+            sessions=[
+                TradingSession(start=time(9, 0), end=time(11, 30), name="AM"),
+                TradingSession(start=time(12, 30), end=time(15, 30), name="PM"),
+            ],
+            bucket=IntradayBucketSpec("5m"),
+        ),
         "group_by": ["sym"],
-        "table_names": {"trades": "trade", "quotes": "quote"},
+        "source_functions": {
+            "reference_data": ".sb.mmsr.getRef",
+            "trades": ".sb.mmsr.getTrade",
+            "quotes": ".sb.mmsr.getQuote",
+        },
         "parameters": {"symbols": ("7203",)},
     }
 
-    series = runner.run_batch(
+    series = runner.run_day(
         [
             MetricRunRequest(metric=registry.get("turnover"), **common),
             MetricRunRequest(metric=registry.get("quoted_spread_bps"), **common),
@@ -256,11 +267,10 @@ def test_kdb_metric_runner_batch_loads_sources_once_and_returns_metric_tables() 
     assert series[0].values == (1000.0,)
     assert series[1].values == (12.5,)
     query = client.queries[0]
-    assert query.count("rawTrades: trade;") == 1
-    assert query.count("rawQuotes: quote;") == 1
-    assert 'refs: `sym xkey select from rawRefs where sym = `$"7203";' in query
-    assert re.search(r'(?<!`)\\$"turnover"', query) is None
-    assert '(`$"turnover";`$"quoted_spread_bps")!(metricResult1;metricResult2)' in query
+    assert ".mmsr.runReportDay[" in query
+    assert "`metricNames" in query
+    assert '`$"turnover"' in query
+    assert '`$"quoted_spread_bps"' in query
 
 
 def test_kdb_metric_runner_renders_reversion_query_and_normalizes_venue_horizon() -> None:
