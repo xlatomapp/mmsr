@@ -9689,3 +9689,69 @@ Removed files:
 ### Open questions
 
 - None.
+
+
+---
+
+## 2026-05-30 — Add desk-first slimming and q-performance roadmap reset
+
+### Implemented
+
+- Added an active near-term roadmap reset to `_docs/ROADMAP.md` that combines
+  the repo review findings with the follow-up direction to slim the codebase and
+  improve kdb metric calculation performance.
+- Prioritized the next work as:
+  - slim and stabilize the default product surface;
+  - remove redundant q wrappers around native q functions unless they add real
+    policy;
+  - make the default report market/group-first rather than symbol-first;
+  - profile and optimize q metric calculation stages;
+  - make the market summary tell the desk-level story before tables;
+  - build drilldowns around TPX/group/intraday market questions;
+  - standardize a generic q-side aggregation contract;
+  - make stockMetrics cache a first-class performance feature;
+  - validate runtime, row counts, and HTML budgets against real kdb data.
+- Updated the later-milestones summary so symbol pages are described as opt-in
+  escalation and codebase/q-performance work is explicit.
+
+### Files changed
+
+- `_docs/ROADMAP.md`
+- `_docs/journal.md`
+
+### Tests added or updated
+
+- None. Documentation-only roadmap update.
+
+### Validation
+
+- Not run. Documentation-only roadmap update.
+
+### Current milestone
+
+- Roadmap reset for desk-first market report, codebase slimming, and q
+  performance hardening.
+
+### Estimated milestone completion
+
+- Planning update complete.
+
+### Remaining work before milestone completion
+
+- Implement the first recommended PR:
+  - remove no-op q wrappers;
+  - remove default symbol aggregation levels;
+  - disable symbol pages by default;
+  - add `runReportDay` timing instrumentation;
+  - lock default report shape and aggregation defaults in tests.
+
+### Best next deterministic step
+
+- Start Milestone R0 with the smallest behavior change: update default
+  aggregation/report options away from symbol-first output and add regression
+  tests for the new defaults.
+
+### Open questions
+
+- Should symbol aggregation remain available through config only, or should the
+  CLI expose a short explicit flag for one-off symbol escalation reports?

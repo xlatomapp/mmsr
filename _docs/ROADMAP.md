@@ -29,6 +29,210 @@ frameworks unless the user explicitly changes the product scope. Existing
 execution-cost-style compatibility templates may remain tested but must not be
 promoted into default configs or report sections.
 
+## Current roadmap reset: desk-first report, slimmer code, faster q
+
+This section is the active near-term roadmap after the 2026-05-30 repo review.
+It combines the product report direction with the codebase slimming and kdb
+performance direction. Historical milestones below remain useful background, but
+new implementation should follow this ordered sequence.
+
+### Milestone R0: Slim and stabilize the default product surface
+
+**Goal:** Make the default package smaller and clearly desk-monitoring-first
+before adding more report features.
+
+**Required changes:**
+
+- Remove redundant q wrappers that only rename native q functions. Examples:
+  wrappers around `sum`, `count`, `med`, or `wavg` should be deleted unless they
+  add explicit null handling, validation, or report-specific policy.
+- Prefer one production execution path: the installed q `runReportDay` path.
+  Keep older single-metric or chunk-batch paths only where tests or explicit
+  compatibility need them; otherwise mark them for removal.
+- Remove symbol-level analysis from default production output. Symbol rows and
+  symbol pages should be opt-in escalation tools, not the default report shape.
+- Change default production aggregation levels to market and TPX cap group
+  rollups first: `market`, `market_bucket`, `topix_cap_group`, and
+  `topix_cap_group_bucket`. `symbol` and `symbol_bucket` should be opt-in.
+- Separate demo acceptance fixtures from product defaults so synthetic
+  symbol-heavy fixtures do not drive the default desk report shape.
+- Clean stale docs and comments that imply removed optional metric families or
+  legacy execution paths are still active roadmap priorities.
+
+**Exit criteria:**
+
+- Default production config does not request symbol or symbol-bucket rollups.
+- Default market report options do not emit symbol anomaly/detail pages.
+- q calculation helpers are only kept when they provide real policy or reuse.
+- Tests assert default report pages and default aggregation levels remain
+  market/group-first.
+
+### Milestone R1: q metric calculation performance pass
+
+**Goal:** Reduce kdb runtime and memory pressure for regular full-market
+reports.
+
+**Required changes:**
+
+- Profile q execution by stage: reference load, raw source load, metric
+  calculation, rollup, cache read/write, and result serialization.
+- Keep source loading once per day/chunk and avoid repeated trade/quote loads
+  across metrics in the same family.
+- Ensure cross-venue reversion prepares joined trade/quote state once per
+  metric family, then evaluates horizons from that prepared state.
+- Avoid broad `raze` of large intermediate chunk tables where earlier q-side
+  grouped rollup can reduce row counts before concatenation.
+- Apply attributes such as `p#` only where they measurably help `aj` paths and
+  after sort keys match the join keys.
+- Return aggregated report facts to Python; raw or near-raw rows should never
+  cross the Python boundary.
+- Add timing logs that identify slow stages without logging sensitive source
+  rows.
+
+**Exit criteria:**
+
+- One production day run can report per-stage q timings.
+- Activity, liquidity, and reversion families load each required raw source at
+  most once per day/chunk.
+- Reversion horizons reuse prepared joins rather than repeating the full
+  preparation per horizon.
+- Tests or deterministic q-render assertions guard against reintroducing
+  redundant native-function wrappers and repeated family preparation.
+
+### Milestone R2: Market summary that tells the story
+
+**Goal:** Make the first page useful for a trading desk review: what changed,
+where it changed, when it changed, and why it matters.
+
+**Required changes:**
+
+- Replace the top-page emphasis on metric cards and broad comparison tables with
+  a concise deterministic market narrative.
+- Surface the top three to five market-level changes across activity,
+  displayed liquidity, and cross-venue reversion.
+- Include the leading TPX cap group, intraday bucket/session, and venue/horizon
+  context when those dimensions explain the change.
+- Keep metric cards and comparison tables as compact audit/detail components,
+  not the primary story.
+- Use deterministic wording from computed comparison facts only; LLM polishing
+  remains optional and explicitly enabled.
+
+**Exit criteria:**
+
+- The first report page leads with narrative highlights before any broad table.
+- Highlights are sourced only from normalized comparisons and metric metadata.
+- Tests cover ranking, wording, and absence of symbol-level highlights in the
+  default summary unless symbol mode is explicitly enabled.
+
+### Milestone R3: Drilldowns around market questions
+
+**Goal:** Make drilldowns explain market structure changes rather than listing
+rows.
+
+**Required changes:**
+
+- Add a dedicated TPX cap group drilldown page before generic diagnostic tables.
+- For activity metrics, show current cumulative intraday distribution versus
+  reference distribution by TPX cap group.
+- For displayed liquidity metrics, show intraday profile shifts and largest
+  group deltas by TPX cap group, segment, or sector when configured.
+- For reversion metrics, keep venue/horizon curves focused on adverse
+  primary-quote movement and low-confidence sample flags.
+- Keep symbol drilldown as an opt-in escalation from the most severe grouped
+  changes.
+
+**Exit criteria:**
+
+- Default page order is market summary, activity distribution, displayed
+  liquidity, cross-venue toxicity, TPX/group drilldowns, intraday diagnostics,
+  and appendix.
+- Drilldown pages use visuals first and capped tables only as supporting audit
+  detail.
+- Symbol pages are absent by default and appear only through explicit config or
+  CLI options.
+
+### Milestone R4: Generic q-side aggregation contract
+
+**Goal:** Replace hard-coded group rollups with a reusable market/group/symbol
+aggregation contract.
+
+**Required changes:**
+
+- Standardize report fact dimensions as `date`, `time_bucket`,
+  `aggregationLevel`, `groupType`, and `groupValue`, plus metric columns and
+  optional metadata such as `venue`, `horizon`, `trade_count`, and `notional`.
+- Generalize q rollups beyond `topixCapGrp` so configured reference-data
+  columns such as TPX cap group, sector, and segment use the same aggregation
+  machinery.
+- Treat symbol aggregation as one optional aggregation level, not a separate
+  default product path.
+- Keep Python report selection based on normalized fact dimensions rather than
+  hard-coded source column names where practical.
+
+**Exit criteria:**
+
+- q can produce market, bucket, TPX cap group, sector, segment, and optional
+  symbol facts through one aggregation-level mechanism.
+- Output schema tests cover generic `groupType`/`groupValue` rows.
+- Existing report pages consume the standardized fact contract without needing
+  special cases for each taxonomy column.
+
+### Milestone R5: stockMetrics cache as a first-class performance feature
+
+**Goal:** Make repeated report generation fast without making MMSR own user
+storage.
+
+**Required changes:**
+
+- Add config for user-owned q cache functions such as `loadStockMetrics` and
+  `persistStockMetrics`, or an equivalent explicitly named client boundary.
+- Cache aggregated metric facts, not raw trade or quote rows.
+- Load one day of wide `stockMetrics` rows once for all requested metrics.
+- Compute only missing metric columns and persist the newly computed wide rows
+  once after q validation.
+- Document the ownership split: the user owns table storage and upsert
+  semantics; MMSR owns the canonical row shape and hydration/persist calls.
+
+**Exit criteria:**
+
+- A production run can hydrate cached metric facts before raw source loading.
+- Partial cache hits compute only missing metric columns.
+- A documented q example shows the expected loader/persister signatures and
+  canonical row shape.
+- Tests cover full hit, partial hit, miss, and persist behavior.
+
+### Milestone R6: Real kdb production validation and report budgets
+
+**Goal:** Validate the desk report against real production-shaped kdb data and
+lock in practical runtime and HTML-size budgets.
+
+**Required changes:**
+
+- Run one real kdb-backed report for one target day and the configured reference
+  window using activity, displayed liquidity, and reversion metrics.
+- Record runtime by q stage, returned row counts by aggregation level, final HTML
+  size, chart count, and report review usability notes.
+- Set default caps for charts, drilldown rows, optional symbol pages, and final
+  report size from observed production data.
+- Add fixture-scale regression tests that preserve the chosen budgets.
+
+**Exit criteria:**
+
+- A real-kdb smoke report validates the q source-function boundary, cache path
+  if enabled, report rendering, and compact visual defaults.
+- Budget tests prevent unbounded table/chart growth in default reports.
+- Remaining live-only risks are documented with concrete dates, configs, and
+  observed runtime numbers.
+
+**Recommended first implementation PR:**
+
+1. Remove no-op q wrappers around native q functions.
+2. Remove `symbol` and `symbol_bucket` from default production aggregation
+   levels.
+3. Disable symbol anomaly/detail pages by default.
+4. Add q timing instrumentation inside `runReportDay`.
+5. Add tests that lock the new default report shape and aggregation defaults.
+
 
 ## Milestone 1: Project skeleton and governance
 
@@ -465,9 +669,13 @@ users define raw trade/quote access while MMSR owns metric q calculations.
 
 ## Later milestones
 
-- Advanced visualizations.
-- Symbol-level anomaly pages.
-- Sector/segment/market-cap drilldowns.
+- Advanced visualizations that support the desk-first market story.
+- Symbol-level anomaly pages as explicit opt-in escalation, not default output.
+- Sector/segment/market-cap drilldowns through the generic q-side aggregation
+  contract.
+- Codebase slimming and q performance hardening until the default production
+  path is small, fast, and easy to reason about.
+- First-class stockMetrics cache integration for faster repeated generation.
 - Optional LLM commentary extras.
 - PDF rendering.
 - Scheduling and distribution.
