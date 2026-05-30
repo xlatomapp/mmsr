@@ -107,6 +107,11 @@ class FakeProductionKdbClient:
                     "sym": "7203",
                     "quoted_spread_bps": 3.5,
                     "top_of_book_depth": 2500,
+                    "report_ref_load_ms": 5,
+                    "report_trade_load_ms": 6,
+                    "report_quote_load_ms": 7,
+                    "report_calc_ms": 8,
+                    "report_total_ms": 23,
                 }
             ]
 
@@ -119,6 +124,11 @@ class FakeProductionKdbClient:
                 "volume": volume,
                 "turnover": 987654321,
                 "trade_count": 42,
+                "report_ref_load_ms": 5,
+                "report_trade_load_ms": 6,
+                "report_quote_load_ms": 7,
+                "report_calc_ms": 8,
+                "report_total_ms": 23,
             }
         ]
 
@@ -276,6 +286,10 @@ def test_preflight_production_report_executes_one_bounded_metric_step(
     assert result.rendered_query.template_name == "activity"
     assert "topixCapGrp" in result.rendered_query.required_output_columns
     assert result.result_row_count == 1
+    assert result.sample_timing_ms is not None
+    assert result.sample_timing_ms["report_total_ms"] == 23
+    assert any(check.name == "sample_q_timing" for check in result.checks)
+    assert "Sample q timings (ms):" in "\n".join(result.summary_lines())
     assert len(FakeProductionKdbClient.queries) == 3
     assert "callTradingCalendar" in FakeProductionKdbClient.queries[0]
     assert "getTradingCalendar" in FakeProductionKdbClient.queries[1]

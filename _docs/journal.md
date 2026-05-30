@@ -9981,3 +9981,33 @@ Removed files:
 
 - Should timing columns remain embedded in every metric table, or should a
   dedicated optional diagnostics table be returned by q in a future iteration?
+
+---
+
+## 2026-05-30 — Surface q timing diagnostics in production preflight/executor
+
+### Implemented
+
+- Extended `KdbProductionPreflightResult` with `sample_timing_ms`.
+- Added Python extraction of q timing metadata from series observations via
+  `_timing_ms_from_metric_series`.
+- Added preflight diagnostics output and check:
+  - summary line `Sample q timings (ms): ...`
+  - check name `sample_q_timing`
+- Added executor logging of day-batch q timings during production execution.
+- Updated test fakes to emit timing fields and added assertions in:
+  - `tests/test_kdb_production_execution.py`
+  - `tests/test_production_cli.py`
+
+### Files changed
+
+- `mmsr/kdb/production.py`
+- `tests/test_kdb_production_execution.py`
+- `tests/test_production_cli.py`
+- `_docs/journal.md`
+
+### Validation
+
+- `python -m compileall mmsr tests` passed.
+- Could not run pytest in this environment because `pytest` and `uvx` are not
+  available in PATH.

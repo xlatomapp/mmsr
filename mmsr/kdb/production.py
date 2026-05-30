@@ -138,6 +138,7 @@ class KdbProductionPreflightResult:
     preflight_step: ProductionMetricRunStep
     rendered_query: object
     result_row_count: int
+    sample_timing_ms: Mapping[str, int] | None = None
     checks: tuple[KdbProductionPreflightCheck, ...]
 
     @property
@@ -162,6 +163,17 @@ class KdbProductionPreflightResult:
             "Required output columns: "
             + ", ".join(self.rendered_query.required_output_columns),
             f"Validated sample rows: {self.result_row_count}",
+            *(
+                (
+                    "Sample q timings (ms): "
+                    + ", ".join(
+                        f"{name}={value}"
+                        for name, value in self.sample_timing_ms.items()
+                    )
+                ,)
+                if self.sample_timing_ms
+                else ()
+            ),
         )
 
 
@@ -501,12 +513,21 @@ class KdbProductionExecutor:
                 len(_symbols_for_day_steps(day_steps)),
             )
             day_series = self._run_metric_step_day(day_steps)
+            day_timing_ms = _timing_ms_from_metric_series(day_series)
             LOGGER.info(
                 "Completed day batch %s/%s: day=%s",
                 day_index,
                 len(day_batches),
                 day_steps[0].trading_day.isoformat(),
             )
+            if day_timing_ms:
+                LOGGER.info(
+                    "Day batch q timings (ms): day=%s %s",
+                    day_steps[0].trading_day.isoformat(),
+                    ", ".join(
+                        f"{name}={value}" for name, value in day_timing_ms.items()
+                    ),
+                )
             representative_steps = _representative_steps_by_metric(day_steps)
             for step, series in zip(representative_steps, day_series, strict=True):
                 observations_by_metric[step.metric_name].extend(series.observations)
@@ -783,10 +804,16 @@ class KdbProductionPreflight:
 
         LOGGER.info("Executing preflight sample day query")
         series = self.runner.run_day((step.request,))[0]
+        sample_timing_ms = _timing_ms_from_metric_series((series,))
         LOGGER.info(
             "Preflight sample day query returned %s observation(s)",
             len(series.observations),
         )
+        if sample_timing_ms:
+            LOGGER.info(
+                "Preflight sample q timings (ms): %s",
+                ", ".join(f"{name}={value}" for name, value in sample_timing_ms.items()),
+            )
         checks.append(
             KdbProductionPreflightCheck(
                 name="sample_result_schema",
@@ -797,6 +824,16 @@ class KdbProductionPreflight:
                 ),
             )
         )
+        if sample_timing_ms:
+            checks.append(
+                KdbProductionPreflightCheck(
+                    name="sample_q_timing",
+                    status="passed",
+                    detail=", ".join(
+                        f"{name}={value}" for name, value in sample_timing_ms.items()
+                    ),
+                )
+            )
 
         return KdbProductionPreflightResult(
             config_title=config.title,
@@ -804,6 +841,7 @@ class KdbProductionPreflight:
             preflight_step=step,
             rendered_query=rendered_query,
             result_row_count=len(series.observations),
+            sample_timing_ms=sample_timing_ms,
             checks=tuple(checks),
         )
 
@@ -835,6 +873,36 @@ class KdbProductionPreflight:
 
 def _metric_family_for_step(step: ProductionMetricRunStep) -> str:
     return metric_family_for_metric(step.metric_name)
+
+
+_RUN_REPORT_DAY_TIMING_FIELDS: tuple[str, ...] = (
+    "report_ref_load_ms",
+    "report_chunk_calc_ms",
+    "report_rollup_ms",
+    "report_total_ms",
+    "report_chunk_count",
+    "report_symbol_count",
+)
+
+
+def _timing_ms_from_metric_series(
+    series_items: Sequence[MetricTimeSeries],
+) -> dict[str, int]:
+    """Extract q-side runReportDay timing metadata from normalized observations."""
+
+    if not series_items:
+        return {}
+    observations = series_items[0].observations
+    if not observations:
+        return {}
+    metadata = observations[0].metadata
+    timing: dict[str, int] = {}
+    for key in _RUN_REPORT_DAY_TIMING_FIELDS:
+        value = metadata.get(key)
+        if isinstance(value, bool) or not isinstance(value, int):
+            continue
+        timing[key] = value
+    return timing
 
 
 def _preflight_metric_selection(

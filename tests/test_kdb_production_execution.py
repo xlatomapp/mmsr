@@ -302,6 +302,14 @@ def test_production_preflight_can_select_configured_metric(
         check.name == "metric_selection" and check.detail == metric_name
         for check in result.checks
     )
+    assert result.sample_timing_ms is not None
+    assert "report_ref_load_ms" in result.sample_timing_ms
+    assert any(
+        check.name == "sample_q_timing" and "report_ref_load_ms=" in check.detail
+        for check in result.checks
+    )
+    summary_lines = "\n".join(result.summary_lines())
+    assert "Sample q timings (ms):" in summary_lines
 
 def test_production_preflight_rejects_metric_not_configured() -> None:
     config = ReportConfig(title="Daily Monitor", metrics=["volume"])
@@ -374,6 +382,13 @@ class FakeRunner:
                     time_bucket="09:00",
                     group={"sym": request.parameters.get("symbols", ("ALL",))[0]},
                     value=100,
+                    metadata={
+                        "report_ref_load_ms": 1,
+                        "report_trade_load_ms": 2,
+                        "report_quote_load_ms": 3,
+                        "report_calc_ms": 4,
+                        "report_total_ms": 10,
+                    },
                 )
             ],
             metric_name=request.metric.name,
