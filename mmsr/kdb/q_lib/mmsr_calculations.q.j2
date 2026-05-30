@@ -62,6 +62,15 @@
     0!raze mmsrRollups
     };
 
+{{ calculation_namespace }}.preAggregateFacts:{[facts]
+    / Reduce per-chunk row count before cross-chunk raze by aggregating
+    / additive activity columns to date/time_bucket/cap-group grain.
+    if[0=count facts; :0!facts];
+    0!select sum turnover, sum volume, sum trade_count
+        by date, time_bucket, topixCapGrp
+        from facts
+    };
+
 {{ calculation_namespace }}.calcActivity:{[rawTrades;refs;params]
     trades: rawTrades lj refs;
     result: select
@@ -362,9 +371,16 @@
                     reversionMetrics]
                 ];
             calcEnd: .z.p;
+            / Pre-aggregate activity-family results to shrink cross-chunk raze
+            slimDict: metricNames!({[resultDict;metricName]
+                    facts: resultDict[metricName];
+                    $[metricName in `turnover`volume`trade_count;
+                        {{ calculation_namespace }}.preAggregateFacts facts;
+                        facts]
+                    }[resultDict] each metricNames);
             ({{ calculation_namespace }}.elapsedMs[srcStart;srcEnd];
              {{ calculation_namespace }}.elapsedMs[srcEnd;calcEnd];
-             resultDict)
+             slimDict)
         }[runDate;refs;sourceFunctions;metricNames;metricParams] each chunks;
 
     sourceLoadMs: sum {first x} each chunkResults;
