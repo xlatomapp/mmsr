@@ -803,8 +803,7 @@ def _metric_family_for_step(step: ProductionMetricRunStep) -> str:
 
 _RUN_REPORT_DAY_TIMING_FIELDS: tuple[str, ...] = (
     "report_ref_load_ms",
-    "report_source_load_ms",
-    "report_metric_calc_ms",
+    "report_chunk_calc_ms",
     "report_rollup_ms",
     "report_total_ms",
     "report_chunk_count",
