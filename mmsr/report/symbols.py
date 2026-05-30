@@ -8,6 +8,7 @@ facts into deterministic report components.
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -177,6 +178,11 @@ def build_symbol_anomaly_page(
         return None
 
     _require_metric_definitions_for_comparisons(selected, definitions)
+    anomaly_explorer_block = _build_symbol_anomaly_explorer_block(
+        selected,
+        definitions,
+        symbol_group_keys=resolved_options.symbol_group_keys,
+    )
     table = MetricTable(
         title=resolved_options.table_title.strip(),
         rows=[
@@ -191,7 +197,81 @@ def build_symbol_anomaly_page(
     )
     return ReportPage(
         title=resolved_options.title.strip(),
+        html_blocks=[anomaly_explorer_block] if anomaly_explorer_block is not None else [],
         metric_tables=[table],
+    )
+
+
+def _build_symbol_anomaly_explorer_block(
+    selected: tuple[MetricComparison, ...],
+    definitions: Mapping[str, MetricDefinition],
+    *,
+    symbol_group_keys: tuple[str, ...],
+) -> HtmlBlock | None:
+    rows: list[dict[str, str]] = []
+    for comparison in selected:
+        symbol = _symbol_from_group(
+            comparison.group,
+            symbol_group_keys=symbol_group_keys,
+        )
+        if symbol is None:
+            continue
+        definition = definitions.get(comparison.metric_name)
+        if definition is None:
+            continue
+        unit = definition.unit
+        rows.append(
+            {
+                "symbol": symbol,
+                "metric_label": definition.label,
+                "status": comparison.status.replace("_", " ").title(),
+                "value_text": _format_metric_value(comparison.value, unit),
+                "reference_text": (
+                    "—"
+                    if comparison.reference_value is None
+                    else _format_metric_value(comparison.reference_value, unit)
+                ),
+                "change_text": _format_change(comparison, unit) or "not available",
+                "scope_text": _format_symbol_scope(comparison, symbol_group_keys),
+            }
+        )
+
+    if not rows:
+        return None
+
+    row_items = "".join(
+        (
+            '<button type="button" class="symbol-anomaly-explorer__row" '
+            f'data-symbol-anomaly-index="{idx}">'
+            f'<span class="symbol-anomaly-explorer__symbol">{escape(item["symbol"])}</span>'
+            f'<span class="symbol-anomaly-explorer__metric">{escape(item["metric_label"])}</span>'
+            f'<span class="symbol-anomaly-explorer__status">{escape(item["status"])}</span>'
+            "</button>"
+        )
+        for idx, item in enumerate(rows)
+    )
+    payload = {"rows": rows}
+    payload_json = escape(json.dumps(payload, separators=(",", ":")))
+    body_html = (
+        '<div class="symbol-anomaly-explorer" data-symbol-anomaly-explorer>'
+        '<div class="symbol-anomaly-explorer__grid">'
+        '<div class="symbol-anomaly-explorer__left">'
+        "<h4>Anomaly list</h4>"
+        "<p>Select a row to update the detail panel.</p>"
+        f'<div class="symbol-anomaly-explorer__rows">{row_items}</div>'
+        "</div>"
+        '<div class="symbol-anomaly-explorer__right">'
+        "<h4>Selected anomaly detail</h4>"
+        '<div class="symbol-anomaly-explorer__detail" data-symbol-anomaly-detail></div>'
+        "</div>"
+        "</div>"
+        f'<script type="application/json" data-symbol-anomaly-spec>{payload_json}</script>'
+        "</div>"
+    )
+    return HtmlBlock(
+        title="Anomaly Detail Panel",
+        body_html=body_html,
+        help_text="Deterministic symbol-anomaly selector and detail panel from existing comparison facts.",
     )
 
 

@@ -104,6 +104,11 @@ def test_build_symbol_anomaly_page_renders_metric_table_with_scope_and_help() ->
 
     assert page is not None
     assert page.title == "Symbol Anomalies"
+    assert len(page.html_blocks) == 1
+    assert page.html_blocks[0].title == "Anomaly Detail Panel"
+    assert "data-symbol-anomaly-explorer" in page.html_blocks[0].body_html
+    assert 'data-symbol-anomaly-index="0"' in page.html_blocks[0].body_html
+    assert "7203" in page.html_blocks[0].body_html
     assert len(page.metric_tables) == 1
     table = page.metric_tables[0]
     assert table.title == "Top symbol-level anomalies"
@@ -114,6 +119,25 @@ def test_build_symbol_anomaly_page_renders_metric_table_with_scope_and_help() ->
     assert "Symbol: 7203" in table.rows[0].group_text
     assert "symbol=7203" not in table.rows[0].group_text
     assert "AM opening auction" in table.rows[0].group_text
+
+
+def test_symbol_anomaly_explorer_uses_deterministic_default_selection_order() -> None:
+    definitions = build_default_registry()
+    comparisons = (
+        _comparison("quoted_spread_bps", "6758", status="watch", z_score=1.5, empirical_tail=0.08),
+        _comparison("quoted_spread_bps", "7203", status="alert", z_score=2.8, empirical_tail=0.01),
+    )
+
+    page = build_symbol_anomaly_page(comparisons, definitions.docs())
+
+    assert page is not None
+    explorer_html = page.html_blocks[0].body_html
+    first_idx = explorer_html.index('data-symbol-anomaly-index="0"')
+    second_idx = explorer_html.index('data-symbol-anomaly-index="1"')
+    first_symbol_idx = explorer_html.index("7203")
+    second_symbol_idx = explorer_html.index("6758")
+    assert first_idx < second_idx
+    assert first_symbol_idx < second_symbol_idx
 
 
 def test_build_symbol_anomaly_page_returns_none_without_symbol_rows() -> None:
@@ -523,11 +547,15 @@ def test_market_report_adds_symbol_detail_index_when_detail_pages_exist() -> Non
 
     assert symbol_page.title == "Symbol Anomalies"
     assert [block.title for block in symbol_page.html_blocks] == [
+        "Anomaly Detail Panel",
         "Symbol Detail Index",
     ]
     assert detail_page.anchor_id == symbol_detail_anchor_id("7203")
     assert f'id="{detail_page.anchor_id}"' in html
     assert f'href="#{detail_page.anchor_id}"' in html
+    assert "data-symbol-anomaly-explorer" in html
+    assert "data-symbol-anomaly-detail" in html
+    assert "data-symbol-anomaly-spec" in html
 
 
 def test_market_report_symbol_detail_index_can_be_disabled() -> None:
@@ -563,7 +591,7 @@ def test_market_report_symbol_detail_index_can_be_disabled() -> None:
     )
 
     assert document.pages[1].title == "Symbol Anomalies"
-    assert document.pages[1].html_blocks == []
+    assert [block.title for block in document.pages[1].html_blocks] == ["Anomaly Detail Panel"]
 
 
 def test_market_report_symbol_detail_pages_can_be_disabled() -> None:

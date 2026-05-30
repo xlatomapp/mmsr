@@ -17,53 +17,48 @@ Use this file as the **active-step buffer**.
 
 ## Current Step Entry
 
-## 2026-05-30 — D3 implementation: unified drilldown matrix + linked trend panel
+## 2026-05-30 — D4 implementation: anomaly row selector linked to detail panel
 
 ### What changed
-- Replaced drilldown per-metric heatmap emission with a unified `Metric Explorer & Group Analysis` block in `mmsr/report/drilldowns.py`.
-- New explorer block behavior:
-  - one matrix heatmap (rows=`Metric`, columns=`Group`, value=`change_pct`)
-  - right-side daily trend chart (`current value` by date) for selected group
-  - click any heatmap cell column to switch selected group trend
-- Kept `Group Delta Overview` as the lead visual summary and preserved drilldown metric table output.
-- Updated report template styles and JavaScript to render and wire the new matrix/trend interaction using Plotly.
-- Updated roadmap/design docs to reflect this completed D3 deliverable and set D4 as the next deterministic implementation step.
+- Added a deterministic symbol anomaly explorer block in `mmsr/report/symbols.py`:
+  - left side anomaly row list (symbol, metric, status)
+  - right side detail panel (symbol/metric/status/current/reference/change/scope)
+  - deterministic default selection uses anomaly rank index `0`
+- Wired the explorer into `build_symbol_anomaly_page()` so it renders above the anomaly table.
+- Added CSS and JavaScript in `mmsr/report/templates/report.html.j2`:
+  - responsive two-column explorer layout
+  - click row updates detail panel
+  - selected-row highlight state
+- Updated symbol anomaly tests to validate:
+  - explorer presence
+  - deterministic default selection ordering
+  - rendered report contains explorer hooks.
 
 ### Files changed
-- `mmsr/report/drilldowns.py`
+- `mmsr/report/symbols.py`
 - `mmsr/report/templates/report.html.j2`
-- `tests/test_drilldowns.py`
-- `tests/test_market_report.py`
-- `tests/test_offline_demo.py`
-- `tests/test_mock_kdb_demo.py`
-- `_docs/ROADMAP.md`
-- `_docs/report_design_roadmap.md`
+- `tests/test_symbol_anomaly_pages.py`
 - `_docs/journal.md`
+- `_docs/latest_journal.md`
 
 ### Tests updated
-- Adjusted drilldown/report/demo assertions for:
-  - unified matrix explorer presence (`data-drilldown-matrix-spec`)
-  - removal of legacy per-metric heatmap section assumptions in default outputs
-  - matrix block conditional behavior when insufficient metric diversity exists
+- `tests/test_symbol_anomaly_pages.py` assertions expanded for explorer block and ordering.
 
 ### Validation
-- `conda run -n mmsr pytest -q tests/test_drilldowns.py tests/test_market_report.py tests/test_offline_demo.py tests/test_mock_kdb_demo.py` passed.
-- Full pre-commit/commit still pending for this step.
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache conda run -n mmsr pre-commit run --all-files` passed (ruff, mypy, full pytest).
 
 ### Current milestone
-- D3 complete (group analysis redesign).
-- D4 in progress (symbol drilldown UX linkage cleanup).
+- D4 in progress (symbol drilldown UX cleanup).
 
 ### Estimated completion
-- ~70% of the current redesign stream (D0-D4).
+- ~85% of D4.
 
 ### Remaining work
-- Implement D4 anomaly table-to-detail panel deterministic linkage.
-- Add deterministic selection-state tests for anomaly detail panel behavior.
-- Run full pre-commit and commit this step.
+- Optional refinement: connect explorer row to symbol detail page anchor when detail pages exist.
+- Continue redesign stream toward D5 polish/a11y/budget hardening.
 
 ### Best next deterministic implementation step
-- Implement deterministic anomaly row selection state (default selected row + click-to-detail panel update) and lock with integration tests.
+- Add optional “open detail page” link binding from selected anomaly row to emitted symbol detail anchor and lock with render assertions.
 
 ### Open questions
 - None.

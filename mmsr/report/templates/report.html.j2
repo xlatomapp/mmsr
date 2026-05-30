@@ -354,6 +354,74 @@
       min-height: 320px;
       width: 100%;
     }
+    .symbol-anomaly-explorer__grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: minmax(220px, 0.42fr) 1fr;
+    }
+    .symbol-anomaly-explorer__left, .symbol-anomaly-explorer__right {
+      background: #fff;
+      border: 1px solid var(--mmsr-border);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+    .symbol-anomaly-explorer__left h4, .symbol-anomaly-explorer__right h4 {
+      font-size: 14px;
+      margin: 0 0 4px;
+    }
+    .symbol-anomaly-explorer__left p {
+      color: var(--mmsr-muted);
+      font-size: 12px;
+      margin: 0 0 8px;
+    }
+    .symbol-anomaly-explorer__rows {
+      display: grid;
+      gap: 6px;
+    }
+    .symbol-anomaly-explorer__row {
+      align-items: center;
+      background: #fff;
+      border: 1px solid var(--mmsr-border);
+      border-radius: 10px;
+      cursor: pointer;
+      display: grid;
+      gap: 6px;
+      grid-template-columns: minmax(56px, 72px) 1fr auto;
+      padding: 8px 10px;
+      text-align: left;
+      width: 100%;
+    }
+    .symbol-anomaly-explorer__row.is-selected {
+      border-color: #1f4f9a;
+      box-shadow: 0 0 0 1px #1f4f9a inset;
+    }
+    .symbol-anomaly-explorer__symbol {
+      font-weight: 700;
+    }
+    .symbol-anomaly-explorer__metric, .symbol-anomaly-explorer__status {
+      color: var(--mmsr-muted);
+      font-size: 12px;
+    }
+    .symbol-anomaly-explorer__detail {
+      display: grid;
+      gap: 8px;
+    }
+    .symbol-anomaly-explorer__detail-item {
+      border-bottom: 1px solid var(--mmsr-border);
+      display: grid;
+      gap: 4px;
+      grid-template-columns: minmax(96px, 0.35fr) 1fr;
+      padding-bottom: 6px;
+    }
+    .symbol-anomaly-explorer__detail-label {
+      color: var(--mmsr-muted);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .symbol-anomaly-explorer__detail-value {
+      font-size: 13px;
+    }
     .report-meta-strip {
       display: grid;
       gap: 10px;
@@ -587,6 +655,7 @@
       .report-meta-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .kpi-snapshot { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .drilldown-matrix-explorer__grid { grid-template-columns: 1fr; }
+      .symbol-anomaly-explorer__grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -780,6 +849,46 @@
           });
         });
       }
+
+      document.querySelectorAll("[data-symbol-anomaly-explorer]").forEach(function (container) {
+        var specNode = container.querySelector("[data-symbol-anomaly-spec]");
+        var detailTarget = container.querySelector("[data-symbol-anomaly-detail]");
+        var rowButtons = Array.prototype.slice.call(
+          container.querySelectorAll("[data-symbol-anomaly-index]")
+        );
+        if (!specNode || !detailTarget || !rowButtons.length) {
+          return;
+        }
+        var spec = JSON.parse(specNode.textContent || "{}");
+        var rows = spec.rows || [];
+        if (!rows.length) {
+          return;
+        }
+        var renderDetail = function (index) {
+          var row = rows[index];
+          if (!row) {
+            return;
+          }
+          rowButtons.forEach(function (button, buttonIndex) {
+            button.classList.toggle("is-selected", buttonIndex === index);
+          });
+          detailTarget.innerHTML =
+            '<div class="symbol-anomaly-explorer__detail-item"><div class="symbol-anomaly-explorer__detail-label">Symbol</div><div class="symbol-anomaly-explorer__detail-value">' + row.symbol + "</div></div>" +
+            '<div class="symbol-anomaly-explorer__detail-item"><div class="symbol-anomaly-explorer__detail-label">Metric</div><div class="symbol-anomaly-explorer__detail-value">' + row.metric_label + "</div></div>" +
+            '<div class="symbol-anomaly-explorer__detail-item"><div class="symbol-anomaly-explorer__detail-label">Status</div><div class="symbol-anomaly-explorer__detail-value">' + row.status + "</div></div>" +
+            '<div class="symbol-anomaly-explorer__detail-item"><div class="symbol-anomaly-explorer__detail-label">Current</div><div class="symbol-anomaly-explorer__detail-value">' + row.value_text + "</div></div>" +
+            '<div class="symbol-anomaly-explorer__detail-item"><div class="symbol-anomaly-explorer__detail-label">Reference</div><div class="symbol-anomaly-explorer__detail-value">' + row.reference_text + "</div></div>" +
+            '<div class="symbol-anomaly-explorer__detail-item"><div class="symbol-anomaly-explorer__detail-label">Change</div><div class="symbol-anomaly-explorer__detail-value">' + row.change_text + "</div></div>" +
+            '<div class="symbol-anomaly-explorer__detail-item"><div class="symbol-anomaly-explorer__detail-label">Scope</div><div class="symbol-anomaly-explorer__detail-value">' + row.scope_text + "</div></div>";
+        };
+        rowButtons.forEach(function (button) {
+          button.addEventListener("click", function () {
+            var idx = Number(button.getAttribute("data-symbol-anomaly-index") || "0");
+            renderDetail(idx);
+          });
+        });
+        renderDetail(0);
+      });
     });
   </script>
 </body>
