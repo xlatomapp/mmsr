@@ -17,21 +17,21 @@ Use this file as the **active-step buffer**.
 
 ## Current Step Entry
 
-## 2026-05-31 — D5 continuation: render-level accessibility assertions + budgetless D5 doc scope
+## 2026-05-31 — D5 implementation: compact drilldown/anomaly panel polish with render-lock assertions
 
 ### What changed
-- Added render-level accessibility assertions for interactive components:
-  - `tests/test_market_report.py` now asserts drilldown matrix/trend `aria-label` attributes in rendered HTML.
-  - `tests/test_symbol_anomaly_pages.py` now asserts anomaly detail live-region semantics (`role="status"`, `aria-live="polite"`) and row `aria-label` presence in rendered HTML.
-- Updated design roadmap D5 scope to remove budget framing after budget subsystem removal:
-  - renamed section to `D5 — Polish + Accessibility`
-  - removed budget-related scope/deliverables/exit-criteria bullets
-  - updated immediate deterministic step wording accordingly.
+- Implemented compact spacing and typography polish for D5 in report template:
+  - tightened drilldown matrix panel padding/gaps and heading/body text scale
+  - tightened symbol anomaly explorer row/detail spacing and text scale
+  - preserved existing structural semantics and interactivity; this is presentation-focused compaction.
+- Added deterministic render assertions to lock the style contract:
+  - market report render test now verifies compact drilldown CSS selectors/properties are present
+  - symbol anomaly render test now verifies compact anomaly detail/row style selectors/properties are present.
 
 ### Files changed
+- `mmsr/report/templates/report.html.j2`
 - `tests/test_market_report.py`
 - `tests/test_symbol_anomaly_pages.py`
-- `_docs/report_design_roadmap.md`
 - `_docs/journal.md`
 - `_docs/latest_journal.md`
 
@@ -40,58 +40,20 @@ Use this file as the **active-step buffer**.
 - `tests/test_symbol_anomaly_pages.py`
 
 ### Validation
+- `conda run -n mmsr pytest -q tests/test_market_report.py tests/test_symbol_anomaly_pages.py` passed.
 - `PRE_COMMIT_HOME=/tmp/pre-commit-cache conda run -n mmsr pre-commit run --all-files` passed.
 
 ### Current milestone
 - D5 in progress.
 
 ### Estimated completion
-- ~55% of D5.
+- ~68% of D5.
 
 ### Remaining work
-- Continue visual polish and finalize D5 closeout criteria/documentation.
+- Finalize D5 with UX-level polish for summary/drilldown flow consistency against design roadmap targets.
 
 ### Best next deterministic implementation step
-- Implement compact spacing/typography polish for drilldown/anomaly panels and lock with deterministic render assertions.
-
-### Open questions
-- None.
-
-## 2026-05-31 — Complexity reduction: removed report budget subsystem
-
-### What changed
-- Removed report budget functionality to reduce repo complexity:
-  - deleted `mmsr/report/budgets.py`
-  - deleted `tests/test_report_budgets.py`
-- Removed budget integration from CLI render flow:
-  - dropped budget imports from `mmsr/cli.py`
-  - removed budget snapshot/evaluation logging branch from production render command.
-- Verified no remaining code references to budget helpers.
-
-### Files changed
-- `mmsr/cli.py`
-- `mmsr/report/budgets.py` (deleted)
-- `tests/test_report_budgets.py` (deleted)
-- `_docs/journal.md`
-- `_docs/latest_journal.md`
-
-### Tests updated
-- Removed budget-specific test module as part of subsystem removal.
-
-### Validation
-- `PRE_COMMIT_HOME=/tmp/pre-commit-cache conda run -n mmsr pre-commit run --all-files` passed.
-
-### Current milestone
-- D5 in progress (ongoing polish stream); budget subsystem removed by user direction.
-
-### Estimated completion
-- ~45% of D5.
-
-### Remaining work
-- Continue accessibility and visual polish tasks without budget guardrails.
-
-### Best next deterministic implementation step
-- Add final accessibility assertions for interactive drilldown/anomaly components and update D5 status docs.
+- Implement summary-to-drilldown visual continuity pass (consistent panel headers, spacing rhythm, and section microcopy hierarchy) and lock with render-level assertions.
 
 ### Open questions
 - None.

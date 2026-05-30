@@ -564,6 +564,11 @@ def test_market_report_adds_symbol_detail_index_when_detail_pages_exist() -> Non
     assert 'aria-live="polite"' in html
     assert 'aria-label="Select anomaly 7203 Quoted Spread status Alert"' in html
     assert ".symbol-anomaly-explorer__row:focus-visible" in html
+    assert ".symbol-anomaly-explorer__rows {" in html
+    assert ".symbol-anomaly-explorer__detail-item {" in html
+    assert "padding-bottom: 5px;" in html
+    assert ".symbol-anomaly-explorer__detail-value {" in html
+    assert "font-size: 12px;" in html
     assert "Open detail page" in html
 
 

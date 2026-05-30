@@ -113,6 +113,11 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert "data-drilldown-heatmap" in html
     assert 'aria-label="Liquidity group-metric heatmap"' in html
     assert 'aria-label="Selected group daily trend chart"' in html
+    assert ".drilldown-matrix-explorer__grid {" in html
+    assert "gap: 10px;" in html
+    assert ".drilldown-matrix-explorer__panel h4 {" in html
+    assert "font-size: 13px;" in html
+    assert "line-height: 1.35;" in html
     assert "Executive Market Overview" in html
     assert "Market KPI Snapshot" in html
     assert "Report Meta" in html
