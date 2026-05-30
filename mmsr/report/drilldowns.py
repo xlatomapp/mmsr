@@ -99,6 +99,7 @@ def build_drilldown_report_page(
 
     _require_metric_definitions_for_comparisons(selected, definitions)
     delta_bars_block = _build_group_delta_bars_block(selected, definitions)
+    matrix_block = _build_group_comparison_matrix_block(selected, definitions)
     table = MetricTable(
         title=resolved_options.table_title.strip(),
         rows=[
@@ -111,9 +112,14 @@ def build_drilldown_report_page(
         ],
         help_text=resolved_options.help_text.strip(),
     )
+    html_blocks: list[HtmlBlock] = []
+    if delta_bars_block is not None:
+        html_blocks.append(delta_bars_block)
+    if matrix_block is not None:
+        html_blocks.append(matrix_block)
     return ReportPage(
         title=resolved_options.title.strip(),
-        html_blocks=([delta_bars_block] if delta_bars_block is not None else []),
+        html_blocks=html_blocks,
         metric_tables=[table],
     )
 
@@ -195,6 +201,169 @@ def _format_drilldown_group_label(comparison: MetricComparison) -> str:
     if not parts:
         parts.append(format_group_label(comparison.group))
     return ", ".join(parts)
+
+
+_MATRIX_MAX_METRICS = 6
+_MATRIX_MAX_GROUPS = 8
+
+
+def _build_group_comparison_matrix_block(
+    comparisons: tuple[MetricComparison, ...],
+    definitions: Mapping[str, MetricDefinition],
+) -> HtmlBlock | None:
+    """Build a color-coded group × metric comparison matrix.
+
+    Rows are metrics, columns are group values. Each cell shows ``change_pct``
+    colored by magnitude and direction (green = favorable, red = adverse),
+    respecting each metric's ``higher_is_better`` direction.
+    """
+    if not comparisons:
+        return None
+
+    # Collect distinct metrics and group dimension values for the matrix axes
+    metric_names: list[str] = []
+    seen_metrics: set[str] = set()
+    metric_defs: dict[str, MetricDefinition] = {}
+    for comp in comparisons:
+        if comp.metric_name not in seen_metrics and len(metric_names) < _MATRIX_MAX_METRICS:
+            metric_names.append(comp.metric_name)
+            seen_metrics.add(comp.metric_name)
+            if comp.metric_name in definitions:
+                metric_defs[comp.metric_name] = definitions[comp.metric_name]
+    if len(metric_names) < 2:
+        return None
+
+    # Pivot: (metric_name, group_value) → best comparison
+    group_values, cell_map = _pivot_comparison_matrix(comparisons, metric_names)
+
+    if len(group_values) < 2:
+        return None
+
+    # Find max |change_pct| for color scaling
+    max_abs_pct = max(
+        abs(cell.change_pct or 0.0)
+        for cell in cell_map.values()
+        if cell.change_pct is not None and isfinite(float(cell.change_pct))
+    )
+    if max_abs_pct == 0:
+        max_abs_pct = 0.01
+
+    header_cells = "".join(f'<th class="matrix-cell matrix-cell--header">{escape(str(gv))}</th>' for gv in group_values)
+    rows_html = "".join(
+        _matrix_row_html(metric_name, group_values, cell_map, metric_defs.get(metric_name), max_abs_pct)
+        for metric_name in metric_names
+    )
+
+    body_html = (
+        '<div class="drilldown-matrix">\n'
+        "  <p><strong>Group Comparison Matrix:</strong> "
+        "percentage change versus reference. "
+        "Green = favorable direction, Red = adverse direction.</p>\n"
+        '  <table class="matrix-table">\n'
+        "    <thead><tr>"
+        '<th class="matrix-cell matrix-cell--corner"></th>'
+        f"{header_cells}"
+        "</tr></thead>\n"
+        f"    <tbody>{rows_html}</tbody>\n"
+        "  </table>\n"
+        "</div>"
+    )
+    return HtmlBlock(
+        title="Group Comparison Matrix",
+        body_html=body_html,
+        help_text="Deterministic group × metric matrix from already-computed comparisons.",
+    )
+
+
+def _pivot_comparison_matrix(
+    comparisons: tuple[MetricComparison, ...],
+    metric_names: list[str],
+) -> tuple[list[str], dict[tuple[str, str], MetricComparison]]:
+    """Pivot comparisons into (metric, group_value) → best_representative map."""
+    group_set: dict[str, None] = {}
+    pivot: dict[tuple[str, str], list[MetricComparison]] = {}
+    for comp in comparisons:
+        if comp.metric_name not in metric_names:
+            continue
+        gv = _primary_group_value(comp)
+        if not gv:
+            continue
+        group_set[gv] = None
+        pivot.setdefault((comp.metric_name, gv), []).append(comp)
+
+    # Keep top N groups by how many metrics they appear in
+    group_counts: dict[str, int] = {}
+    for (_, gv), comps in pivot.items():
+        group_counts[gv] = group_counts.get(gv, 0) + len(comps)
+    sorted_groups = sorted(group_counts, key=lambda gv: -group_counts[gv])[:_MATRIX_MAX_GROUPS]
+
+    # Best representative per cell
+    cell_map: dict[tuple[str, str], MetricComparison] = {}
+    for (mn, gv), comps in pivot.items():
+        if gv not in sorted_groups:
+            continue
+        cell_map[(mn, gv)] = min(
+            comps,
+            key=lambda c: (abs(c.change_pct or 0.0),),
+        )
+
+    return sorted_groups, cell_map
+
+
+def _primary_group_value(comparison: MetricComparison) -> str:
+    """Return the most meaningful drilldown group value for matrix columns."""
+    for key in ("market_cap_bucket", "sector", "segment", "topixCapGrp", "market_segment"):
+        if key in comparison.group:
+            return str(comparison.group[key])
+    # Fallback: first non-symbol group value
+    for key, value in comparison.group.items():
+        if key not in ("sym", "ric", "isin", "ticker", "venue", "horizon"):
+            return str(value)
+    return ""
+
+
+def _matrix_row_html(
+    metric_name: str,
+    group_values: list[str],
+    cell_map: dict[tuple[str, str], MetricComparison],
+    definition: MetricDefinition | None,
+    max_abs_pct: float,
+) -> str:
+    label = definition.label if definition is not None else metric_name
+    higher_is_better = (definition.higher_is_better is not False) if definition is not None else True
+    cells = "".join(
+        _matrix_cell_html(cell_map.get((metric_name, gv)), higher_is_better, max_abs_pct) for gv in group_values
+    )
+    return f'<tr><th class="matrix-cell matrix-cell--row-header">{escape(label)}</th>{cells}</tr>'
+
+
+def _matrix_cell_html(
+    comparison: MetricComparison | None,
+    higher_is_better: bool,
+    max_abs_pct: float,
+) -> str:
+    if comparison is None:
+        return '<td class="matrix-cell matrix-cell--empty">—</td>'
+    pct = comparison.change_pct or 0.0
+    if not isfinite(float(pct)):
+        return '<td class="matrix-cell matrix-cell--empty">—</td>'
+    intensity = min(abs(pct) / max_abs_pct, 1.0)
+    # Adverse if positive change on a higher-is-worse metric, or negative on higher-is-better
+    adverse = (pct > 0 and not higher_is_better) or (pct < 0 and higher_is_better)
+    direction_class = "matrix-cell--adverse" if adverse else "matrix-cell--favorable"
+    alpha = 0.15 + intensity * 0.85
+    if adverse:
+        color = f"rgba(220,53,69,{alpha:.2f})"
+    else:
+        color = f"rgba(25,135,84,{alpha:.2f})"
+    pct_text = f"{pct:+.1%}"
+    return (
+        f'<td class="matrix-cell {direction_class}"'
+        f' style="background-color:{color}"'
+        f' data-pct="{escape(pct_text)}">'
+        f"{escape(pct_text)}"
+        "</td>"
+    )
 
 
 def select_drilldown_comparisons(

@@ -110,6 +110,8 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert "Top group-level drilldowns" in html
     assert "drilldown-delta-bars" in html
     assert "Group Delta Overview" in html
+    assert "Group Comparison Matrix" in html
+    assert "drilldown-matrix" in html
     assert "Executive Market Overview" in html
     assert "Market KPI Snapshot" in html
     assert "Report Meta" in html

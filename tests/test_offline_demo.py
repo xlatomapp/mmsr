@@ -84,6 +84,8 @@ def test_offline_demo_report_renders_comparison_visuals_commentary_and_help() ->
     assert "Sector, Segment, and Market-Cap Drilldowns" in html
     assert "Top group-level drilldowns" in html
     assert "Group Delta Overview" in html
+    assert "Group Comparison Matrix" in html
+    assert "matrix-cell--favorable" in html
     assert "Symbol 7203 Detail" not in html
     assert "Quoted Spread intraday time-bucket trend for symbol 7203" not in html
     assert "Volume intraday time-bucket trend for symbol 8306" not in html
