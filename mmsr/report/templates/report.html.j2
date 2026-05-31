@@ -140,6 +140,26 @@
     .report-page--summary > .commentary-block {
       grid-column: 1 / -1;
     }
+    .report-page--activity > .plotly-chart,
+    .report-page--liquidity > .plotly-chart,
+    .report-page--daily-trends > .time-series-chart {
+      background: var(--mmsr-panel);
+      border: 1px solid var(--mmsr-border);
+      border-radius: 10px;
+      margin-top: 14px;
+      padding: 14px 14px 10px;
+    }
+    .report-page--activity > .plotly-chart:first-of-type,
+    .report-page--liquidity > .plotly-chart:first-of-type,
+    .report-page--daily-trends > .time-series-chart:first-of-type {
+      margin-top: 6px;
+    }
+    .report-page--activity .component-heading h3,
+    .report-page--liquidity .component-heading h3,
+    .report-page--daily-trends .component-heading h3 {
+      font-size: 18px;
+      line-height: 1.3;
+    }
     .report-page h2 { margin-top: 0; }
     .metric-grid {
       display: grid;
@@ -838,7 +858,17 @@
     </header>
 
     {% for page in document.pages %}
-      <section class="report-page{% if page.title == 'Market Summary' %} report-page--summary{% endif %}"{% if page.anchor_id %} id="{{ page.anchor_id }}"{% endif %}>
+      {%- set page_class = 'report-page' -%}
+      {%- if page.title == 'Market Summary' -%}
+        {%- set page_class = page_class + ' report-page--summary' -%}
+      {%- elif page.title == 'Activity Distribution' -%}
+        {%- set page_class = page_class + ' report-page--activity' -%}
+      {%- elif page.title == 'Displayed Liquidity' -%}
+        {%- set page_class = page_class + ' report-page--liquidity' -%}
+      {%- elif page.title == 'Reference and Target Daily Trends' -%}
+        {%- set page_class = page_class + ' report-page--daily-trends' -%}
+      {%- endif -%}
+      <section class="{{ page_class }}"{% if page.anchor_id %} id="{{ page.anchor_id }}"{% endif %}>
         <div class="report-page__header">
           <span class="report-page__index">{{ loop.index }}</span>
           <h2 class="report-page__title">{{ page.title }}</h2>

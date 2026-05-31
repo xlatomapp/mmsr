@@ -141,8 +141,17 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert "--mmsr-heading: #0b3a67;" in html
     assert ".report-page__title {" in html
     assert "font-size: 30px;" in html
+    assert ".report-page--activity > .plotly-chart" in html
+    assert ".report-page--liquidity > .plotly-chart" in html
+    assert ".report-page--daily-trends > .time-series-chart" in html
+    assert ".report-page--activity .component-heading h3" in html
+    assert ".report-page--liquidity .component-heading h3" in html
+    assert ".report-page--daily-trends .component-heading h3" in html
     assert "Primary Intraday Signal" in html
     assert "report-page--summary" in html
+    assert "report-page--activity" in html
+    assert "report-page--liquidity" in html
+    assert "report-page--daily-trends" in html
     assert 'data-block-title="Report Meta"' in html
     assert 'data-block-title="Market KPI Snapshot"' in html
     assert 'data-block-title="Executive Market Overview"' in html
@@ -158,6 +167,8 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     )
     assert html.index("Executive Market Overview") < html.index("Current versus reference")
     assert html.index("Top market drivers") < html.index("Current versus reference")
+    assert html.index("Activity Distribution") < html.index("Displayed Liquidity")
+    assert html.index("Displayed Liquidity") < html.index("Reference and Target Daily Trends")
     assert html.index("Driver intensity (|z|)") < html.index("Current versus reference")
     assert html.index("cumulative intraday distribution") < html.index("Current versus reference")
     assert "Overall:</strong>" in html
