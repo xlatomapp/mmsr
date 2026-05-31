@@ -583,9 +583,11 @@ def test_market_report_adds_symbol_detail_index_when_detail_pages_exist() -> Non
     assert ".symbol-anomaly-explorer__row:focus-visible" in html
     assert ".symbol-anomaly-explorer__rows {" in html
     assert ".symbol-anomaly-explorer__detail-item {" in html
-    assert "padding-bottom: 5px;" in html
+    assert "padding-bottom: 6px;" in html
     assert ".explorer-panel {" in html
+    assert "box-shadow: 0 3px 10px rgba(16, 39, 66, 0.06);" in html
     assert ".explorer-panel__subtitle {" in html
+    assert "font-size: 12px;" in html
     assert ".symbol-anomaly-explorer__detail-value {" in html
     assert "font-size: 12px;" in html
     assert "Open detail page" in html

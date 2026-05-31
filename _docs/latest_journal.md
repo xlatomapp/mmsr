@@ -17,55 +17,45 @@ Use this file as the **active-step buffer**.
 
 ## Current Step Entry
 
-## 2026-05-31 10:32 JST — D5 accessibility hardening for explorer panels
+## 2026-05-31 10:53 JST — D5 full report visual redesign pass (one-go implementation)
 
 ### What changed
-- Performed the required task-start journal handoff:
-  - appended the previous completed D5 section-container entry from `_docs/latest_journal.md` to `_docs/journal.md`
-  - reset `_docs/latest_journal.md` back to its working-buffer template before implementation
-- Hardened the group matrix explorer accessibility semantics:
-  - added region labels for the heatmap and selected-trend panels
-  - linked the heatmap to its explanatory subtitle through `aria-describedby`
-  - made the Plotly heatmap and selected trend chart focusable with `tabindex="0"`
-  - added polite live-region semantics for selected group text
-  - updated selected-trend `aria-label` when the clicked group changes
-- Hardened the optional symbol anomaly explorer accessibility semantics:
-  - added labeled regions for the anomaly list and selected detail panel
-  - connected row buttons to the detail panel with `aria-controls`
-  - added deterministic `aria-pressed` state updates alongside the existing selected-row class
-  - kept the detail panel as a polite status/live region
-- Added regression assertions for these interactive-panel accessibility hooks in builder and rendered-report tests.
+- Completed a substantial redesign of `mmsr/report/templates/report.html.j2` to move closer to the reference report composition in `_docs/code.html`:
+  - upgraded global visual tokens and shell treatment (background gradient, framed report shell, stronger card surfaces)
+  - redesigned page headers with panel-like heading bars, larger section indices, and tighter hierarchy
+  - strengthened section framing so HTML blocks/charts/tables/heatmaps are all rendered as carded component surfaces
+  - enhanced summary-page composition density (meta panel/KPI/overview emphasis kept, with stronger spacing and visual separation)
+  - upgraded explorer panels (matrix + symbol anomaly) to share denser panel styling and clearer selected-state emphasis
+  - adjusted responsive behavior to preserve readability on mobile without overlap
+- Kept all existing deterministic data semantics and component ordering intact; this pass is presentation-layer only.
+- Updated render assertions to validate the new design tokens and style contracts instead of old literal values (for example old heading color and old `30px` typography assertions).
 
 ### Files changed
 - `_docs/journal.md`
 - `_docs/latest_journal.md`
-- `mmsr/report/drilldowns.py`
-- `mmsr/report/symbols.py`
 - `mmsr/report/templates/report.html.j2`
-- `tests/test_drilldowns.py`
 - `tests/test_market_report.py`
 - `tests/test_symbol_anomaly_pages.py`
 
 ### Tests added or updated
-- `tests/test_drilldowns.py`
 - `tests/test_market_report.py`
 - `tests/test_symbol_anomaly_pages.py`
 
 ### Validation
-- `conda run -n mmsr pytest -q tests/test_drilldowns.py tests/test_symbol_anomaly_pages.py tests/test_market_report.py tests/test_offline_demo.py tests/test_mock_kdb_demo.py` passed.
+- `conda run -n mmsr pytest -q tests/test_market_report.py tests/test_symbol_anomaly_pages.py tests/test_drilldowns.py tests/test_offline_demo.py tests/test_mock_kdb_demo.py` passed.
 - `PRE_COMMIT_HOME=/tmp/pre-commit-cache conda run -n mmsr pre-commit run --all-files` passed.
 
 ### Current milestone
-- D5 polish + accessibility.
+- D5 polish + accessibility/design parity.
 
 ### Estimated milestone completion percentage
-- ~100% of D5.
+- ~100% for D5.
 
 ### Remaining work for the milestone
-- None for this D5 accessibility hardening pass.
+- None for this D5 redesign pass.
 
 ### Single best next deterministic step
-- Start the next redesign slice by tightening visual parity of the explorer panels: align matrix explorer and symbol anomaly panel density, panel spacing, and selected-state treatment with the reference report while preserving the existing accessibility hooks.
+- Deferred per user request for this step (next-step guidance intentionally omitted for now).
 
 ### Open questions
 - None.

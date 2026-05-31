@@ -118,9 +118,9 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert 'data-drilldown-selected-group aria-live="polite"' in html
     assert 'trendTarget.setAttribute("aria-label", "Selected group daily trend chart for " + groupName);' in html
     assert ".drilldown-matrix-explorer__grid {" in html
-    assert "gap: 10px;" in html
+    assert "gap: 12px;" in html
     assert ".drilldown-matrix-explorer__panel h4 {" in html
-    assert "font-size: 13px;" in html
+    assert "font-size: 14px;" in html
     assert "line-height: 1.35;" in html
     assert ".explorer-panel__title {" in html
     assert ".explorer-panel__subtitle {" in html
@@ -138,13 +138,17 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert "grid-column: 2 / 3;" in html
     assert "grid-row: 2 / 4;" in html
     assert "kpi-snapshot__value" in html
-    assert "font-size: 30px;" in html
+    assert "font-size: 34px;" in html
     assert 'class="report-page__header"' in html
     assert 'class="report-page__index">1<' in html
     assert 'class="report-page__title">Market Summary<' in html
-    assert "--mmsr-heading: #0b3a67;" in html
+    assert "--mmsr-shell: #f7fafd;" in html
+    assert "--mmsr-heading: #113a63;" in html
+    assert "--mmsr-accent: #2d5d93;" in html
+    assert ".report-shell {" in html
+    assert "box-shadow: 0 18px 40px rgba(15, 34, 58, 0.08);" in html
     assert ".report-page__title {" in html
-    assert "font-size: 30px;" in html
+    assert "font-size: 28px;" in html
     assert ".report-page--activity > .plotly-chart" in html
     assert ".report-page--liquidity > .plotly-chart" in html
     assert ".report-page--daily-trends > .time-series-chart" in html

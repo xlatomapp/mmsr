@@ -8,30 +8,42 @@
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" defer></script>
   <style>
     :root {
-      --mmsr-bg: #f2f5f9;
+      --mmsr-bg: #edf2f8;
+      --mmsr-shell: #f7fafd;
       --mmsr-card: #ffffff;
-      --mmsr-text: #0f172a;
-      --mmsr-muted: #475569;
-      --mmsr-border: #d2dbe7;
-      --mmsr-panel: #f8fbff;
-      --mmsr-heading: #0b3a67;
+      --mmsr-text: #122033;
+      --mmsr-muted: #516176;
+      --mmsr-border: #cfd8e6;
+      --mmsr-panel: #f5f8fd;
+      --mmsr-heading: #113a63;
+      --mmsr-heading-soft: #e9f0fb;
+      --mmsr-accent: #2d5d93;
       --mmsr-watch: #fff8e6;
       --mmsr-alert: #fff0f0;
     }
     body {
       margin: 0;
-      background: var(--mmsr-bg);
+      background: linear-gradient(180deg, #f4f7fc 0%, var(--mmsr-bg) 220px, #e8eef6 100%);
       color: var(--mmsr-text);
-      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
       line-height: 1.5;
     }
-    .report-shell { max-width: 1360px; margin: 0 auto; padding: 20px 24px 28px; }
+    .report-shell {
+      background: var(--mmsr-shell);
+      border-left: 1px solid #d9e2ef;
+      border-right: 1px solid #d9e2ef;
+      box-shadow: 0 18px 40px rgba(15, 34, 58, 0.08);
+      max-width: 1360px;
+      margin: 0 auto;
+      padding: 24px 28px 34px;
+    }
     .brand-header, .brand-footer {
       background: var(--mmsr-card);
       border: 1px solid var(--mmsr-border);
-      border-radius: 10px;
-      padding: 14px 18px;
-      margin-bottom: 14px;
+      border-radius: 12px;
+      box-shadow: 0 10px 26px rgba(17, 42, 67, 0.08);
+      padding: 18px 20px;
+      margin-bottom: 16px;
     }
     .brand-header__content {
       align-items: flex-start;
@@ -46,33 +58,36 @@
     .report-page {
       background: var(--mmsr-card);
       border: 1px solid var(--mmsr-border);
-      border-radius: 10px;
-      padding: 14px 16px;
-      margin: 14px 0;
+      border-radius: 12px;
+      box-shadow: 0 8px 22px rgba(15, 34, 58, 0.06);
+      padding: 16px 18px;
+      margin: 16px 0;
     }
     .report-page__header {
       align-items: center;
-      border-bottom: 1px solid var(--mmsr-border);
+      background: linear-gradient(90deg, var(--mmsr-heading-soft) 0%, #f9fbff 100%);
+      border: 1px solid var(--mmsr-border);
+      border-radius: 10px;
       display: flex;
       gap: 10px;
-      margin: 0 0 10px;
-      padding-bottom: 10px;
+      margin: 0 0 12px;
+      padding: 9px 12px;
     }
     .report-page__index {
       align-items: center;
-      background: var(--mmsr-heading);
+      background: var(--mmsr-accent);
       border-radius: 999px;
       color: #fff;
       display: inline-flex;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 700;
-      height: 20px;
+      height: 24px;
       justify-content: center;
-      width: 20px;
+      width: 24px;
     }
     .report-page__title {
       color: var(--mmsr-heading);
-      font-size: 30px;
+      font-size: 28px;
       font-weight: 700;
       line-height: 1.15;
       margin: 0;
@@ -90,10 +105,10 @@
       line-height: 1.25;
     }
     .report-page--summary .commentary-block {
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.72);
+      border-radius: 10px;
+      background: #f9fbff;
       border: 1px solid var(--mmsr-border);
-      padding: 12px;
+      padding: 12px 13px;
     }
     .report-page--summary {
       align-items: start;
@@ -112,11 +127,11 @@
     .report-page--summary > .html-block[data-block-title="Report Meta"] {
       background: var(--mmsr-panel);
       border: 1px solid var(--mmsr-border);
-      border-radius: 8px;
+      border-radius: 10px;
       grid-column: 2 / 3;
       grid-row: 2 / 4;
       margin-top: 0;
-      padding: 10px 10px 6px;
+      padding: 12px 12px 8px;
     }
     .report-page--summary > .html-block[data-block-title="Report Meta"] .component-heading h3 {
       color: var(--mmsr-heading);
@@ -143,11 +158,11 @@
     .report-page--activity > .plotly-chart,
     .report-page--liquidity > .plotly-chart,
     .report-page--daily-trends > .time-series-chart {
-      background: var(--mmsr-panel);
+      background: linear-gradient(180deg, #f7fbff 0%, var(--mmsr-panel) 100%);
       border: 1px solid var(--mmsr-border);
       border-radius: 10px;
       margin-top: 14px;
-      padding: 14px 14px 10px;
+      padding: 14px 15px 10px;
     }
     .report-page--activity > .plotly-chart:first-of-type,
     .report-page--liquidity > .plotly-chart:first-of-type,
@@ -164,12 +179,13 @@
     .metric-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 12px;
-      margin: 16px 0;
+      gap: 13px;
+      margin: 16px 0 14px;
     }
     .metric-card {
       border: 1px solid var(--mmsr-border);
-      border-radius: 8px;
+      border-radius: 10px;
+      box-shadow: 0 4px 14px rgba(12, 34, 60, 0.05);
       padding: 12px;
       background: var(--mmsr-panel);
     }
@@ -285,9 +301,11 @@
       background: #fff;
     }
     .commentary-block, .html-block, .time-series-chart, .plotly-chart, .heatmap {
-      border-top: 1px solid var(--mmsr-border);
+      background: #fff;
+      border: 1px solid var(--mmsr-border);
+      border-radius: 10px;
       margin-top: 12px;
-      padding-top: 10px;
+      padding: 11px 12px 12px;
     }
     .time-series-chart__meta, .heatmap__meta {
       color: var(--mmsr-muted);
@@ -298,10 +316,10 @@
     }
     .time-series-chart__visual, .time-series-chart__data, .plotly-chart__visual, .heatmap__visual, .heatmap__data {
       border: 1px solid var(--mmsr-border);
-      border-radius: 8px;
+      border-radius: 10px;
       overflow-x: auto;
       padding: 12px;
-      background: var(--mmsr-panel);
+      background: linear-gradient(180deg, #f9fbff 0%, var(--mmsr-panel) 100%);
     }
     .time-series-chart__data, .plotly-chart__data-summary, .heatmap__data {
       margin-top: 10px;
@@ -432,25 +450,27 @@
     .html-block__body { overflow-x: auto; }
     .drilldown-matrix-explorer__grid {
       display: grid;
-      gap: 10px;
+      gap: 12px;
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
     .explorer-panel {
-      background: var(--mmsr-panel);
+      background: linear-gradient(180deg, #f9fbff 0%, var(--mmsr-panel) 100%);
       border: 1px solid var(--mmsr-border);
-      border-radius: 8px;
-      padding: 8px 10px;
+      border-radius: 10px;
+      box-shadow: 0 3px 10px rgba(16, 39, 66, 0.06);
+      padding: 10px 11px;
     }
     .explorer-panel__title {
-      font-size: 13px;
+      font-size: 14px;
+      font-weight: 700;
       line-height: 1.35;
-      margin: 0 0 3px;
+      margin: 0 0 4px;
     }
     .explorer-panel__subtitle {
       color: var(--mmsr-muted);
-      font-size: 11px;
+      font-size: 12px;
       line-height: 1.4;
-      margin: 0 0 6px;
+      margin: 0 0 8px;
     }
     .drilldown-matrix-explorer__panel h4 {
       font-size: 13px;
@@ -469,12 +489,15 @@
       padding-top: 6px;
     }
     .drilldown-matrix-explorer__chart {
+      border: 1px solid #d5dfec;
+      border-radius: 8px;
       min-height: 320px;
+      padding: 2px;
       width: 100%;
     }
     .symbol-anomaly-explorer__grid {
       display: grid;
-      gap: 12px;
+      gap: 14px;
       grid-template-columns: minmax(220px, 0.42fr) 1fr;
     }
     .symbol-anomaly-explorer__left h4, .symbol-anomaly-explorer__right h4 {
@@ -490,24 +513,24 @@
     }
     .symbol-anomaly-explorer__rows {
       display: grid;
-      gap: 4px;
+      gap: 6px;
     }
     .symbol-anomaly-explorer__row {
       align-items: center;
       background: #fff;
       border: 1px solid var(--mmsr-border);
-      border-radius: 10px;
+      border-radius: 8px;
       cursor: pointer;
       display: grid;
       gap: 6px;
       grid-template-columns: minmax(56px, 72px) 1fr auto;
-      padding: 7px 9px;
+      padding: 8px 10px;
       text-align: left;
       width: 100%;
     }
     .symbol-anomaly-explorer__row.is-selected {
       border-color: #1f4f9a;
-      box-shadow: 0 0 0 1px #1f4f9a inset;
+      box-shadow: 0 0 0 1px #1f4f9a inset, 0 4px 10px rgba(25, 58, 98, 0.12);
     }
     .symbol-anomaly-explorer__row:focus-visible {
       outline: 2px solid #1f4f9a;
@@ -522,14 +545,14 @@
     }
     .symbol-anomaly-explorer__detail {
       display: grid;
-      gap: 6px;
+      gap: 8px;
     }
     .symbol-anomaly-explorer__detail-item {
       border-bottom: 1px solid var(--mmsr-border);
       display: grid;
       gap: 3px;
       grid-template-columns: minmax(96px, 0.35fr) 1fr;
-      padding-bottom: 5px;
+      padding-bottom: 6px;
     }
     .symbol-anomaly-explorer__detail-label {
       color: var(--mmsr-muted);
@@ -542,7 +565,7 @@
     }
     .report-meta-strip {
       display: grid;
-      gap: 10px;
+      gap: 12px;
       grid-template-columns: repeat(4, minmax(0, 1fr));
     }
     .report-control-strip {
@@ -552,8 +575,9 @@
     .report-meta-strip__item {
       background: var(--mmsr-panel);
       border: 1px solid var(--mmsr-border);
-      border-radius: 8px;
-      padding: 10px 12px;
+      border-radius: 10px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+      padding: 11px 12px;
     }
     .report-meta-strip__label {
       color: var(--mmsr-muted);
@@ -576,7 +600,7 @@
       align-items: center;
       background: #0b3a67;
       border: 1px solid #0b3a67;
-      border-radius: 6px;
+      border-radius: 8px;
       color: #fff;
       cursor: default;
       display: inline-flex;
@@ -593,14 +617,15 @@
     }
     .kpi-snapshot {
       display: grid;
-      gap: 10px;
+      gap: 12px;
       grid-template-columns: repeat(4, minmax(0, 1fr));
     }
     .kpi-snapshot__card {
       background: var(--mmsr-panel);
       border: 1px solid var(--mmsr-border);
-      border-radius: 8px;
-      padding: 11px 12px;
+      border-radius: 10px;
+      box-shadow: 0 5px 14px rgba(20, 42, 67, 0.07);
+      padding: 12px 12px;
     }
     .kpi-snapshot__label {
       color: var(--mmsr-muted);
@@ -609,7 +634,7 @@
       text-transform: uppercase;
     }
     .kpi-snapshot__value {
-      font-size: 30px;
+      font-size: 34px;
       font-weight: 700;
       line-height: 1.15;
       margin: 0 0 4px;
@@ -658,9 +683,10 @@
     }
     .executive-overview {
       border: 1px solid var(--mmsr-border);
-      border-radius: 8px;
-      padding: 12px;
-      background: var(--mmsr-panel);
+      border-radius: 10px;
+      box-shadow: 0 6px 16px rgba(17, 38, 62, 0.08);
+      padding: 13px;
+      background: linear-gradient(180deg, #f8fbff 0%, var(--mmsr-panel) 100%);
     }
     .executive-overview--watch { background: var(--mmsr-watch); }
     .executive-overview--alert { background: var(--mmsr-alert); }
@@ -675,7 +701,7 @@
     .executive-overview__kpi {
       background: rgba(255, 255, 255, 0.72);
       border: 1px solid var(--mmsr-border);
-      border-radius: 8px;
+      border-radius: 10px;
       display: grid;
       gap: 2px;
       padding: 8px 10px;
@@ -695,7 +721,7 @@
     .executive-overview__highlights {
       background: rgba(255, 255, 255, 0.72);
       border: 1px solid var(--mmsr-border);
-      border-radius: 8px;
+      border-radius: 10px;
       margin: 0 0 12px;
       padding: 10px 12px;
     }
@@ -713,7 +739,7 @@
     .executive-overview__drivers {
       background: rgba(255, 255, 255, 0.72);
       border: 1px solid var(--mmsr-border);
-      border-radius: 8px;
+      border-radius: 10px;
       margin: 0 0 12px;
       padding: 10px 12px;
     }
@@ -784,7 +810,7 @@
     .executive-overview__family {
       background: rgba(255, 255, 255, 0.62);
       border: 1px solid var(--mmsr-border);
-      border-radius: 8px;
+      border-radius: 10px;
       margin: 0;
       padding: 10px 12px;
     }
@@ -814,9 +840,10 @@
     .metric-definition__fields ul { margin: 0; padding-left: 18px; }
     .brand-footer { color: var(--mmsr-muted); font-size: 13px; }
     @media (max-width: 900px) {
+      .report-shell { border-left: 0; border-right: 0; padding: 14px 12px 20px; }
       .brand-header__content { grid-template-columns: 1fr; }
-      .report-title { font-size: 30px; }
-      .report-page__title { font-size: 24px; }
+      .report-title { font-size: 31px; }
+      .report-page__title { font-size: 23px; }
       .report-page--summary { grid-template-columns: 1fr; }
       .report-page--summary > .html-block[data-block-title="Report Meta"] {
         grid-column: 1 / -1;
