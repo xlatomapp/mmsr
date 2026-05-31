@@ -527,8 +527,8 @@ def _build_summary_meta_strip_block(
 
     fields = (
         ("Period", period_text),
-        ("Reference", reference_method),
-        ("Scope", scope_text),
+        ("Universe", scope_text),
+        ("Benchmark", reference_method),
         ("Run Tag", run_tag),
     )
     items = "".join(
@@ -540,7 +540,14 @@ def _build_summary_meta_strip_block(
         )
         for label, value in fields
     )
-    body_html = f'  <section class="report-meta-strip">{items}</section>'
+    body_html = (
+        '  <section class="report-meta-strip report-control-strip">'
+        f"{items}"
+        '<div class="report-meta-strip__action">'
+        '<a class="report-export-link" aria-label="Export report PDF" href="#" role="button">Export PDF</a>'
+        "</div>"
+        "</section>"
+    )
     return HtmlBlock(
         title="Report Meta",
         help_text="Page-1 run metadata for period, reference method, scope, and run tag.",
@@ -655,6 +662,8 @@ def _build_market_kpi_snapshot_block(
             f'<p class="kpi-snapshot__label">{escape(definition.label)}</p>'
             f'<p class="kpi-snapshot__value">{escape(value_text)}</p>'
             f'<p class="kpi-snapshot__change kpi-snapshot__change--{escape(status)}">{escape(change_text)}</p>'
+            f'<div class="kpi-snapshot__mini kpi-snapshot__mini--{escape(status)}" '
+            'aria-hidden="true"><span></span></div>'
             "</article>"
         )
 

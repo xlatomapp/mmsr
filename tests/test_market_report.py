@@ -53,7 +53,7 @@ def test_market_monitor_report_is_canonical_production_format() -> None:
 
     assert len(summary_page.html_blocks) == 3
     assert summary_page.html_blocks[0].title == "Report Meta"
-    assert 'class="report-meta-strip"' in summary_page.html_blocks[0].body_html
+    assert 'class="report-meta-strip report-control-strip"' in summary_page.html_blocks[0].body_html
     assert summary_page.html_blocks[1].title == "Market KPI Snapshot"
     assert 'class="kpi-snapshot"' in summary_page.html_blocks[1].body_html
     assert summary_page.html_blocks[2].title == "Executive Market Overview"
@@ -123,6 +123,12 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert "Executive Market Overview" in html
     assert "Market KPI Snapshot" in html
     assert "Report Meta" in html
+    assert "Universe" in html
+    assert "Benchmark" in html
+    assert "Export PDF" in html
+    assert "report-control-strip" in html
+    assert "report-export-link" in html
+    assert "kpi-snapshot__mini" in html
     assert 'class="report-page__header"' in html
     assert 'class="report-page__index">1<' in html
     assert 'class="report-page__title">Market Summary<' in html

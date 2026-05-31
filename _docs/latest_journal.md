@@ -17,18 +17,21 @@ Use this file as the **active-step buffer**.
 
 ## Current Step Entry
 
-## 2026-05-31 — D5 implementation: high-impact report template redesign (layout + hierarchy)
+## 2026-05-31 — D5 implementation: summary control strip + KPI row redesign
 
 ### What changed
-- Switched from incremental polish to high-impact visual redesign in the live render template:
-  - updated color system and panel tones for stronger visual hierarchy
-  - moved page sections to compact dashboard framing (tighter spacing, 8-10px radii, denser layout)
-  - introduced explicit section header structure with numbered index chips and large page titles
-  - increased report title prominence and applied responsive title scaling for mobile.
-- Kept existing content pipeline and section data wiring intact; this is a render-layer redesign in the path used by `mmsr render`.
-- Added deterministic render assertions for the new hierarchy/style hooks.
+- Implemented summary top control strip in live render path:
+  - updated summary meta field semantics to `Period / Universe / Benchmark / Run Tag`
+  - added right-side export control element (`Export PDF`) in the same strip.
+- Upgraded KPI snapshot card composition toward reference style:
+  - added deterministic mini visual bar per KPI card (`kpi-snapshot__mini`) to improve scanability.
+- Updated template styling for new control strip and export action:
+  - control strip grid now supports meta fields + action slot
+  - export action styled as button-like link (keeps existing metric-help tests that forbid raw `<button>` tags).
+- Added/updated render assertions to lock new hooks.
 
 ### Files changed
+- `mmsr/report/market_report.py`
 - `mmsr/report/templates/report.html.j2`
 - `tests/test_market_report.py`
 - `_docs/journal.md`
@@ -38,20 +41,19 @@ Use this file as the **active-step buffer**.
 - `tests/test_market_report.py`
 
 ### Validation
-- `conda run -n mmsr pytest -q tests/test_market_report.py tests/test_drilldowns.py tests/test_symbol_anomaly_pages.py` passed.
 - `PRE_COMMIT_HOME=/tmp/pre-commit-cache conda run -n mmsr pre-commit run --all-files` passed.
 
 ### Current milestone
 - D5 in progress.
 
 ### Estimated completion
-- ~86% of D5.
+- ~92% of D5.
 
 ### Remaining work
-- Align summary hero/meta arrangement and KPI card composition even closer to reference (period/universe/benchmark control bar + first-row KPI visual rhythm).
+- Final pass to align first viewport structure and visual rhythm with design reference (summary hero panel proportions + spacing consistency across first two sections).
 
 ### Best next deterministic implementation step
-- Implement summary top control strip (`Period / Universe / Benchmark / Export`) and promote first KPI row to reference-like card layout, then lock with render assertions.
+- Implement first-viewport composition pass: tighten top header block proportions and align Market Summary section spacing to the reference grid, then lock with render assertions.
 
 ### Open questions
 - None.
