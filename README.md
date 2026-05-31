@@ -94,6 +94,41 @@ mmsr render \
   --symbol 6758
 ```
 
+Common production flags:
+
+- `--detailed-trends-granularity daily|weekly|monthly|quarterly|yearly`  
+  Controls aggregation grain in **Detailed Metric Trends**.
+- `--include-automated-insights`  
+  Enables deterministic insight commentary under Detailed Metric Trends (off by default).
+- `--isolate-calculation-namespace-per-run / --no-isolate-calculation-namespace-per-run`  
+  Use per-run q namespace isolation (`<calculation_namespace>.run_<guid>`). Default is enabled.
+- `--keep-isolated-calculation-namespace`  
+  Keeps the isolated namespace after run for kdb-side debugging.
+- `--inject-simulated-sources`  
+  Installs deterministic simulated source functions into the connected kdb process and routes source calls to that namespace.
+- `--simulated-source-namespace .sim.mmsr`  
+  Namespace for injected simulated functions (defaults to configured raw source namespace).
+- `--simulated-symbol-count 240`  
+  Number of simulated symbols.
+- `--simulated-points-per-symbol-per-day 1200`  
+  Guidance points per symbol/day for simulated sources (actual per-symbol count jitters around this target).
+
+Example with simulated sources and detailed trends controls:
+
+```bash
+mmsr render \
+  --config config/report.production_minimal.yaml \
+  --output _output/test.html \
+  --kdb-host 192.168.3.99 \
+  --kdb-port 5001 \
+  --inject-simulated-sources \
+  --simulated-source-namespace .sim.mmsr \
+  --simulated-symbol-count 50 \
+  --simulated-points-per-symbol-per-day 1200 \
+  --detailed-trends-granularity daily \
+  --include-automated-insights
+```
+
 For full-universe reports, omit repeated `--symbol` filters and let the
 configured symbol function choose the analysis universe for each trading day.
 When a symbol list is supplied, `data.kdb.symbol_chunk_size` bounds each

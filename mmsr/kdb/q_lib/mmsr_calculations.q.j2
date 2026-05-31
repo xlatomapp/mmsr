@@ -11,7 +11,9 @@
 
 {{ calculation_namespace }}.timeBucket:{[t;session;auction;bucket]
     / Auction code 1=open, 2=close, 0=continuous.
-    labels:`$string bucket xbar t;
+    bucketMs:max (1;`int$(bucket % 0D00:00:00.001));
+    timeMs:`int$t;
+    labels:`$string `time$(timeMs - timeMs mod bucketMs);
     labels:@[labels;where (auction = 1) & (session = `am);:;`AMO];
     labels:@[labels;where (auction = 2) & (session = `am);:;`AMC];
     labels:@[labels;where (auction = 1) & (session = `pm);:;`PMO];
@@ -20,7 +22,9 @@
     };
 
 {{ calculation_namespace }}.timeBucketContinuous:{[t;bucket]
-    `$string bucket xbar t
+    bucketMs:max (1;`int$(bucket % 0D00:00:00.001));
+    timeMs:`int$t;
+    `$string `time$(timeMs - timeMs mod bucketMs)
     };
 
 {{ calculation_namespace }}.appendScope:{[t;level;groupType;groupValue]

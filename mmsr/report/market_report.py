@@ -382,66 +382,6 @@ def build_market_monitor_report(
     )
 
     pages = [summary_page]
-    activity_distribution_page = _build_activity_distribution_page(
-        report_input,
-        definitions,
-        options=resolved_options,
-    )
-    if activity_distribution_page is not None:
-        pages.append(activity_distribution_page)
-    displayed_liquidity_page = _build_displayed_liquidity_page(
-        report_input,
-        definitions,
-        options=resolved_options,
-    )
-    if displayed_liquidity_page is not None:
-        pages.append(displayed_liquidity_page)
-    daily_trend_page = _build_daily_trend_page(
-        report_input,
-        definitions,
-        options=resolved_options,
-    )
-    if daily_trend_page is not None:
-        pages.append(daily_trend_page)
-    toxicity_reversion_page = _build_toxicity_reversion_page(
-        report_input,
-        definitions,
-        options=resolved_options,
-    )
-    if toxicity_reversion_page is not None:
-        pages.append(toxicity_reversion_page)
-    drilldown_page = _build_drilldown_page(
-        report_input,
-        definitions,
-        options=resolved_options,
-    )
-    if drilldown_page is not None:
-        pages.append(drilldown_page)
-    symbol_detail_pages = _build_symbol_detail_pages(
-        report_input,
-        definitions,
-        options=resolved_options,
-    )
-    symbol_anomaly_page = _build_symbol_anomaly_page(
-        report_input,
-        definitions,
-        symbol_detail_pages=symbol_detail_pages,
-        options=resolved_options,
-    )
-    if symbol_anomaly_page is not None:
-        pages.append(symbol_anomaly_page)
-    pages.extend(symbol_detail_pages)
-    detail_series = _detail_current_series(
-        report_input.current_series,
-        options=resolved_options,
-        toxicity_reversion_page_present=toxicity_reversion_page is not None,
-    )
-    detail_page = _build_detail_page(
-        detail_series,
-        definitions,
-        options=resolved_options,
-    )
-    pages.append(detail_page)
 
     document = ReportDocument(
         title=resolved_options.title.strip(),
@@ -486,21 +426,6 @@ def _build_summary_page(
         definitions,
         options=comparison_options,
     )
-    executive_overview = build_executive_market_overview_block(
-        summary_comparisons,
-        definitions,
-        options=ExecutiveOverviewOptions(
-            title=options.executive_overview_title,
-            help_text=options.executive_overview_help_text,
-            max_metric_summaries=options.max_overview_metrics,
-            top_change_diversification=options.overview_top_change_diversification,
-        ),
-    )
-    kpi_snapshot_block = _build_market_kpi_snapshot_block(
-        summary_metric_card_comparisons,
-        definitions,
-        options=options,
-    )
     market_overview_block = _build_market_overview_cards_block(
         report_input,
         summary_metric_card_comparisons,
@@ -511,49 +436,55 @@ def _build_summary_page(
         definitions,
         options=options,
     )
-    comparison_table = build_comparison_metric_table(
-        options.comparison_table_title,
-        summary_comparisons,
-        definitions,
-        max_rows=options.max_table_rows,
-        help_text=options.comparison_help_text,
-    )
-    summary_story_charts = _build_summary_story_charts(
-        report_input,
-        definitions,
-        options=options,
-    )
-    primary_intraday_chart = _build_primary_intraday_signal_chart(
-        report_input,
-        definitions,
-        options=options,
-    )
+    turnover_distribution_chart = _build_turnover_intraday_distribution_chart(report_input, definitions, options=options)
     ordered_summary_charts: list[PlotlyChart] = []
-    if primary_intraday_chart is not None:
-        ordered_summary_charts.append(primary_intraday_chart)
-    primary_chart_title = None if primary_intraday_chart is None else primary_intraday_chart.title
-    ordered_summary_charts.extend(chart for chart in summary_story_charts if chart.title != primary_chart_title)
-    insight_callout_block = _build_primary_intraday_insight_callout(
-        summary_comparisons,
-        definitions,
-        options=options,
-    )
-    summary_commentary_blocks = (
-        [insight_callout_block] if insight_callout_block is not None else []
-    ) + base_page.commentary_blocks
+    if turnover_distribution_chart is not None:
+        ordered_summary_charts.append(turnover_distribution_chart)
     return ReportPage(
         title=base_page.title,
         html_blocks=(
             ([meta_strip_block] if meta_strip_block is not None else [])
             + ([market_overview_block] if market_overview_block is not None else [])
             + ([detailed_trends_block] if detailed_trends_block is not None else [])
-            + ([kpi_snapshot_block] if kpi_snapshot_block is not None else [])
-            + [executive_overview]
         ),
         metric_cards=base_page.metric_cards,
         plotly_charts=ordered_summary_charts,
-        metric_tables=[comparison_table],
-        commentary_blocks=summary_commentary_blocks,
+        metric_tables=[],
+        commentary_blocks=[],
+    )
+
+
+def _build_turnover_intraday_distribution_chart(
+    report_input: MarketReportInput,
+    definitions: Mapping[str, MetricDefinition],
+    *,
+    options: MarketReportOptions,
+) -> PlotlyChart | None:
+    if not report_input.reference_series:
+        return None
+    current_by_metric = {
+        series.metric_name: series
+        for series in report_input.current_series
+        if not _series_has_symbol_scope(series, options.symbol_group_keys)
+    }
+    reference_by_metric = {
+        series.metric_name: series
+        for series in report_input.reference_series
+        if not _series_has_symbol_scope(series, options.symbol_group_keys)
+    }
+    target_series = current_by_metric.get("turnover")
+    reference_series = reference_by_metric.get("turnover")
+    if target_series is None or reference_series is None:
+        return None
+    definition = definitions.get("turnover")
+    if definition is None:
+        return None
+    return build_activity_intraday_distribution_chart(
+        "Turnover cumulative intraday distribution",
+        reference_series=reference_series,
+        target_series=target_series,
+        metric_definition=definition,
+        help_text=options.activity_distribution_help_text,
     )
 
 
