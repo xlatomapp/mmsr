@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from datetime import date, datetime, time
 from numbers import Real
 from typing import Any
@@ -41,11 +43,15 @@ class KdbMetricRunner:
         *,
         query_planner: KdbMetricQueryPlanner | None = None,
         cache_hooks: MetricDayCacheHooks | None = None,
+        isolate_calculation_namespace_per_run: bool = False,
+        keep_isolated_calculation_namespace: bool = False,
     ) -> None:
         self.client = client
         self.query_planner = KdbMetricQueryPlanner() if query_planner is None else query_planner
         self.cache_hooks = MetricDayCacheHooks() if cache_hooks is None else cache_hooks
         self._installed_calculation_namespaces: set[str] = set()
+        self.isolate_calculation_namespace_per_run = isolate_calculation_namespace_per_run
+        self.keep_isolated_calculation_namespace = keep_isolated_calculation_namespace
 
     def install_calculation_functions(
         self,
@@ -111,6 +117,11 @@ class KdbMetricRunner:
         """
 
         clean_requests = tuple(requests)
+        run_namespace = self._ephemeral_namespace_for_requests(clean_requests)
+        if run_namespace is not None:
+            clean_requests = tuple(
+                replace(request, calculation_namespace=run_namespace) for request in clean_requests
+            )
         cached_by_metric, missing_requests = self._load_cached_day_results(clean_requests)
         if not missing_requests:
             return tuple(cached_by_metric[request.metric.name] for request in clean_requests)
@@ -122,7 +133,12 @@ class KdbMetricRunner:
             plan.chunk_size,
         )
         self.ensure_calculation_functions(plan.metric_queries[0].calculation_namespace)
-        raw_result = self.client.execute(plan.query)
+        calculation_namespace = plan.metric_queries[0].calculation_namespace
+        self.client.execute(f"{calculation_namespace}.reportConfig:{plan.report_config_expression}")
+        try:
+            raw_result = self.client.execute(plan.query)
+        finally:
+            self._cleanup_ephemeral_namespace(run_namespace)
         LOGGER.info("Received kdb day result for metrics=%s", ", ".join(plan.metric_names))
         result_by_metric = _coerce_batch_result(
             raw_result,
@@ -167,6 +183,27 @@ class KdbMetricRunner:
 
         combined = {**cached_by_metric, **computed_by_metric}
         return tuple(combined[request.metric.name] for request in clean_requests)
+
+    def _ephemeral_namespace_for_requests(self, requests: Sequence[MetricRunRequest]) -> str | None:
+        if not self.isolate_calculation_namespace_per_run or not requests:
+            return None
+        base_namespace = requests[0].calculation_namespace
+        token = f"run_{uuid.uuid4().hex}"
+        return f"{base_namespace}.{token}"
+
+    def _cleanup_ephemeral_namespace(self, namespace: str | None) -> None:
+        if namespace is None or self.keep_isolated_calculation_namespace or not isinstance(self.client, KdbClient):
+            return
+        parts = namespace.split(".")
+        if len(parts) < 3:
+            return
+        parent = "." + ".".join(parts[1:-1])
+        child = parts[-1]
+        try:
+            self.client.execute(f"delete {child} from `{parent}")
+            self._installed_calculation_namespaces.discard(namespace)
+        except Exception:
+            LOGGER.exception("Failed to cleanup ephemeral calculation namespace %s", namespace)
 
     def _load_cached_day_results(
         self,
@@ -262,6 +299,9 @@ class KdbMetricRunner:
         returned table-like object before row normalization.
         """
 
+        run_namespace = self._ephemeral_namespace_for_requests((request,))
+        if run_namespace is not None:
+            request = replace(request, calculation_namespace=run_namespace)
         plan = self.plan_query(request)
         LOGGER.info(
             "Running kdb metric query: metric=%s family=%s",
@@ -269,7 +309,10 @@ class KdbMetricRunner:
             metric_family_for_metric(request.metric.name),
         )
         self.ensure_calculation_functions(plan.calculation_namespace)
-        raw_result = self.client.execute(plan.query)
+        try:
+            raw_result = self.client.execute(plan.query)
+        finally:
+            self._cleanup_ephemeral_namespace(run_namespace)
         plan.validate_result_schema(raw_result)
         LOGGER.debug("Validated metric result schema for metric=%s", request.metric.name)
         return normalize_metric_result(

@@ -23,6 +23,7 @@ class MetricDefinition:
     required_tables: list[str]
     required_columns: list[str]
     caveats: list[str] = field(default_factory=list)
+    formula_latex: str | None = None
 
     def help_text(self) -> str:
         """Return user-facing help text for info icons or appendices."""

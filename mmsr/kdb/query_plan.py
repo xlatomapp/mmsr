@@ -27,7 +27,7 @@ from mmsr.metrics.base import MetricDefinition
 from mmsr.periods.models import IntradayBucketSpec, ReportPeriod
 
 _ACTIVITY_METRICS = frozenset({"turnover", "volume", "trade_count"})
-_LIQUIDITY_METRICS = frozenset({"quoted_spread_bps", "top_of_book_depth"})
+_LIQUIDITY_METRICS = frozenset({"quoted_spread_bps", "top_of_book_depth", "parkinson_volatility_bps"})
 _REVERSION_METRIC_PATTERN = re.compile(r"^primary_quote_reversion_(?P<horizon>10ms|100ms|500ms|1s|5s|10s)_bps$")
 _REVERSION_GROUP_COLUMNS = ("venue", "horizon")
 _REVERSION_HORIZON_SORT_ORDER = {
@@ -137,6 +137,7 @@ class RenderedMetricDayQuery:
     query: str
     metric_queries: tuple[RenderedMetricQuery, ...]
     chunk_size: int
+    report_config_expression: str
 
     @property
     def metric_names(self) -> tuple[str, ...]:
@@ -228,12 +229,13 @@ class KdbMetricQueryPlanner:
 
         query = f"""{calculation_namespace}.runReportDay[
     {_q_date(clean_requests[0].period.start_date)};
-    {report_config}]"""
+    {calculation_namespace}.reportConfig]"""
 
         return RenderedMetricDayQuery(
             query=query,
             metric_queries=metric_queries,
             chunk_size=chunk_size,
+            report_config_expression=report_config,
         )
 
 

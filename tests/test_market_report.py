@@ -56,15 +56,22 @@ def test_market_monitor_report_is_canonical_production_format() -> None:
     drilldown_page = document.pages[4]
     detail_page = document.pages[5]
 
-    assert len(summary_page.html_blocks) == 3
+    assert len(summary_page.html_blocks) == 4
     assert summary_page.html_blocks[0].title == "Report Meta"
     assert 'class="report-meta-strip report-control-strip"' in summary_page.html_blocks[0].body_html
-    assert summary_page.html_blocks[1].title == "Market KPI Snapshot"
-    assert 'class="kpi-snapshot"' in summary_page.html_blocks[1].body_html
-    assert summary_page.html_blocks[2].title == "Executive Market Overview"
-    assert "Overall:</strong>" in summary_page.html_blocks[2].body_html
-    assert "<strong>Market activity:</strong>" in summary_page.html_blocks[2].body_html
-    assert "<strong>Displayed liquidity:</strong>" in summary_page.html_blocks[2].body_html
+    assert summary_page.html_blocks[1].title == "Market Overview"
+    assert "Traded Value" in summary_page.html_blocks[1].body_html
+    assert "Quoted Spread" in summary_page.html_blocks[1].body_html
+    assert "Top of book Depth" in summary_page.html_blocks[1].body_html
+    assert "Volatility" in summary_page.html_blocks[1].body_html
+    assert "market-overview-card__spark" in summary_page.html_blocks[1].body_html
+    assert "market-overview-card__bar" in summary_page.html_blocks[1].body_html
+    assert summary_page.html_blocks[2].title == "Market KPI Snapshot"
+    assert 'class="kpi-snapshot"' in summary_page.html_blocks[2].body_html
+    assert summary_page.html_blocks[3].title == "Executive Market Overview"
+    assert "Overall:</strong>" in summary_page.html_blocks[3].body_html
+    assert "<strong>Market activity:</strong>" in summary_page.html_blocks[3].body_html
+    assert "<strong>Displayed liquidity:</strong>" in summary_page.html_blocks[3].body_html
     assert len(summary_page.metric_cards) == 3
     assert len(summary_page.plotly_charts) == 4
     assert summary_page.plotly_charts[0].title.startswith("Primary Intraday Signal")
@@ -224,7 +231,7 @@ def test_market_monitor_report_can_omit_appendix_and_limit_components() -> None:
         "Sector, Segment, and Market-Cap Drilldowns",
         "Intraday Detail",
     ]
-    assert len(document.pages[0].html_blocks) == 3
+    assert len(document.pages[0].html_blocks) == 4
     assert len(document.pages[0].metric_cards) == 2
     assert len(document.pages[0].plotly_charts) == 4
     assert len(document.pages[0].metric_tables[0].rows) == 3
@@ -339,7 +346,7 @@ def test_market_summary_aggregates_bucket_level_duplicates_for_same_market_conte
     summary_page = document.pages[0]
     quoted_spread_cards = [card for card in summary_page.metric_cards if card.metric.name == "quoted_spread_bps"]
     assert len(quoted_spread_cards) == 1
-    assert "Top market drivers" in summary_page.html_blocks[2].body_html
+    assert "Top market drivers" in summary_page.html_blocks[3].body_html
 
 
 def test_market_monitor_report_passes_custom_drilldown_options() -> None:

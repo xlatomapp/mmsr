@@ -171,6 +171,7 @@ def render_simulated_source_function_bootstrap(
     source_namespace: str = ".sim.mmsr",
     *,
     symbol_count: int = 240,
+    points_per_symbol_per_day: int = 1200,
 ) -> str:
     """Render deterministic q source functions for development/debugging.
 
@@ -181,16 +182,20 @@ def render_simulated_source_function_bootstrap(
     generate reports without production trade/quote/reference tables.
 
     ``symbol_count`` controls the default q universe size baked into the
-    bootstrap file. Operators may still override ``<namespace>.symbolCount`` in
-    q after loading the generated file for ad hoc stress tests.
+    bootstrap file. ``points_per_symbol_per_day`` controls the per-symbol daily
+    guidance used by simulated sources before local +/-20% jitter. Operators may
+    still override these namespace values in q after loading for ad hoc stress
+    tests.
     """
 
     source_namespace = _validate_q_namespace(source_namespace, "source_namespace")
     symbol_count_value = _validate_positive_int(symbol_count, "symbol_count")
+    points_value = _validate_positive_int(points_per_symbol_per_day, "points_per_symbol_per_day")
     return render_template(
         _simulated_source_q_library_template(),
         {
             "source_namespace": source_namespace,
             "symbol_count": str(symbol_count_value),
+            "points_per_symbol_per_day": str(points_value),
         },
     )

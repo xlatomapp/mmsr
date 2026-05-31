@@ -54,6 +54,7 @@ def _liquidity_result() -> dict[str, list[object]]:
         "sector": ["Banks"],
         "quoted_spread_bps": [12.5],
         "top_of_book_depth": [5000],
+        "parkinson_volatility_bps": [18.2],
     }
 
 
@@ -151,6 +152,7 @@ def test_liquidity_contract_lists_all_template_output_columns() -> None:
         "sector",
         "quoted_spread_bps",
         "top_of_book_depth",
+        "parkinson_volatility_bps",
     )
 
 
@@ -406,6 +408,7 @@ def test_output_schema_validation_accepts_keyed_table_mapping_representation() -
             "value": {
                 "quoted_spread_bps": [12.5],
                 "top_of_book_depth": [5000],
+                "parkinson_volatility_bps": [18.2],
                 "aggregationLevel": ["symbol_bucket"],
                 "groupType": ["sym"],
                 "groupValue": ["7203"],

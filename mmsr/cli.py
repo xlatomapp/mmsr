@@ -348,6 +348,11 @@ def _plan_command(
         "--simulated-symbol-count",
         help="Number of synthetic symbols baked into the injected simulated q source functions.",
     ),
+    simulated_points_per_symbol_per_day: int = typer.Option(
+        1200,
+        "--simulated-points-per-symbol-per-day",
+        help="Guidance points per symbol per day for simulated q sources (actual per-symbol count jitters by +/-20%).",
+    ),
 ) -> int:
     """Print target/reference execution scope without running metric q."""
 
@@ -363,6 +368,7 @@ def _plan_command(
         inject_simulated_sources=inject_simulated_sources,
         simulated_source_namespace=simulated_source_namespace,
         simulated_symbol_count=simulated_symbol_count,
+        simulated_points_per_symbol_per_day=simulated_points_per_symbol_per_day,
     )
     for line in summary.summary_lines():
         typer.echo(line)
@@ -456,6 +462,27 @@ def _render_command(
         "--simulated-symbol-count",
         help="Number of synthetic symbols baked into the injected simulated q source functions.",
     ),
+    simulated_points_per_symbol_per_day: int = typer.Option(
+        1200,
+        "--simulated-points-per-symbol-per-day",
+        help="Guidance points per symbol per day for simulated q sources (actual per-symbol count jitters by +/-20%).",
+    ),
+    isolate_calculation_namespace_per_run: bool = typer.Option(
+        True,
+        "--isolate-calculation-namespace-per-run/--no-isolate-calculation-namespace-per-run",
+        help=(
+            "Install and execute MMSR-owned q calculations in a per-run namespace "
+            "suffix (<calculation_namespace>.run_<guid>)."
+        ),
+    ),
+    keep_isolated_calculation_namespace: bool = typer.Option(
+        False,
+        "--keep-isolated-calculation-namespace",
+        help=(
+            "When namespace isolation is enabled, keep the per-run calculation "
+            "namespace after completion for kdb-side debugging."
+        ),
+    ),
 ) -> int:
     """Render a production report by executing configured kdb source functions."""
 
@@ -473,6 +500,9 @@ def _render_command(
         inject_simulated_sources=inject_simulated_sources,
         simulated_source_namespace=simulated_source_namespace,
         simulated_symbol_count=simulated_symbol_count,
+        simulated_points_per_symbol_per_day=simulated_points_per_symbol_per_day,
+        isolate_calculation_namespace_per_run=isolate_calculation_namespace_per_run,
+        keep_isolated_calculation_namespace=keep_isolated_calculation_namespace,
     )
     typer.echo(f"Rendered production kdb-backed report: {output_path}")
     return 0
@@ -557,6 +587,11 @@ def _preflight_command(
         "--simulated-symbol-count",
         help="Number of synthetic symbols baked into the injected simulated q source functions.",
     ),
+    simulated_points_per_symbol_per_day: int = typer.Option(
+        1200,
+        "--simulated-points-per-symbol-per-day",
+        help="Guidance points per symbol per day for simulated q sources (actual per-symbol count jitters by +/-20%).",
+    ),
 ) -> int:
     """Run one bounded production metric step and print diagnostics."""
 
@@ -573,6 +608,7 @@ def _preflight_command(
         inject_simulated_sources=inject_simulated_sources,
         simulated_source_namespace=simulated_source_namespace,
         simulated_symbol_count=simulated_symbol_count,
+        simulated_points_per_symbol_per_day=simulated_points_per_symbol_per_day,
     )
     for line in result.summary_lines():
         typer.echo(line)
@@ -674,6 +710,7 @@ def _maybe_inject_simulated_source_functions(
     inject_simulated_sources: bool,
     simulated_source_namespace: str | None,
     simulated_symbol_count: int,
+    simulated_points_per_symbol_per_day: int,
 ) -> ReportConfig:
     """Optionally install simulated q getters and return the routed config.
 
@@ -690,14 +727,16 @@ def _maybe_inject_simulated_source_functions(
         simulated_source_namespace,
     )
     LOGGER.info(
-        "Injecting simulated source functions into remote kdb namespace %s with symbol_count=%s",
+        "Injecting simulated source functions into remote kdb namespace %s with symbol_count=%s points_per_symbol_per_day=%s",
         source_namespace,
         simulated_symbol_count,
+        simulated_points_per_symbol_per_day,
     )
     client.execute(
         render_simulated_source_function_bootstrap(
             source_namespace,
             symbol_count=simulated_symbol_count,
+            points_per_symbol_per_day=simulated_points_per_symbol_per_day,
         )
     )
     return _report_config_with_simulated_source_functions(
@@ -717,6 +756,7 @@ def summarize_production_report_plan(
     inject_simulated_sources: bool = False,
     simulated_source_namespace: str | None = None,
     simulated_symbol_count: int = 240,
+    simulated_points_per_symbol_per_day: int = 1200,
 ) -> KdbProductionPlanSummary:
     """Return a production execution summary without executing metric q."""
 
@@ -743,6 +783,7 @@ def summarize_production_report_plan(
         inject_simulated_sources=inject_simulated_sources,
         simulated_source_namespace=simulated_source_namespace,
         simulated_symbol_count=simulated_symbol_count,
+        simulated_points_per_symbol_per_day=simulated_points_per_symbol_per_day,
     )
     calendar = _kdb_calendar_source(client, report_config)
     symbol_source = _kdb_symbol_source(client, report_config)
@@ -772,6 +813,7 @@ def preflight_production_report(
     inject_simulated_sources: bool = False,
     simulated_source_namespace: str | None = None,
     simulated_symbol_count: int = 240,
+    simulated_points_per_symbol_per_day: int = 1200,
 ) -> KdbProductionPreflightResult:
     """Run a bounded production preflight against the configured kdb endpoint."""
 
@@ -798,6 +840,7 @@ def preflight_production_report(
         inject_simulated_sources=inject_simulated_sources,
         simulated_source_namespace=simulated_source_namespace,
         simulated_symbol_count=simulated_symbol_count,
+        simulated_points_per_symbol_per_day=simulated_points_per_symbol_per_day,
     )
     calendar = _kdb_calendar_source(client, report_config)
     symbol_source = _kdb_symbol_source(client, report_config)
@@ -829,6 +872,9 @@ def render_production_report_file(
     inject_simulated_sources: bool = False,
     simulated_source_namespace: str | None = None,
     simulated_symbol_count: int = 240,
+    simulated_points_per_symbol_per_day: int = 1200,
+    isolate_calculation_namespace_per_run: bool = True,
+    keep_isolated_calculation_namespace: bool = False,
 ) -> Path:
     """Render a production report through the production kdb executor.
 
@@ -865,10 +911,15 @@ def render_production_report_file(
         inject_simulated_sources=inject_simulated_sources,
         simulated_source_namespace=simulated_source_namespace,
         simulated_symbol_count=simulated_symbol_count,
+        simulated_points_per_symbol_per_day=simulated_points_per_symbol_per_day,
     )
     calendar = _kdb_calendar_source(client, report_config)
     symbol_source = _kdb_symbol_source(client, report_config)
-    runner = KdbMetricRunner(client)
+    runner = KdbMetricRunner(
+        client,
+        isolate_calculation_namespace_per_run=isolate_calculation_namespace_per_run,
+        keep_isolated_calculation_namespace=keep_isolated_calculation_namespace,
+    )
     runner.install_calculation_functions(report_config.kdb.calculation_namespace)
     executor = KdbProductionExecutor(
         runner=runner,

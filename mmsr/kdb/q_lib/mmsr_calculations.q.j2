@@ -66,7 +66,7 @@
     };
 
 {{ calculation_namespace }}.calcActivity:{[rawTrades;refs;params]
-    trades: rawTrades lj refs;
+    trades: rawTrades lj `date`sym xkey refs;
     result: select
         turnover: sum tradePrice * tradeSize,
         volume: sum tradeSize,
@@ -87,7 +87,8 @@
     quotes: rawQuotes lj refs;
     result: select
         quoted_spread_bps: med 10000 * (askPrice - bidPrice) % ((askPrice + bidPrice) % 2),
-        top_of_book_depth: med bidSize + askSize
+        top_of_book_depth: med (bidSize + askSize) % lot_size,
+        parkinson_volatility_bps: 10000 * sqrt (avg ((log (askPrice % bidPrice)) xexp 2) % (4 * log 2))
     by date,
        time_bucket: {{ calculation_namespace }}.timeBucketContinuous[time; params`bucket],
        sym,
@@ -96,6 +97,7 @@
     where date within (params`start_date; params`end_date),
           bidPrice > 0,
           askPrice > bidPrice,
+          lot_size > 0,
           not null sym;
     0!result
     };
@@ -341,7 +343,7 @@
     chunks: enlist 0#`;
     if[0<count allSyms; chunks: chunkSize cut allSyms];
 
-    / Each chunk lambda returns (sourceLoadMs; metricCalcMs; resultDict).
+    / Each chunk lambda returns (sourceLoadMs; regularCalcMs; reversionCalcMs; resultDict).
     chunkResults: { [runDate;refs;sourceFunctions;metricNames;metricParams;chunkSyms]
             chunkRefs: `sym xkey select from 0!refs where sym in chunkSyms;
             srcStart: .z.p;
@@ -350,11 +352,14 @@
             reversionMetrics: metricNames where {{ calculation_namespace }}.isToxicityReversionMetric each metricNames;
             regularMetrics: metricNames where not {{ calculation_namespace }}.isToxicityReversionMetric each metricNames;
             resultDict: ()!();
+            regularStart: .z.p;
             if[0<count regularMetrics;
                 resultDict,: regularMetrics!({[rawSources;metricParams;metricName]
                     {{ calculation_namespace }}.runMetric[metricName;rawSources;metricParams[metricName]]
                     }[rawSources;metricParams] each regularMetrics)
                 ];
+            regularEnd: .z.p;
+            reversionStart: regularEnd;
             if[0<count reversionMetrics;
                 resultDict,: {{ calculation_namespace }}.calcToxicityReversionFamily[
                     rawSources`pts_trades;
@@ -364,7 +369,7 @@
                     metricParams;
                     reversionMetrics]
                 ];
-            calcEnd: .z.p;
+            reversionEnd: .z.p;
             / Pre-aggregate activity-family results to shrink cross-chunk raze
             slimDict: metricNames!({[resultDict;metricName]
                     facts: resultDict[metricName];
@@ -373,18 +378,21 @@
                         facts]
                     }[resultDict] each metricNames);
             ({{ calculation_namespace }}.elapsedMs[srcStart;srcEnd];
-             {{ calculation_namespace }}.elapsedMs[srcEnd;calcEnd];
+             {{ calculation_namespace }}.elapsedMs[regularStart;regularEnd];
+             {{ calculation_namespace }}.elapsedMs[reversionStart;reversionEnd];
              slimDict)
         }[runDate;refs;sourceFunctions;metricNames;metricParams] each chunks;
 
     sourceLoadMs: sum {first x} each chunkResults;
-    metricCalcMs: sum {x 1} each chunkResults;
+    regularCalcMs: sum {x 1} each chunkResults;
+    reversionCalcMs: sum {x 2} each chunkResults;
+    metricCalcMs: regularCalcMs + reversionCalcMs;
     chunkCalcMs: sourceLoadMs + metricCalcMs;
 
     rollupStartTs: .z.p;
     rolledMetricDict: metricNames!({[chunkResults;requestedAggregationLevels;metricName]
             {{ calculation_namespace }}.rollupMetricResult[
-                raze {[metricName;chunkResult] chunkResult[2][metricName]}[metricName] each chunkResults;
+                raze {[metricName;chunkResult] chunkResult[3][metricName]}[metricName] each chunkResults;
                 requestedAggregationLevels]
             }[chunkResults;requestedAggregationLevels] each metricNames);
     rollupEndTs: .z.p;
@@ -406,6 +414,6 @@
             from rolledMetricDict[metricName]
             }[rolledMetricDict;refLoadMs;chunkCalcMs;rollupMs;totalMs;chunkCount;symbolCount] each metricNames);
 
-    -1 "MMSR runReportDay ",string[runDate]," ref:",string[refLoadMs],"ms src:",string[sourceLoadMs],"ms calc:",string[metricCalcMs],"ms rollup:",string[rollupMs],"ms total:",string[totalMs],"ms chunks:",string[chunkCount]," syms:",string[symbolCount];
+    -1 "MMSR runReportDay ",string[runDate]," ref:",string[refLoadMs],"ms src:",string[sourceLoadMs],"ms calc_regular:",string[regularCalcMs],"ms calc_reversion:",string[reversionCalcMs],"ms calc_total:",string[metricCalcMs],"ms rollup:",string[rollupMs],"ms total:",string[totalMs],"ms chunks:",string[chunkCount]," syms:",string[symbolCount];
     timingResult
     };

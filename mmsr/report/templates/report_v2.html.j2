@@ -6,6 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ document.title }}</title>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" defer></script>
+  <script>
+    window.MathJax = { tex: { inlineMath: [['\\(', '\\)']] } };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" defer></script>
   <style>
     :root {
       --mmsr-bg: #edf2f8;
@@ -29,10 +33,7 @@
       line-height: 1.5;
     }
     .report-shell {
-      background: var(--mmsr-shell);
-      border-left: 1px solid #d9e2ef;
-      border-right: 1px solid #d9e2ef;
-      box-shadow: 0 18px 40px rgba(15, 34, 58, 0.08);
+      background: transparent;
       max-width: 1360px;
       margin: 0 auto;
       padding: 24px 28px 34px;
@@ -160,38 +161,35 @@
       padding: 8px 12px;
     }
     .report-page {
-      background: var(--mmsr-card);
-      border: 1px solid var(--mmsr-border);
-      border-radius: 12px;
-      box-shadow: 0 8px 22px rgba(15, 34, 58, 0.06);
-      padding: 16px 18px;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+      padding: 8px 0 12px;
       margin: 16px 0;
     }
     .report-page__header {
-      align-items: center;
-      background: linear-gradient(90deg, var(--mmsr-heading-soft) 0%, #f9fbff 100%);
-      border: 1px solid var(--mmsr-border);
-      border-radius: 10px;
+      align-items: flex-end;
+      background: transparent;
+      border: 0;
+      border-bottom: 1px solid var(--mmsr-border);
+      border-radius: 0;
       display: flex;
       gap: 10px;
       margin: 0 0 12px;
-      padding: 9px 12px;
+      padding: 0 0 8px;
     }
     .report-page__index {
-      align-items: center;
-      background: var(--mmsr-accent);
-      border-radius: 999px;
-      color: #fff;
-      display: inline-flex;
-      font-size: 12px;
+      color: var(--mmsr-heading);
+      background: transparent;
+      display: inline;
+      font-size: 36px;
       font-weight: 700;
-      height: 24px;
-      justify-content: center;
-      width: 24px;
+      line-height: 1.15;
     }
     .report-page__title {
       color: var(--mmsr-heading);
-      font-size: 28px;
+      font-size: 36px;
       font-weight: 700;
       line-height: 1.15;
       margin: 0;
@@ -246,6 +244,11 @@
       margin-top: 0;
       padding-top: 0;
     }
+    .report-page--summary > .html-block[data-block-title="Market Overview"] {
+      grid-column: 1 / -1;
+      margin-top: 0;
+      padding-top: 0;
+    }
     .report-page--summary > .html-block[data-block-title="Executive Market Overview"] {
       grid-column: 1 / 2;
       margin-top: 0;
@@ -286,6 +289,84 @@
       gap: 13px;
       margin: 16px 0 14px;
     }
+    .market-overview-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin: 4px 0 10px;
+    }
+    .market-overview-card {
+      border: 1px solid var(--mmsr-border);
+      border-radius: 8px;
+      background: #fff;
+      padding: 10px 12px 6px;
+      min-height: 160px;
+    }
+    .market-overview-card__heading {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+    .market-overview-card__label {
+      margin: 0;
+      color: var(--mmsr-muted);
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: 600;
+    }
+    .market-overview-card__value {
+      margin: 6px 0 2px;
+      font-size: 28px;
+      line-height: 1.1;
+      color: var(--mmsr-heading);
+      font-weight: 700;
+    }
+    .market-overview-card__aggregation {
+      margin: 4px 0 2px;
+      color: var(--mmsr-muted);
+      font-size: 12px;
+      line-height: 1.25;
+      font-weight: 400;
+      opacity: 1;
+    }
+    .market-overview-card__delta {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .market-overview-card__delta--up { color: #0f9d58; }
+    .market-overview-card__delta--down { color: #ba1a1a; }
+    .market-overview-card__delta--flat { color: var(--mmsr-muted); }
+    .market-overview-card__spark {
+      margin-top: 10px;
+      height: 56px;
+      border-radius: 4px;
+      background: linear-gradient(180deg, #dfe6ef 0%, #e8edf4 100%);
+      border-bottom: 2px solid #6f8eaf;
+      display: flex;
+      align-items: end;
+      gap: 1px;
+      padding: 0 1px;
+      position: relative;
+    }
+    .market-overview-card__spark-mean {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 0;
+      border-top: 1px dashed #5a6f8b;
+      opacity: 0.8;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .market-overview-card__bar {
+      flex: 1 1 0;
+      min-width: 2px;
+      background: #a9b5c6;
+      border-radius: 1px 1px 0 0;
+      position: relative;
+      z-index: 1;
+    }
     .metric-card {
       border: 1px solid var(--mmsr-border);
       border-radius: 10px;
@@ -312,6 +393,8 @@
     .metric-help {
       display: inline-block;
       position: relative;
+      align-self: flex-start;
+      margin-top: 0;
     }
     .metric-help__summary {
       align-items: center;
@@ -321,11 +404,15 @@
       color: var(--mmsr-muted);
       cursor: pointer;
       display: inline-flex;
-      font-size: 12px;
-      gap: 4px;
+      font-size: 10px;
       list-style: none;
-      min-height: 22px;
-      padding: 2px 8px;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      min-height: 16px;
+      padding: 0;
+      line-height: 16px;
+      vertical-align: top;
     }
     .metric-help__summary::-webkit-details-marker { display: none; }
     .metric-help__summary::marker { content: ""; }
@@ -334,11 +421,28 @@
       border-color: var(--mmsr-muted);
       color: var(--mmsr-text);
     }
-    .metric-help__icon { font-weight: 700; }
+    .metric-help__icon { font-weight: 700; line-height: 1; }
+    .metric-help__unit {
+      margin: 6px 0 0;
+      font-size: 12px;
+      white-space: normal;
+    }
+    .metric-help__meta {
+      margin: 6px 0 0;
+      font-size: 12px;
+      white-space: normal;
+    }
     .metric-help__label {
       font-size: 11px;
       text-transform: uppercase;
       letter-spacing: 0.03em;
+    }
+    .report-page__header > .metric-help .metric-help__label {
+      display: none;
+    }
+    .report-page__header > .metric-help {
+      align-self: center;
+      margin-top: 0;
     }
     .metric-help__body {
       background: #fff;
@@ -346,17 +450,35 @@
       border-radius: 12px;
       box-shadow: 0 8px 28px rgba(24, 32, 47, 0.12);
       color: var(--mmsr-text);
-      margin-top: 6px;
       max-width: min(520px, calc(100vw - 64px));
       min-width: 260px;
       padding: 12px;
-      position: absolute;
-      right: 0;
-      z-index: 10;
+      position: fixed;
+      left: 16px;
+      top: 16px;
+      z-index: 99999;
     }
     .metric-help__body p {
       margin: 6px 0 0;
       white-space: pre-wrap;
+    }
+    .metric-help__formula-wrap {
+      margin-top: 8px;
+      border-top: 1px solid var(--mmsr-border);
+      padding-top: 8px;
+    }
+    .metric-help__formula-label {
+      margin: 0 0 4px;
+      color: var(--mmsr-muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      font-weight: 600;
+    }
+    .metric-help__formula {
+      margin: 0;
+      font-size: 13px;
+      white-space: normal;
     }
     .metric-table__metric-cell {
       align-items: flex-start;
@@ -961,6 +1083,9 @@
       .report-page--summary > .html-block[data-block-title="Market KPI Snapshot"] {
         grid-column: 1 / -1;
       }
+      .report-page--summary > .html-block[data-block-title="Market Overview"] {
+        grid-column: 1 / -1;
+      }
       .report-page--summary > .html-block[data-block-title="Executive Market Overview"] {
         grid-column: 1 / -1;
       }
@@ -970,6 +1095,7 @@
       .report-control-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .report-meta-strip__action { grid-column: 1 / -1; justify-content: flex-start; }
       .kpi-snapshot { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .market-overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .drilldown-matrix-explorer__grid { grid-template-columns: 1fr; }
       .symbol-anomaly-explorer__grid { grid-template-columns: 1fr; }
     }
@@ -1015,7 +1141,7 @@
 
     {% for page in document.pages %}
       {%- set page_class = 'report-page' -%}
-      {%- if page.title == 'Market Summary' -%}
+      {%- if page.title == 'Market Summary' or page.title == 'Market Overview' -%}
         {%- set page_class = page_class + ' report-page--summary' -%}
       {%- elif page.title == 'Activity Distribution' -%}
         {%- set page_class = page_class + ' report-page--activity' -%}
@@ -1028,17 +1154,27 @@
         <div class="report-page__header">
           <span class="report-page__index">{{ loop.index }}</span>
           <h2 class="report-page__title">{{ page.title }}</h2>
+          {% if page.title == "Market Summary" or page.title == "Market Overview" %}
+            {{ help_control(
+              "Market Summary",
+              "How to Read Cards\n"
+              ~ "- Value: target-period aggregate.\n"
+              ~ "- Delta: % change versus benchmark period.\n"
+              ~ "- Spark bars: trend over time.\n"
+              ~ "- Dashed line: benchmark-period mean.\n\n"
+              ~ "Card Trend Granularity\n"
+              ~ "- Daily for <= 30 days.\n"
+              ~ "- Weekly for > 30 days.\n"
+              ~ "- Monthly for > 30 weeks.\n"
+              ~ "- Quarterly for > 30 months.",
+              "Section help"
+            ) }}
+          {% endif %}
         </div>
-        {% if page.title == "Market Summary" %}
+        {% if page.title == "Market Summary" or page.title == "Market Overview" %}
           {% for block in page.html_blocks %}
-            {% if block.title == "Market KPI Snapshot" %}
-              <section class="html-block" data-block-title="{{ block.title }}">
-                <div class="component-heading">
-                  <h3>{{ block.title }}</h3>
-                  {{ help_control(block.title, block.help_text, "Section help") }}
-                </div>
-                <div class="html-block__body">{{ block.body_html | safe }}</div>
-              </section>
+            {% if block.title == "Market Overview" %}
+              <div class="html-block__body">{{ block.body_html | safe }}</div>
             {% endif %}
           {% endfor %}
         {% else %}
@@ -1053,7 +1189,7 @@
           {% endfor %}
         {% endif %}
 
-        {% if page.metric_cards %}
+        {% if page.metric_cards and page.title != "Market Summary" and page.title != "Market Overview" %}
           <div class="metric-grid">
             {% for card in page.metric_cards %}
               {% include "partials/metric_card.html.j2" %}
@@ -1073,7 +1209,7 @@
           {% include "partials/heatmap.html.j2" %}
         {% endfor %}
 
-        {% if page.title == "Market Summary" %}
+        {% if page.title == "Market Summary" or page.title == "Market Overview" %}
           {% for block in page.html_blocks %}
             {% if block.title == "Executive Market Overview" %}
               <section class="html-block" data-block-title="{{ block.title }}">
@@ -1111,6 +1247,51 @@
   </main>
   <script>
     window.addEventListener("DOMContentLoaded", function () {
+      var closeMetricHelp = function (exceptNode) {
+        document.querySelectorAll(".metric-help[open]").forEach(function (node) {
+          if (exceptNode && node === exceptNode) {
+            return;
+          }
+          node.removeAttribute("open");
+        });
+      };
+      var positionMetricHelp = function (detailsNode) {
+        var trigger = detailsNode.querySelector(".metric-help__summary");
+        var body = detailsNode.querySelector(".metric-help__body");
+        if (!trigger || !body) {
+          return;
+        }
+        var triggerRect = trigger.getBoundingClientRect();
+        var bodyRect = body.getBoundingClientRect();
+        var desiredTop = triggerRect.bottom + 8;
+        var desiredLeft = triggerRect.left;
+        var maxLeft = Math.max(8, window.innerWidth - bodyRect.width - 8);
+        var maxTop = Math.max(8, window.innerHeight - bodyRect.height - 8);
+        body.style.left = Math.min(Math.max(8, desiredLeft), maxLeft) + "px";
+        body.style.top = Math.min(Math.max(8, desiredTop), maxTop) + "px";
+        if (window.MathJax && window.MathJax.typesetPromise) {
+          window.MathJax.typesetPromise([body]).catch(function () {});
+        }
+      };
+      document.querySelectorAll(".metric-help").forEach(function (detailsNode) {
+        detailsNode.addEventListener("toggle", function () {
+          if (!detailsNode.open) {
+            return;
+          }
+          closeMetricHelp(detailsNode);
+          positionMetricHelp(detailsNode);
+        });
+      });
+      document.addEventListener("click", function (event) {
+        if (!event.target.closest(".metric-help")) {
+          closeMetricHelp(null);
+        }
+      });
+      window.addEventListener("resize", function () {
+        document.querySelectorAll(".metric-help[open]").forEach(function (node) {
+          positionMetricHelp(node);
+        });
+      });
       var renderCharts = function () {
         if (!window.Plotly) {
           return;

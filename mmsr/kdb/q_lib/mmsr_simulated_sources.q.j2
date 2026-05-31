@@ -11,14 +11,29 @@
 / They are for report development and debugging only, not market evidence.
 
 {{ source_namespace }}.symbolCount:{{ symbol_count }};
+{{ source_namespace }}.pointsPerSymPerDayGuidance:{{ points_per_symbol_per_day }};
 {{ source_namespace }}.venues:`SBIJ`JNX`Cboe;
 {{ source_namespace }}.primaryVenue:`TSE;
 {{ source_namespace }}.topixCapGroups:`Large`Mid`Small;
 {{ source_namespace }}.marketSegments:`Prime`Standard;
 {{ source_namespace }}.sectors:`Banks`Technology`Autos`Retail`Pharma`Industrials;
-{{ source_namespace }}.intradayTimes:09:00:00.000 09:30:00.000 10:00:00.000 10:30:00.000 11:00:00.000 11:29:00.000 12:30:00.000 13:00:00.000 13:30:00.000 14:00:00.000 14:30:00.000 15:00:00.000 15:25:00.000;
-{{ source_namespace }}.intradaySessions:`am`am`am`am`am`am`pm`pm`pm`pm`pm`pm`pm;
-{{ source_namespace }}.intradayAuctions:1 0 0 0 0 2 1 0 0 0 0 0 2;
+{{ source_namespace }}.amOpen:09:00:00.000;
+{{ source_namespace }}.amClose:11:30:00.000;
+{{ source_namespace }}.pmOpen:12:30:00.000;
+{{ source_namespace }}.pmClose:15:30:00.000;
+{{ source_namespace }}.amOpenDelayEnd:09:01:59.999;
+{{ source_namespace }}.pmOpenDelayEnd:12:31:59.999;
+{{ source_namespace }}.amContinuousStart:09:02:00.000;
+{{ source_namespace }}.amContinuousEnd:11:29:59.999;
+{{ source_namespace }}.pmContinuousStart:12:32:00.000;
+{{ source_namespace }}.pmContinuousEnd:15:24:59.999;
+{{ source_namespace }}.seedA:1103515245j;
+{{ source_namespace }}.seedB:12345j;
+{{ source_namespace }}.seedC:214013j;
+{{ source_namespace }}.seedD:2531011j;
+{{ source_namespace }}.seedE:69069j;
+{{ source_namespace }}.seedF:1664525j;
+{{ source_namespace }}.seedG:22695477j;
 
 {{ source_namespace }}.weekdayDates:{[start;end]
     if[start>end; :0#start];
@@ -31,13 +46,151 @@
     {{ source_namespace }}.weekdayDates[start;end]
     };
 
-{{ source_namespace }}.symbols:{[n]
+{{ source_namespace }}.simSymbols:{[n]
     `$"SIM",/:string 1 + til n
+    };
+
+{{ source_namespace }}.symId:{[sym]
+    "J"$3_ string sym
+    };
+
+{{ source_namespace }}.basePriceBySym:{[sym]
+    sid:{{ source_namespace }}.symId sym;
+    600f + 8f * sid + 35f * ((sid mod 11) % 11f)
+    };
+
+{{ source_namespace }}.volScaleBySym:{[sym]
+    sid:{{ source_namespace }}.symId sym;
+    0.006f + 0.0007f * (sid mod 13)
+    };
+
+{{ source_namespace }}.spreadBpsBySym:{[sym]
+    sid:{{ source_namespace }}.symId sym;
+    4f + 0.9f * (sid mod 9)
+    };
+
+{{ source_namespace }}.dailyCloseRaw:{[runDate;sym]
+    sid:{{ source_namespace }}.symId sym;
+    d:`int$runDate;
+    base:{{ source_namespace }}.basePriceBySym sym;
+    oscillation:0.035f * sin 0.16f * (d + 3 * sid);
+    micro:0.012f * cos 0.07f * (d + sid);
+    base * (1f + oscillation + micro)
+    };
+
+{{ source_namespace }}.dailyClose:{[runDate;sym]
+    prevClose:{{ source_namespace }}.dailyCloseRaw[runDate - 1;sym];
+    rawClose:{{ source_namespace }}.dailyCloseRaw[runDate;sym];
+    rel:(rawClose % prevClose) - 1f;
+    cappedRel:(-0.10f) | (0.10f & rel);
+    prevClose * (1f + cappedRel)
+    };
+
+{{ source_namespace }}.dailyCloseBySidRaw:{[runDate;sid]
+    d:`int$runDate;
+    base:600f + 8f * sid + 35f * ((sid mod 11) % 11f);
+    oscillation:0.035f * sin 0.16f * (d + 3 * sid);
+    micro:0.012f * cos 0.07f * (d + sid);
+    base * (1f + oscillation + micro)
+    };
+
+{{ source_namespace }}.dailyCloseBySid:{[runDate;sid]
+    prevClose:{{ source_namespace }}.dailyCloseBySidRaw[runDate - 1;sid];
+    rawClose:{{ source_namespace }}.dailyCloseBySidRaw[runDate;sid];
+    rel:(rawClose % prevClose) - 1f;
+    cappedRel:(-0.10f) | (0.10f & rel);
+    prevClose * (1f + cappedRel)
+    };
+
+{{ source_namespace }}.mixSeed:{[dayInt;sid;a;b]
+    abs (`long$dayInt) * (`long$a) + (`long$sid) * (`long$b)
+    };
+
+{{ source_namespace }}.sessionProgress:{[tm]
+    ms:`int$tm;
+    amStart:`int${{ source_namespace }}.amOpen;
+    amEnd:`int${{ source_namespace }}.amClose;
+    pmStart:`int${{ source_namespace }}.pmOpen;
+    pmEnd:`int${{ source_namespace }}.pmClose;
+    amDur:amEnd - amStart;
+    pmDur:pmEnd - pmStart;
+    totalDur:amDur + pmDur;
+    $[tm <= {{ source_namespace }}.amClose;
+        (ms - amStart) % totalDur;
+        (amDur + (ms - pmStart)) % totalDur]
+    };
+
+{{ source_namespace }}.randTimes:{[start;end;n]
+    if[n<=0; :0#start];
+    startMs:`int$start;
+    spanMs:1 + (`int$end) - startMs;
+    `time$ startMs + n?spanMs
+    };
+
+{{ source_namespace }}.symIntradayRows:{[runDate;sym]
+    sid:`long${{ source_namespace }}.symId sym;
+    dayInt:`long$`int$runDate;
+    baseN:{{ source_namespace }}.pointsPerSymPerDayGuidance;
+    minN:1 | `int$(0.8f * baseN);
+    spanN:1 + (1 | `int$(0.4f * baseN));
+    n:minN + (({{ source_namespace }}.mixSeed[dayInt;sid;{{ source_namespace }}.seedA;{{ source_namespace }}.seedB]) mod spanN);
+    includeAmOpen:1b;
+    includePmClose:(({{ source_namespace }}.mixSeed[dayInt;sid;{{ source_namespace }}.seedC;{{ source_namespace }}.seedD]) mod 100) < 82;
+    mandatoryPmOpen:1;
+    mandatoryAmClose:1;
+    amOpenPct:0.03f + (({{ source_namespace }}.mixSeed[dayInt;sid;{{ source_namespace }}.seedE;17j]) mod 401) % 10000f;
+    pmClosePct:0.15f + (({{ source_namespace }}.mixSeed[dayInt;sid;{{ source_namespace }}.seedF;29j]) mod 1001) % 10000f;
+    amOpenCount:$[includeAmOpen;1 | (`int$(n * amOpenPct));0];
+    pmCloseCount:$[includePmClose;1 | (`int$(n * pmClosePct));0];
+    nBase:0 | (n - amOpenCount - pmCloseCount - mandatoryPmOpen - mandatoryAmClose);
+    nAmBase:nBase div 2;
+    nAmJitter:({{ source_namespace }}.mixSeed[dayInt;sid;{{ source_namespace }}.seedG;31j]) mod 21;
+    nAm:nAmBase + nAmJitter - 10;
+    nAm:0 | nAm;
+    nAm:nBase & nAm;
+    nPm:nBase - nAm;
+    amTimes:asc {{ source_namespace }}.randTimes[
+        {{ source_namespace }}.amContinuousStart;
+        {{ source_namespace }}.amContinuousEnd;
+        nAm];
+    pmTimes:asc {{ source_namespace }}.randTimes[
+        {{ source_namespace }}.pmContinuousStart;
+        {{ source_namespace }}.pmContinuousEnd;
+        nPm];
+    amOpenTimes:asc {{ source_namespace }}.randTimes[
+        {{ source_namespace }}.amOpen;
+        {{ source_namespace }}.amOpenDelayEnd;
+        amOpenCount];
+    amCloseTimes:mandatoryAmClose#{{ source_namespace }}.amClose;
+    pmOpenTimes:asc {{ source_namespace }}.randTimes[
+        {{ source_namespace }}.pmOpen;
+        {{ source_namespace }}.pmOpenDelayEnd;
+        mandatoryPmOpen];
+    pmCloseTimes:pmCloseCount#{{ source_namespace }}.pmClose;
+    amAllTimes:asc raze (amOpenTimes; amTimes; amCloseTimes);
+    pmAllTimes:asc raze (pmOpenTimes; pmTimes; pmCloseTimes);
+    amAuction:(count amAllTimes)#0;
+    amAuction:@[amAuction;where (amAllTimes >= {{ source_namespace }}.amOpen) & (amAllTimes <= {{ source_namespace }}.amOpenDelayEnd);:;1];
+    amAuction:@[amAuction;where amAllTimes={{ source_namespace }}.amClose;:;2];
+    pmAuction:(count pmAllTimes)#0;
+    pmAuction:@[pmAuction;where (pmAllTimes >= {{ source_namespace }}.pmOpen) & (pmAllTimes <= {{ source_namespace }}.pmOpenDelayEnd);:;1];
+    pmAuction:@[pmAuction;where pmAllTimes={{ source_namespace }}.pmClose;:;2];
+    amRows:([] date:(count amAllTimes)#runDate;
+        time:amAllTimes;
+        sym:(count amAllTimes)#sym;
+        session:(count amAllTimes)#`am;
+        auction:amAuction);
+    pmRows:([] date:(count pmAllTimes)#runDate;
+        time:pmAllTimes;
+        sym:(count pmAllTimes)#sym;
+        session:(count pmAllTimes)#`pm;
+        auction:pmAuction);
+    amRows,pmRows
     };
 
 {{ source_namespace }}.getRef:{[runDate]
     n:{{ source_namespace }}.symbolCount;
-    syms:{{ source_namespace }}.symbols[n];
+    syms:{{ source_namespace }}.simSymbols[n];
     ([] date:n#runDate;
         sym:syms;
         ric:syms;
@@ -49,16 +202,8 @@
 
 {{ source_namespace }}.symTimeGrid:{[runDate;refs]
     syms:exec sym from refs;
-    nSyms:count syms;
-    times:{{ source_namespace }}.intradayTimes;
-    sessions:{{ source_namespace }}.intradaySessions;
-    auctions:{{ source_namespace }}.intradayAuctions;
-    nTimes:count times;
-    ([] date:(nSyms*nTimes)#runDate;
-        time:raze {[nSyms;x] nSyms#x}[nSyms] each times;
-        sym:raze nTimes#enlist syms;
-        session:raze {[nSyms;x] nSyms#x}[nSyms] each sessions;
-        auction:raze {[nSyms;x] nSyms#x}[nSyms] each auctions)
+    rowsBySym:{{ source_namespace }}.symIntradayRows[runDate] each syms;
+    raze rowsBySym
     };
 
 {{ source_namespace }}.withRowNumber:{[t]
@@ -66,28 +211,50 @@
     };
 
 {{ source_namespace }}.simMid:{[rows;offset]
-    1000f + offset + (0.25 * (rows mod 41))
+    1000f + offset + 0.05f * (rows mod 10) + 0.20f * (rows mod 41)
     };
 
 {{ source_namespace }}.getTrade:{[runDate;refs]
-    t:{{ source_namespace }}.withRowNumber {{ source_namespace }}.symTimeGrid[runDate;refs];
+    refsBySym:`sym xkey refs;
+    t:{{ source_namespace }}.withRowNumber {{ source_namespace }}.symTimeGrid[runDate;refs] lj refsBySym;
+    dayInt:`long$`int$runDate;
+    sidSyms:asc distinct t`sym;
+    sid:`long$1 + sidSyms ? t`sym;
+    openPx:`float${{ source_namespace }}.dailyCloseBySid[runDate - 1;sid];
+    closePx:`float${{ source_namespace }}.dailyCloseBySid[runDate;sid];
+    progress:`float${{ source_namespace }}.sessionProgress each t`time;
+    volScale:0.006f + 0.0007f * (sid mod 13);
+    wiggle:(sin 0.22f * ((t`row) + sid)) * volScale;
+    mid:`float$raze enlist each ((openPx + progress * (closePx - openPx)) * (1f + wiggle));
+    rowSeed:abs dayInt * 747796405j + sid * 2891336453j + (`long$t`row) * 1181783497j;
+    tradeLots:1 + rowSeed mod 80;
     update
-        tradePrice:{{ source_namespace }}.simMid[row;0f],
-        tradeSize:100 * 1 + row mod 25
+        tradePrice:mid,
+        tradeSize:`int$100 * tradeLots
     from t
     };
 
 {{ source_namespace }}.quoteFromGrid:{[runDate;refs;venue]
-    q:{{ source_namespace }}.withRowNumber {{ source_namespace }}.symTimeGrid[runDate;refs];
+    refsBySym:`sym xkey refs;
+    q:{{ source_namespace }}.withRowNumber {{ source_namespace }}.symTimeGrid[runDate;refs] lj refsBySym;
     rows:q`row;
-    mid:{{ source_namespace }}.simMid[rows;0.5f];
-    spread:0.5f + 0.05f * (rows mod 10);
+    legacySpreadJitter:0.06f * (rows mod 12);
+    sidSyms:asc distinct q`sym;
+    sid:`long$1 + sidSyms ? q`sym;
+    volScale:0.006f + 0.0007f * (sid mod 13);
+    spreadBps:4f + 0.9f * (sid mod 9);
+    openPx:`float${{ source_namespace }}.dailyCloseBySid[runDate - 1;sid];
+    closePx:`float${{ source_namespace }}.dailyCloseBySid[runDate;sid];
+    progress:`float${{ source_namespace }}.sessionProgress each q`time;
+    noise:(sin 0.19f * ((q`row) + (sid * 3))) * volScale;
+    mid:`float$raze enlist each ((openPx + progress * (closePx - openPx)) * (1f + noise));
+    spread:`float$raze enlist each (mid * ((spreadBps + 0f * legacySpreadJitter) % 10000f));
     update
         venue:venue,
         bidPrice:mid - spread % 2,
         askPrice:mid + spread % 2,
-        bidSize:1000 * 1 + rows mod 30,
-        askSize:1000 * 1 + (rows + 7) mod 30
+        bidSize:`int$(800f + (220f * (1f + sin 0.13f * ((q`row) + sid)))),
+        askSize:`int$(760f + (260f * (1f + cos 0.11f * ((q`row) + sid + 5))))
     from q
     };
 
@@ -100,24 +267,44 @@
     };
 
 {{ source_namespace }}.getPtsTrade:{[runDate;refs]
-    t:{{ source_namespace }}.withRowNumber {{ source_namespace }}.symTimeGrid[runDate;refs];
+    refsBySym:`sym xkey refs;
+    t:{{ source_namespace }}.withRowNumber {{ source_namespace }}.symTimeGrid[runDate;refs] lj refsBySym;
+    dayInt:`long$`int$runDate;
+    sidSyms:asc distinct t`sym;
+    sid:`long$1 + sidSyms ? t`sym;
+    volScale:0.006f + 0.0007f * (sid mod 13);
+    openPx:`float${{ source_namespace }}.dailyCloseBySid[runDate - 1;sid];
+    closePx:`float${{ source_namespace }}.dailyCloseBySid[runDate;sid];
+    progress:`float${{ source_namespace }}.sessionProgress each t`time;
+    noise:(sin 0.21f * ((t`row) + (sid * 5))) * (1.2f * volScale);
+    mid:`float$raze enlist each ((openPx + progress * (closePx - openPx)) * (1f + noise));
+    rowSeed:abs dayInt * 196613j + sid * 15731j + (`long$t`row) * 32771j;
+    tradeLots:1 + rowSeed mod 90;
     update
         venue:(count t)#{{ source_namespace }}.venues,
-        tradePrice:{{ source_namespace }}.simMid[row;1.0f],
-        tradeSize:100 * 1 + (row + 3) mod 25
+        tradePrice:mid,
+        tradeSize:`int$100 * tradeLots
     from t
     };
 
 {{ source_namespace }}.getPtsQuote:{[runDate;refs]
-    q:{{ source_namespace }}.withRowNumber {{ source_namespace }}.symTimeGrid[runDate;refs];
-    rows:q`row;
-    mid:{{ source_namespace }}.simMid[rows;1.25f];
-    spread:0.65f + 0.06f * (rows mod 12);
+    refsBySym:`sym xkey refs;
+    q:{{ source_namespace }}.withRowNumber {{ source_namespace }}.symTimeGrid[runDate;refs] lj refsBySym;
+    sidSyms:asc distinct q`sym;
+    sid:`long$1 + sidSyms ? q`sym;
+    volScale:0.006f + 0.0007f * (sid mod 13);
+    spreadBps:4f + 0.9f * (sid mod 9);
+    openPx:`float${{ source_namespace }}.dailyCloseBySid[runDate - 1;sid];
+    closePx:`float${{ source_namespace }}.dailyCloseBySid[runDate;sid];
+    progress:`float${{ source_namespace }}.sessionProgress each q`time;
+    noise:(sin 0.17f * ((q`row) + (sid * 7))) * (1.1f * volScale);
+    mid:`float$raze enlist each ((openPx + progress * (closePx - openPx)) * (1f + noise));
+    spread:`float$raze enlist each (mid * ((spreadBps + 0.9f) % 10000f));
     update
         venue:(count q)#{{ source_namespace }}.venues,
         bidPrice:mid - spread % 2,
         askPrice:mid + spread % 2,
-        bidSize:900 * 1 + rows mod 28,
-        askSize:900 * 1 + (rows + 5) mod 28
+        bidSize:`int$(720f + (250f * (1f + sin 0.17f * ((q`row) + sid + 3)))),
+        askSize:`int$(700f + (270f * (1f + cos 0.09f * ((q`row) + sid + 9))))
     from q
     };

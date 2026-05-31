@@ -9,8 +9,12 @@ STARTER_METRICS: list[MetricDefinition] = [
         name="turnover",
         label="Turnover",
         category="Activity",
-        description="Total traded notional over the selected period or bucket.",
+        description=(
+            "Summed traded notional at the selected aggregation grain "
+            "(for example, per intraday bucket or per day)."
+        ),
         formula="sum(tradePrice * tradeSize)",
+        formula_latex=r"\sum_i \mathrm{price}_i \cdot \mathrm{qty}_i",
         interpretation="Higher turnover indicates more trading activity.",
         unit="JPY",
         higher_is_better=None,
@@ -27,6 +31,7 @@ STARTER_METRICS: list[MetricDefinition] = [
         category="Activity",
         description="Total traded shares over the selected period or bucket.",
         formula="sum(tradeSize)",
+        formula_latex=r"\sum_i q_i",
         interpretation="Higher volume indicates more share trading activity.",
         unit="shares",
         higher_is_better=None,
@@ -42,6 +47,7 @@ STARTER_METRICS: list[MetricDefinition] = [
         category="Activity",
         description="Number of trades over the selected period or bucket.",
         formula="count trades",
+        formula_latex=r"N_{\mathrm{trades}}",
         interpretation="Higher trade count indicates more frequent trading.",
         unit="count",
         higher_is_better=None,
@@ -57,6 +63,7 @@ STARTER_METRICS: list[MetricDefinition] = [
         category="Liquidity",
         description="Best ask minus best bid, normalized by mid price.",
         formula="10000 * (askPrice - bidPrice) / ((askPrice + bidPrice) / 2)",
+        formula_latex=r"10000 \cdot \frac{\mathrm{ask}-\mathrm{bid}}{(\mathrm{ask}+\mathrm{bid})/2}",
         interpretation="Higher values usually indicate worse liquidity and higher immediate transaction cost.",
         unit="bps",
         higher_is_better=False,
@@ -71,16 +78,45 @@ STARTER_METRICS: list[MetricDefinition] = [
         name="top_of_book_depth",
         label="Top-of-Book Depth",
         category="Liquidity",
-        description="Visible size at the best bid and best ask.",
-        formula="bidSize + askSize",
+        description="Visible size at the best bid and best ask, normalized by lot size.",
+        formula="(bidSize + askSize) / lot_size",
+        formula_latex=r"\frac{\mathrm{bidSize}+\mathrm{askSize}}{\mathrm{lot\_size}}",
         interpretation="Higher values usually indicate more immediately available liquidity.",
-        unit="shares",
+        unit="lots",
         higher_is_better=True,
         default_aggregation="median",
         supports_intraday=True,
         supports_symbol_level=True,
         required_tables=["quotes"],
-        required_columns=["bidSize", "askSize"],
+        required_columns=["bidSize", "askSize", "lot_size"],
+    ),
+    MetricDefinition(
+        name="parkinson_volatility_bps",
+        label="Parkinson Vola",
+        category="Liquidity",
+        description="Parkinson volatility: range-based estimator derived from bid/ask high-low ranges.",
+        formula=(
+            "10000 * sqrt(mean((log(high/low))^2) / (4 * log(2))) "
+            "where high=max(askPrice), low=min(bidPrice)"
+        ),
+        formula_latex=(
+            r"10000 \cdot \sqrt{\frac{\mathbb{E}\left[\left(\ln\!\left(\frac{H}{L}\right)\right)^2\right]}{4\ln 2}}"
+        ),
+        interpretation=(
+            "Higher values indicate wider intrabucket price ranges and potentially "
+            "higher short-horizon market-state volatility."
+        ),
+        unit="bps",
+        higher_is_better=False,
+        default_aggregation="mean",
+        supports_intraday=True,
+        supports_symbol_level=True,
+        required_tables=["quotes"],
+        required_columns=["bidPrice", "askPrice"],
+        caveats=[
+            "Sensitive to stale/crossed quotes and sparse quote updates in a bucket.",
+            "Uses displayed quote range as a proxy for tradable high-low range.",
+        ],
     ),
 ]
 
@@ -106,6 +142,9 @@ for horizon, label in PRIMARY_QUOTE_REVERSION_HORIZONS:
                 "after the trade."
             ),
             formula=("side * 10000 * (primary_mid[t + horizon] - primary_mid[t-]) / primary_mid[t + horizon]"),
+            formula_latex=(
+                r"\mathrm{side}\cdot 10000 \cdot \frac{\mathrm{mid}_{t+h}-\mathrm{mid}_{t^-}}{\mathrm{mid}_{t+h}}"
+            ),
             interpretation=(
                 "Positive values mean the primary mid moved in the aggressive "
                 "trade direction, suggesting greater adverse selection or "

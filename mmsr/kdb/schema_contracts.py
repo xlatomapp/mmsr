@@ -64,6 +64,7 @@ LIQUIDITY_QUOTES_ASSUMPTIONS: tuple[str, ...] = (
 LIQUIDITY_OUTPUT_AGGREGATE_COLUMNS: tuple[str, ...] = (
     "quoted_spread_bps",
     "top_of_book_depth",
+    "parkinson_volatility_bps",
 )
 
 

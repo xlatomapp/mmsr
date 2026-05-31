@@ -119,6 +119,7 @@ def test_query_planner_exposes_liquidity_quote_contracts() -> None:
         "sector",
         "quoted_spread_bps",
         "top_of_book_depth",
+        "parkinson_volatility_bps",
     )
     assert plan.input_contracts[0].table_role == "quotes"
     assert plan.input_contracts[0].required_columns == (

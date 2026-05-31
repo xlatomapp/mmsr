@@ -347,9 +347,19 @@ def _liquidity_rows(role: str) -> list[dict[str, Any]]:
         small_amplitude=1_400,
         value_column="top_of_book_depth",
     )
+    volatility_rows = _metric_rows(
+        role,
+        large_value=22.4,
+        small_value=84.2,
+        large_reference_base=20.8,
+        small_reference_base=61.6,
+        large_amplitude=1.4,
+        small_amplitude=3.6,
+        value_column="parkinson_volatility_bps",
+    )
 
     rows: list[dict[str, Any]] = []
-    for spread_row, depth_row in zip(spread_rows, depth_rows, strict=True):
+    for spread_row, depth_row, volatility_row in zip(spread_rows, depth_rows, volatility_rows, strict=True):
         rows.append(
             {
                 "date": spread_row["date"],
@@ -357,6 +367,7 @@ def _liquidity_rows(role: str) -> list[dict[str, Any]]:
                 "market_cap_bucket": spread_row["market_cap_bucket"],
                 "quoted_spread_bps": spread_row["quoted_spread_bps"],
                 "top_of_book_depth": depth_row["top_of_book_depth"],
+                "parkinson_volatility_bps": volatility_row["parkinson_volatility_bps"],
                 "mock_source": "deterministic_mock_kdb",
             }
         )
