@@ -95,6 +95,51 @@
       border: 1px solid var(--mmsr-border);
       padding: 12px;
     }
+    .report-page--summary {
+      align-items: start;
+      column-gap: 14px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.9fr) minmax(320px, 1fr);
+      row-gap: 10px;
+    }
+    .report-page--summary > * {
+      grid-column: 1 / -1;
+    }
+    .report-page--summary > .report-page__header {
+      grid-column: 1 / -1;
+      margin-bottom: 0;
+    }
+    .report-page--summary > .html-block[data-block-title="Report Meta"] {
+      background: var(--mmsr-panel);
+      border: 1px solid var(--mmsr-border);
+      border-radius: 8px;
+      grid-column: 2 / 3;
+      grid-row: 2 / 4;
+      margin-top: 0;
+      padding: 10px 10px 6px;
+    }
+    .report-page--summary > .html-block[data-block-title="Report Meta"] .component-heading h3 {
+      color: var(--mmsr-heading);
+      font-size: 16px;
+    }
+    .report-page--summary > .html-block[data-block-title="Market KPI Snapshot"] {
+      grid-column: 1 / 2;
+      margin-top: 0;
+      padding-top: 0;
+    }
+    .report-page--summary > .html-block[data-block-title="Executive Market Overview"] {
+      grid-column: 1 / 2;
+      margin-top: 0;
+      padding-top: 0;
+    }
+    .report-page--summary > .metric-grid,
+    .report-page--summary > .plotly-chart,
+    .report-page--summary > .time-series-chart,
+    .report-page--summary > .heatmap,
+    .report-page--summary > .metric-table,
+    .report-page--summary > .commentary-block {
+      grid-column: 1 / -1;
+    }
     .report-page h2 { margin-top: 0; }
     .metric-grid {
       display: grid;
@@ -535,7 +580,7 @@
       background: var(--mmsr-panel);
       border: 1px solid var(--mmsr-border);
       border-radius: 8px;
-      padding: 10px 12px;
+      padding: 11px 12px;
     }
     .kpi-snapshot__label {
       color: var(--mmsr-muted);
@@ -544,7 +589,7 @@
       text-transform: uppercase;
     }
     .kpi-snapshot__value {
-      font-size: 24px;
+      font-size: 30px;
       font-weight: 700;
       line-height: 1.15;
       margin: 0 0 4px;
@@ -752,6 +797,17 @@
       .brand-header__content { grid-template-columns: 1fr; }
       .report-title { font-size: 30px; }
       .report-page__title { font-size: 24px; }
+      .report-page--summary { grid-template-columns: 1fr; }
+      .report-page--summary > .html-block[data-block-title="Report Meta"] {
+        grid-column: 1 / -1;
+        grid-row: auto;
+      }
+      .report-page--summary > .html-block[data-block-title="Market KPI Snapshot"] {
+        grid-column: 1 / -1;
+      }
+      .report-page--summary > .html-block[data-block-title="Executive Market Overview"] {
+        grid-column: 1 / -1;
+      }
       .executive-overview__kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .executive-overview__driver-bar-row { grid-template-columns: 1fr; }
       .report-meta-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }

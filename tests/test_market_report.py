@@ -129,6 +129,12 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert "report-control-strip" in html
     assert "report-export-link" in html
     assert "kpi-snapshot__mini" in html
+    assert ".report-page--summary {" in html
+    assert '> .html-block[data-block-title="Report Meta"]' in html
+    assert "grid-column: 2 / 3;" in html
+    assert "grid-row: 2 / 4;" in html
+    assert "kpi-snapshot__value" in html
+    assert "font-size: 30px;" in html
     assert 'class="report-page__header"' in html
     assert 'class="report-page__index">1<' in html
     assert 'class="report-page__title">Market Summary<' in html
