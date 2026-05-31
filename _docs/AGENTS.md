@@ -2,6 +2,9 @@
 
 This file defines the mandatory project rules for any AI coding agent, custom GPT, or human contributor working on this repository.
 
+Please think before implement and keep the token usage low and under control.
+
+
 ## 1. Project mission
 
 Build `mmsr`, a Python package that generates market microstructure monitoring reports for Japanese market data using level 1 trade and quote data stored in kdb+.
