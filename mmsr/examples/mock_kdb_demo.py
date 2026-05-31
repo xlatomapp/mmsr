@@ -77,6 +77,8 @@ class MockKdbIntegrationDemoOptions:
     max_overview_metrics: int = 5
     include_drilldown_page: bool = True
     max_drilldown_rows: int | None = 12
+    include_automated_insights: bool = False
+    detailed_metric_trends_granularity: str = "daily"
 
     def __post_init__(self) -> None:
         _require_non_empty(self.title, "title")
@@ -96,6 +98,11 @@ class MockKdbIntegrationDemoOptions:
         _require_optional_non_negative(self.max_heatmap_cells, "max_heatmap_cells")
         _require_non_negative(self.max_overview_metrics, "max_overview_metrics")
         _require_optional_non_negative(self.max_drilldown_rows, "max_drilldown_rows")
+        _require_one_of(
+            self.detailed_metric_trends_granularity,
+            "detailed_metric_trends_granularity",
+            ("daily", "weekly", "monthly", "quarterly", "yearly"),
+        )
 
     def to_market_report_options(self) -> MarketReportOptions:
         """Return equivalent canonical report options for the mock-kdb demo."""
@@ -123,6 +130,8 @@ class MockKdbIntegrationDemoOptions:
             max_overview_metrics=self.max_overview_metrics,
             include_drilldown_page=self.include_drilldown_page,
             max_drilldown_rows=self.max_drilldown_rows,
+            include_automated_insights=self.include_automated_insights,
+            detailed_metric_trends_granularity=self.detailed_metric_trends_granularity,
         )
 
 
@@ -458,6 +467,11 @@ def _require_non_negative(value: int, field_name: str) -> None:
 def _require_optional_non_negative(value: int | None, field_name: str) -> None:
     if value is not None and value < 0:
         raise ValueError(f"{field_name} must be non-negative")
+
+
+def _require_one_of(value: str, field_name: str, allowed_values: tuple[str, ...]) -> None:
+    if value.strip().lower() not in allowed_values:
+        raise ValueError(f"{field_name} must be one of: " + ", ".join(allowed_values))
 
 
 __all__ = [

@@ -33,6 +33,12 @@ ACTIVITY_TRADES_REQUIRED_COLUMNS: tuple[str, ...] = (
     "tradePrice",
     "tradeSize",
 )
+VOLATILITY_TRADES_REQUIRED_COLUMNS: tuple[str, ...] = (
+    "date",
+    "time",
+    "sym",
+    "tradePrice",
+)
 ACTIVITY_TRADES_ASSUMPTIONS: tuple[str, ...] = (
     "tradePrice and tradeSize are positive for included trades",
     "optional symbol filtering requires a sym column",
@@ -44,6 +50,7 @@ ACTIVITY_OUTPUT_AGGREGATE_COLUMNS: tuple[str, ...] = (
     "volume",
     "trade_count",
 )
+VOLATILITY_OUTPUT_AGGREGATE_COLUMNS: tuple[str, ...] = ("parkinson_volatility_bps",)
 
 LIQUIDITY_QUOTES_REQUIRED_COLUMNS: tuple[str, ...] = (
     "date",
@@ -64,7 +71,6 @@ LIQUIDITY_QUOTES_ASSUMPTIONS: tuple[str, ...] = (
 LIQUIDITY_OUTPUT_AGGREGATE_COLUMNS: tuple[str, ...] = (
     "quoted_spread_bps",
     "top_of_book_depth",
-    "parkinson_volatility_bps",
 )
 
 
@@ -267,6 +273,26 @@ def activity_input_schema_contract(
     )
 
 
+def volatility_input_schema_contract(
+    *,
+    trades_table: str = "trades",
+    extra_required_columns: Sequence[str] = (),
+) -> QTemplateInputTableSchemaContract:
+    """Return the raw source contract for trade-range ``volatility``."""
+
+    return QTemplateInputTableSchemaContract(
+        template_name="volatility",
+        table_role="trades",
+        table_name=trades_table,
+        required_columns=_dedupe((*VOLATILITY_TRADES_REQUIRED_COLUMNS, *extra_required_columns)),
+        assumptions=(
+            "tradePrice is positive for included trades",
+            "optional symbol filtering requires a sym column",
+            "requested group_by columns may be supplied by the reference-data source",
+        ),
+    )
+
+
 def liquidity_input_schema_contract(
     *,
     quotes_table: str = "quotes",
@@ -357,6 +383,27 @@ def validate_liquidity_output_schema(
     """Validate a ``liquidity`` result object against its schema contract."""
 
     liquidity_output_schema_contract(metric_name, group_by=group_by).validate_result(result)
+
+
+def volatility_output_schema_contract(
+    metric_name: str,
+    *,
+    group_by: Sequence[str] = (),
+) -> QTemplateOutputSchemaContract:
+    """Return the output-schema contract for ``volatility``."""
+
+    if metric_name not in VOLATILITY_OUTPUT_AGGREGATE_COLUMNS:
+        raise OutputSchemaContractError(
+            "volatility schema contracts only apply to volatility metrics: "
+            + ", ".join(VOLATILITY_OUTPUT_AGGREGATE_COLUMNS)
+        )
+
+    return QTemplateOutputSchemaContract(
+        template_name="volatility",
+        metric_value_column=metric_name,
+        base_columns=STARTER_OUTPUT_BASE_COLUMNS,
+        group_columns=tuple(group_by),
+    )
 
 
 def toxicity_reversion_input_schema_contracts(
@@ -489,6 +536,8 @@ def output_schema_contract_for_template(
         return activity_output_schema_contract(metric_name, group_by=group_by)
     if template_name == "liquidity":
         return liquidity_output_schema_contract(metric_name, group_by=group_by)
+    if template_name == "volatility":
+        return volatility_output_schema_contract(metric_name, group_by=group_by)
     if template_name == "toxicity_reversion":
         return toxicity_reversion_output_schema_contract(
             metric_name,

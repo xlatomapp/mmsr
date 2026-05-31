@@ -34,11 +34,12 @@ def test_build_offline_demo_report_assembles_document_with_appendix() -> None:
     drilldown_page = document.pages[4]
     detail_page = document.pages[5]
 
-    assert len(summary_page.html_blocks) == 4
+    assert len(summary_page.html_blocks) == 5
     assert summary_page.html_blocks[0].title == "Report Meta"
     assert summary_page.html_blocks[1].title == "Market Overview"
-    assert summary_page.html_blocks[2].title == "Market KPI Snapshot"
-    assert summary_page.html_blocks[3].title == "Executive Market Overview"
+    assert summary_page.html_blocks[2].title == "Detailed Metric Trends"
+    assert summary_page.html_blocks[3].title == "Market KPI Snapshot"
+    assert summary_page.html_blocks[4].title == "Executive Market Overview"
     assert len(summary_page.metric_cards) == 3
     assert len(summary_page.metric_tables) == 1
     assert len(summary_page.metric_tables[0].rows) == 6

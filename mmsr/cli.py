@@ -139,6 +139,16 @@ def _offline_demo_command(
         "--max-drilldown-rows",
         help="Optional limit for drilldown table rows.",
     ),
+    detailed_trends_granularity: str = typer.Option(
+        "daily",
+        "--detailed-trends-granularity",
+        help="Detailed Metric Trends granularity: daily, weekly, monthly, quarterly, yearly.",
+    ),
+    include_automated_insights: bool = typer.Option(
+        False,
+        "--include-automated-insights",
+        help="Render automated insight summaries in Detailed Metric Trends.",
+    ),
 ) -> int:
     """Render an offline deterministic report without kdb+, PyKX, or an LLM."""
 
@@ -155,6 +165,8 @@ def _offline_demo_command(
         include_intraday_heatmaps=include_intraday_heatmaps,
         no_drilldown_page=no_drilldown_page,
         max_drilldown_rows=max_drilldown_rows,
+        detailed_trends_granularity=detailed_trends_granularity,
+        include_automated_insights=include_automated_insights,
     )
     output_path = render_offline_demo_report_file(
         output,
@@ -245,6 +257,16 @@ def _mock_kdb_demo_command(
         "--max-drilldown-rows",
         help="Optional limit for drilldown table rows.",
     ),
+    detailed_trends_granularity: str = typer.Option(
+        "daily",
+        "--detailed-trends-granularity",
+        help="Detailed Metric Trends granularity: daily, weekly, monthly, quarterly, yearly.",
+    ),
+    include_automated_insights: bool = typer.Option(
+        False,
+        "--include-automated-insights",
+        help="Render automated insight summaries in Detailed Metric Trends.",
+    ),
 ) -> int:
     """Render the deterministic mock-kdb path through KdbMetricRunner."""
 
@@ -261,6 +283,8 @@ def _mock_kdb_demo_command(
         include_intraday_heatmaps=include_intraday_heatmaps,
         no_drilldown_page=no_drilldown_page,
         max_drilldown_rows=max_drilldown_rows,
+        detailed_trends_granularity=detailed_trends_granularity,
+        include_automated_insights=include_automated_insights,
     )
     output_path = render_mock_kdb_demo_report_file(
         output,
@@ -483,6 +507,16 @@ def _render_command(
             "namespace after completion for kdb-side debugging."
         ),
     ),
+    detailed_trends_granularity: str = typer.Option(
+        "daily",
+        "--detailed-trends-granularity",
+        help="Detailed Metric Trends granularity: daily, weekly, monthly, quarterly, yearly.",
+    ),
+    include_automated_insights: bool = typer.Option(
+        False,
+        "--include-automated-insights",
+        help="Render automated insight summaries in Detailed Metric Trends.",
+    ),
 ) -> int:
     """Render a production report by executing configured kdb source functions."""
 
@@ -503,6 +537,8 @@ def _render_command(
         simulated_points_per_symbol_per_day=simulated_points_per_symbol_per_day,
         isolate_calculation_namespace_per_run=isolate_calculation_namespace_per_run,
         keep_isolated_calculation_namespace=keep_isolated_calculation_namespace,
+        detailed_trends_granularity=detailed_trends_granularity,
+        include_automated_insights=include_automated_insights,
     )
     typer.echo(f"Rendered production kdb-backed report: {output_path}")
     return 0
@@ -875,6 +911,8 @@ def render_production_report_file(
     simulated_points_per_symbol_per_day: int = 1200,
     isolate_calculation_namespace_per_run: bool = True,
     keep_isolated_calculation_namespace: bool = False,
+    detailed_trends_granularity: str = "daily",
+    include_automated_insights: bool = False,
 ) -> Path:
     """Render a production report through the production kdb executor.
 
@@ -961,6 +999,8 @@ def render_production_report_file(
             summary_scope_label="production kdb",
             include_metric_definitions_appendix=True,
             include_toxicity_reversion_page=report_config.toxicity.enabled,
+            detailed_metric_trends_granularity=detailed_trends_granularity,
+            include_automated_insights=include_automated_insights,
         ),
     )
     LOGGER.info("Rendering HTML report")
@@ -1110,6 +1150,8 @@ def _offline_demo_options_from_values(
     include_intraday_heatmaps: bool,
     no_drilldown_page: bool,
     max_drilldown_rows: int | None,
+    detailed_trends_granularity: str,
+    include_automated_insights: bool,
 ) -> OfflineDemoReportOptions:
     defaults = OfflineDemoReportOptions()
     return OfflineDemoReportOptions(
@@ -1139,6 +1181,8 @@ def _offline_demo_options_from_values(
             max_drilldown_rows,
             defaults.max_drilldown_rows,
         ),
+        detailed_metric_trends_granularity=detailed_trends_granularity,
+        include_automated_insights=include_automated_insights,
     )
 
 
@@ -1156,6 +1200,8 @@ def _mock_kdb_demo_options_from_values(
     include_intraday_heatmaps: bool,
     no_drilldown_page: bool,
     max_drilldown_rows: int | None,
+    detailed_trends_granularity: str,
+    include_automated_insights: bool,
 ) -> MockKdbIntegrationDemoOptions:
     defaults = MockKdbIntegrationDemoOptions()
     return MockKdbIntegrationDemoOptions(
@@ -1186,6 +1232,8 @@ def _mock_kdb_demo_options_from_values(
             max_drilldown_rows,
             defaults.max_drilldown_rows,
         ),
+        detailed_metric_trends_granularity=detailed_trends_granularity,
+        include_automated_insights=include_automated_insights,
     )
 
 

@@ -12,8 +12,11 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date
 from html import escape
+import json
 from math import isfinite, sqrt
+from statistics import median
 
+from mmsr.analysis.trends import classify_trend_from_daily_values
 from mmsr.metrics.base import MetricDefinition
 from mmsr.metrics.results import MetricComparison, MetricTimeSeries
 from mmsr.report.components import CommentaryBlock, HtmlBlock, PlotlyChart, ReportBranding, ReportDocument, ReportPage
@@ -150,6 +153,16 @@ class MarketReportOptions:
     overview_top_change_diversification: str = "metric"
     max_summary_story_charts: int = 3
     include_summary_kpi_snapshot: bool = True
+    include_detailed_metric_trends_section: bool = True
+    include_automated_insights: bool = False
+    detailed_metric_trends_granularity: str = "daily"
+    detailed_metric_trends_metric_names: tuple[str, ...] = (
+        "turnover",
+        "quoted_spread_bps",
+        "top_of_book_depth",
+        "parkinson_volatility_bps",
+    )
+    detailed_metric_trends_default_metric: str = "turnover"
     summary_kpi_metric_names: tuple[str, ...] = (
         "turnover",
         "quoted_spread_bps",
@@ -281,6 +294,19 @@ class MarketReportOptions:
         if self.overview_top_change_diversification not in {"metric", "family"}:
             raise ValueError("overview_top_change_diversification must be one of: metric, family")
         _require_non_negative(self.max_summary_story_charts, "max_summary_story_charts")
+        _require_metric_name_sequence(
+            self.detailed_metric_trends_metric_names,
+            "detailed_metric_trends_metric_names",
+        )
+        _require_non_empty(
+            self.detailed_metric_trends_default_metric,
+            "detailed_metric_trends_default_metric",
+        )
+        _require_one_of(
+            self.detailed_metric_trends_granularity,
+            "detailed_metric_trends_granularity",
+            ("daily", "weekly", "monthly", "quarterly", "yearly"),
+        )
         _require_metric_name_sequence(self.summary_kpi_metric_names, "summary_kpi_metric_names")
         _require_non_empty(self.primary_intraday_signal_metric_name, "primary_intraday_signal_metric_name")
         _require_non_empty(
@@ -480,6 +506,11 @@ def _build_summary_page(
         summary_metric_card_comparisons,
         definitions,
     )
+    detailed_trends_block = _build_detailed_metric_trends_block(
+        report_input,
+        definitions,
+        options=options,
+    )
     comparison_table = build_comparison_metric_table(
         options.comparison_table_title,
         summary_comparisons,
@@ -515,6 +546,7 @@ def _build_summary_page(
         html_blocks=(
             ([meta_strip_block] if meta_strip_block is not None else [])
             + ([market_overview_block] if market_overview_block is not None else [])
+            + ([detailed_trends_block] if detailed_trends_block is not None else [])
             + ([kpi_snapshot_block] if kpi_snapshot_block is not None else [])
             + [executive_overview]
         ),
@@ -770,35 +802,26 @@ def _build_market_overview_cards_block(
                 continue
         if card_label == "Volatility" and definition is None:
             definition = _parkinson_volatility_definition_fallback()
-        if card_label == "Volatility" and comparison is None:
-            proxy = comparisons_by_metric.get("quoted_spread_bps")
-            if proxy is not None and proxy.value is not None:
-                comparison = MetricComparison(
-                    metric_name="parkinson_volatility_bps",
-                    value=float(proxy.value) * 2.0,
-                    reference_value=(
-                        None if proxy.reference_value is None else float(proxy.reference_value) * 2.0
-                    ),
-                    change_abs=(
-                        None if proxy.change_abs is None else float(proxy.change_abs) * 2.0
-                    ),
-                    change_pct=proxy.change_pct,
-                    z_score=proxy.z_score,
-                    percentile=proxy.percentile,
-                    status=proxy.status,
-                    group=proxy.group,
-                    date=proxy.date,
-                    time_bucket=proxy.time_bucket,
-                    metadata=dict(proxy.metadata),
-                    reference_sample_size=proxy.reference_sample_size,
-                    comparison_confidence=proxy.comparison_confidence,
-                    comparison_method=proxy.comparison_method,
-                    normal_score_percentile=proxy.normal_score_percentile,
-                    normal_score_adverse_tail_probability=proxy.normal_score_adverse_tail_probability,
-                    empirical_percentile=proxy.empirical_percentile,
-                    empirical_adverse_tail_probability=proxy.empirical_adverse_tail_probability,
-                    range_position_score=proxy.range_position_score,
+        if card_label in {"Quoted Spread", "Top of book Depth"} and metric_name is not None:
+            period_mean_override = _period_mean_value_comparison(report_input, metric_name)
+            if period_mean_override is not None:
+                value_override, change_pct_override = period_mean_override
+                unit = "" if definition is None else definition.unit
+                value_text = _format_overview_card_value(value_override, unit)
+                delta_text = _format_overview_delta_text(change_pct_override)
+                delta_class = _delta_direction_class(change_pct_override)
+                cards_html.append(
+                    '    <article class="market-overview-card">'
+                    '<div class="market-overview-card__heading">'
+                    f'<p class="market-overview-card__label">{escape(card_label)}</p>'
+                    f'{_overview_metric_help_html(card_label, definition, aggregation_text)}'
+                    "</div>"
+                    f'<p class="market-overview-card__value">{escape(value_text)}</p>'
+                    f'<p class="market-overview-card__delta market-overview-card__delta--{escape(delta_class)}">{escape(delta_text)}</p>'
+                    f'{_overview_spark_bar_html(report_input, card_label, metric_name)}'
+                    "</article>"
                 )
+                continue
         if comparison is None or definition is None:
             value_text = "n/a"
             delta_text = "no comparison"
@@ -823,6 +846,408 @@ def _build_market_overview_cards_block(
         title="Market Overview",
         help_text="Top-level market cards for traded value, spread, top-of-book depth, and volatility.",
         body_html='  <section class="market-overview-grid">\n' + "\n".join(cards_html) + "\n  </section>",
+    )
+
+
+def _period_mean_value_comparison(report_input: MarketReportInput, metric_name: str) -> tuple[float, float | None] | None:
+    current_series = next((series for series in report_input.current_series if series.metric_name == metric_name), None)
+    reference_series = next((series for series in report_input.reference_series if series.metric_name == metric_name), None)
+    if current_series is None:
+        return None
+    current_daily = _metric_daily_rollups(metric_name, current_series)
+    if not current_daily:
+        return None
+    current_mean = sum(value for _, value in current_daily) / len(current_daily)
+    if reference_series is None:
+        return current_mean, None
+    reference_daily = _metric_daily_rollups(metric_name, reference_series)
+    if not reference_daily:
+        return current_mean, None
+    reference_mean = sum(value for _, value in reference_daily) / len(reference_daily)
+    if reference_mean == 0:
+        return current_mean, None
+    return current_mean, (current_mean - reference_mean) / reference_mean
+
+
+def _build_detailed_metric_trends_block(
+    report_input: MarketReportInput,
+    definitions: Mapping[str, MetricDefinition],
+    *,
+    options: MarketReportOptions,
+) -> HtmlBlock | None:
+    if not options.include_detailed_metric_trends_section:
+        return None
+    current_by_metric = {series.metric_name: series for series in report_input.current_series}
+    reference_by_metric = {series.metric_name: series for series in report_input.reference_series}
+    available_metric_names = set(current_by_metric) | set(reference_by_metric)
+    if not available_metric_names:
+        return None
+
+    volatility_name = _pick_volatility_metric_name(
+        {comparison.metric_name: comparison for comparison in report_input.comparisons}
+    )
+    metric_names: list[str] = []
+    configured_metric_names = list(options.detailed_metric_trends_metric_names)
+    for configured in configured_metric_names:
+        resolved = configured
+        if configured == "parkinson_volatility_bps" and configured not in available_metric_names and volatility_name is not None:
+            resolved = volatility_name
+        if resolved in available_metric_names and resolved not in metric_names:
+            metric_names.append(resolved)
+
+    if not metric_names:
+        return None
+
+    payload_metrics: dict[str, dict[str, object]] = {}
+    for metric_name in metric_names:
+        current_series = current_by_metric.get(metric_name)
+        reference_series = reference_by_metric.get(metric_name)
+        current_daily_rollups = [] if current_series is None else _metric_daily_rollups(metric_name, current_series)
+        reference_daily_rollups = [] if reference_series is None else _metric_daily_rollups(metric_name, reference_series)
+        current_points = _aggregate_metric_trend_series(
+            current_series,
+            metric_name=metric_name,
+            granularity=options.detailed_metric_trends_granularity,
+        )
+        reference_points = _aggregate_metric_trend_series(
+            reference_series,
+            metric_name=metric_name,
+            granularity=options.detailed_metric_trends_granularity,
+        )
+        if not current_points and not reference_points:
+            continue
+
+        labels = [label for _, label, _ in reference_points] + [label for _, label, _ in current_points]
+        values = [value for _, _, value in reference_points] + [value for _, _, value in current_points]
+        period_flags = (["benchmark"] * len(reference_points)) + (["target"] * len(current_points))
+        benchmark_mean = None if not reference_points else (sum(value for _, _, value in reference_points) / len(reference_points))
+        target_mean = None if not current_points else (sum(value for _, _, value in current_points) / len(current_points))
+        definition = definitions.get(metric_name)
+        metric_help = "No definition available."
+        metric_description = "No definition available."
+        metric_unit = ""
+        metric_formula_latex = ""
+        if definition is not None:
+            unit_text = definition.unit.strip() or "n/a"
+            metric_help = f"{definition.description.strip()} Unit: {unit_text}."
+            metric_description = definition.description.strip()
+            metric_unit = unit_text
+            metric_formula_latex = "" if definition.formula_latex is None else definition.formula_latex
+        payload_metrics[metric_name] = {
+            "metric_label": metric_name if definition is None else definition.label,
+            "unit": "" if definition is None else definition.unit,
+            "labels": labels,
+            "values": values,
+            "period_flags": period_flags,
+            "benchmark_mean": benchmark_mean,
+            "target_mean": target_mean,
+            "help_text": metric_help,
+            "description": metric_description,
+            "unit_text": metric_unit,
+            "formula_latex": metric_formula_latex,
+            "insights": _metric_trend_comments(metric_name, current_daily_rollups, reference_daily_rollups),
+        }
+
+    if not payload_metrics:
+        return None
+
+    default_metric = options.detailed_metric_trends_default_metric
+    if (
+        default_metric == "parkinson_volatility_bps"
+        and default_metric not in payload_metrics
+        and volatility_name is not None
+        and volatility_name in payload_metrics
+    ):
+        default_metric = volatility_name
+    if default_metric not in payload_metrics:
+        default_metric = next(iter(payload_metrics))
+    ordered_metric_keys = [
+        metric_name
+        for metric_name in ("turnover", "quoted_spread_bps", "top_of_book_depth", "parkinson_volatility_bps")
+        if metric_name in payload_metrics
+    ] + [metric_name for metric_name in payload_metrics if metric_name not in {"turnover", "quoted_spread_bps", "top_of_book_depth", "parkinson_volatility_bps"}]
+    select_options = "".join(
+        (
+            f'<option value="{escape(metric_name)}"'
+            + (' selected' if metric_name == default_metric else "")
+            + f'>{escape(str(payload["metric_label"]))}</option>'
+        )
+        for metric_name, payload in ((metric_name, payload_metrics[metric_name]) for metric_name in ordered_metric_keys)
+    )
+    payload = {
+        "granularity": options.detailed_metric_trends_granularity,
+        "default_metric": default_metric,
+        "metrics": payload_metrics,
+        "ordered_metrics": ordered_metric_keys,
+        "section_help": (
+            "Trend chart across benchmark then target period. "
+            "Rollups: traded value sum; quoted spread median; top-of-book depth median; "
+            "volatility RMS over daily volatility values."
+        ),
+    }
+    body_parts = [
+        '<section class="detailed-trends" data-detailed-trends>',
+        '<div class="detailed-trends__header">',
+        '<h3 class="detailed-trends__title">Detailed Metric Trends</h3>',
+        '<details class="metric-help detailed-trends__help">',
+        '<summary class="metric-help__summary metric-info" aria-label="Section help: Detailed Metric Trends">',
+        '<span class="metric-help__icon" aria-hidden="true">i</span>',
+        "</summary>",
+        '<div class="metric-help__body" data-detailed-trends-section-help>',
+        '<strong class="metric-help__title">Section help: Detailed Metric Trends</strong>',
+        '<p data-detailed-trends-section-help-text></p>',
+        "</div>",
+        "</details>",
+        '<button type="button" class="detailed-trends__toggle" data-detailed-trends-toggle>Focused</button>',
+        "</div>",
+        '<div class="detailed-trends__grid" data-detailed-trends-grid></div>',
+    ]
+    if options.include_automated_insights:
+        body_parts.extend(
+            [
+                '<section class="automated-insight automated-insight--inline" data-detailed-trends-insights-grid>',
+                '<div class="automated-insight__icon" aria-hidden="true">i</div>',
+                '<div class="automated-insight__content">',
+                '<h4 class="automated-insight__title">Automated Insight Summary</h4>',
+                '<div class="automated-insight__grid" data-detailed-trends-insights-grid-content></div>',
+                "</div>",
+                "</section>",
+            ]
+        )
+    body_parts.extend(
+        [
+            '<section class="detailed-trends__detail" data-detailed-trends-detail hidden>',
+            '<div class="detailed-trends__controls">',
+            '<label class="detailed-trends__label" for="detailed-trends-metric-select">Metric</label>',
+            f'<select id="detailed-trends-metric-select" class="detailed-trends__select" data-detailed-trends-select>{select_options}</select>',
+            "</div>",
+            '<div class="detailed-trends__chart" role="img" aria-label="Detailed metric trend chart">',
+            '<div class="plotly-chart__figure" data-detailed-trends-chart></div>',
+            "</div>",
+        ]
+    )
+    if options.include_automated_insights:
+        body_parts.extend(
+            [
+                '<section class="automated-insight automated-insight--inline" data-detailed-trends-insight-focus hidden>',
+                '<div class="automated-insight__icon" aria-hidden="true">i</div>',
+                '<div class="automated-insight__content">',
+                '<h4 class="automated-insight__title">Automated Insight Summary</h4>',
+                '<div data-detailed-trends-insight-focus-content></div>',
+                "</div>",
+                "</section>",
+            ]
+        )
+    body_parts.extend(
+        [
+            "</section>",
+            f'<script type="application/json" data-detailed-trends-spec>{_safe_json_script(payload)}</script>',
+            "</section>",
+        ]
+    )
+    body_html = "".join(body_parts)
+    return HtmlBlock(
+        title="Detailed Metric Trends",
+        help_text=(
+            "Continuous benchmark-to-target timeline for the selected metric at configured "
+            f"{options.detailed_metric_trends_granularity} granularity. Rollups: traded value sum; "
+            "quoted spread median; top-of-book depth median; volatility RMS of daily volatility values."
+        ),
+        body_html=body_html,
+    )
+
+
+def _build_automated_insight_summary_block(
+    report_input: MarketReportInput,
+    definitions: Mapping[str, MetricDefinition],
+    *,
+    options: MarketReportOptions,
+) -> HtmlBlock | None:
+    metric_names = (
+        "turnover",
+        "quoted_spread_bps",
+        "top_of_book_depth",
+        "parkinson_volatility_bps",
+    )
+    current_by_metric = {series.metric_name: series for series in report_input.current_series}
+    reference_by_metric = {series.metric_name: series for series in report_input.reference_series}
+    entries: list[str] = []
+    for metric_name in metric_names:
+        series = current_by_metric.get(metric_name)
+        if series is None:
+            continue
+        definition = definitions.get(metric_name)
+        metric_label = metric_name if definition is None else definition.label
+        current_daily = _metric_daily_rollups(metric_name, series)
+        reference_series = reference_by_metric.get(metric_name)
+        reference_daily = [] if reference_series is None else _metric_daily_rollups(metric_name, reference_series)
+        comments = _metric_trend_comments(metric_name, current_daily, reference_daily)
+        if not comments:
+            continue
+        comment_html = " ".join(f"{escape(comment)}" for comment in comments[:2])
+        entries.append(
+            '<article class="automated-insight__item">'
+            f'<h4 class="automated-insight__metric">{escape(metric_label)}</h4>'
+            f'<p class="automated-insight__comment">{comment_html}</p>'
+            "</article>"
+        )
+    if not entries:
+        return None
+    body_html = (
+        '<section class="automated-insight">'
+        '<div class="automated-insight__icon" aria-hidden="true">i</div>'
+        '<div class="automated-insight__content">'
+        '<h4 class="automated-insight__title">Automated Insight Summary</h4>'
+        '<div class="automated-insight__grid">'
+        + "".join(entries)
+        + "</div></div></section>"
+    )
+    return HtmlBlock(
+        title="Automated Insight Summary",
+        help_text="Deterministic trend commentary generated from benchmark and target series.",
+        body_html=body_html,
+    )
+
+
+def _metric_daily_rollups(metric_name: str, series: MetricTimeSeries) -> list[tuple[date, float]]:
+    per_date: dict[date, list[float]] = {}
+    for observation in series.observations:
+        if observation.value is None:
+            continue
+        per_date.setdefault(observation.date, []).append(float(observation.value))
+    rolled: list[tuple[date, float]] = []
+    for obs_date, values in per_date.items():
+        rollup = _metric_rollup(metric_name, values, is_daily=True)
+        if rollup is None or not isfinite(rollup):
+            continue
+        rolled.append((obs_date, rollup))
+    rolled.sort(key=lambda item: item[0])
+    return rolled
+
+
+def _metric_trend_comments(
+    metric_name: str,
+    current_daily: list[tuple[date, float]],
+    reference_daily: list[tuple[date, float]],
+) -> list[str]:
+    if not current_daily:
+        return []
+    current_dates = [obs_date for obs_date, _ in current_daily]
+    current_values = [value for _, value in current_daily]
+    comments: list[str] = []
+    trend = classify_trend_from_daily_values(current_dates, current_values)
+    comments.append(trend.summary_text)
+
+    if reference_daily:
+        current_mean = sum(current_values) / len(current_values)
+        reference_values = [value for _, value in reference_daily]
+        reference_mean = sum(reference_values) / len(reference_values)
+        if reference_mean != 0:
+            vs_pct = (current_mean - reference_mean) / abs(reference_mean)
+            metric_direction = _metric_interpretation_direction(metric_name, vs_pct)
+            comments.append(
+                f"Target-period mean is {abs(vs_pct):.1%} {metric_direction} benchmark mean."
+            )
+        else:
+            comments.append("Benchmark mean is zero, so relative mean comparison is not computed.")
+    return comments
+
+
+def _metric_interpretation_direction(metric_name: str, pct: float) -> str:
+    if metric_name in {"quoted_spread_bps", "parkinson_volatility_bps"}:
+        if pct >= 0:
+            return "above"
+        return "below"
+    if pct >= 0:
+        return "above"
+    return "below"
+
+
+def _aggregate_metric_trend_series(
+    series: MetricTimeSeries | None,
+    *,
+    metric_name: str,
+    granularity: str,
+) -> list[tuple[tuple[int, ...], str, float]]:
+    if series is None:
+        return []
+    daily_values: dict[date, list[float]] = {}
+    for observation in series.observations:
+        if observation.value is None:
+            continue
+        daily_values.setdefault(observation.date, []).append(float(observation.value))
+    if not daily_values:
+        return []
+
+    by_bucket: dict[tuple[int, ...], list[float]] = {}
+    for obs_date, values in daily_values.items():
+        daily_rollup = _metric_rollup(metric_name, values, is_daily=True)
+        if daily_rollup is None:
+            continue
+        bucket_key = _time_bucket_key(obs_date, granularity)
+        by_bucket.setdefault(bucket_key, []).append(daily_rollup)
+
+    result: list[tuple[tuple[int, ...], str, float]] = []
+    for bucket_key, values in by_bucket.items():
+        rollup = _metric_rollup(metric_name, values, is_daily=False)
+        if rollup is None:
+            continue
+        result.append((bucket_key, _time_bucket_label(bucket_key, granularity), rollup))
+    result.sort(key=lambda item: item[0])
+    return result
+
+
+def _metric_rollup(metric_name: str, values: list[float], *, is_daily: bool) -> float | None:
+    if not values:
+        return None
+    if metric_name == "turnover":
+        return sum(values)
+    if metric_name in {"quoted_spread_bps", "top_of_book_depth"}:
+        return float(median(values))
+    if "volatility" in metric_name:
+        if is_daily:
+            return sum(values) / len(values)
+        return _rms_value(values)
+    return sum(values) / len(values)
+
+
+def _time_bucket_key(obs_date: date, granularity: str) -> tuple[int, ...]:
+    if granularity == "daily":
+        return (obs_date.year, obs_date.month, obs_date.day)
+    if granularity == "weekly":
+        iso = obs_date.isocalendar()
+        return (iso.year, iso.week)
+    if granularity == "monthly":
+        return (obs_date.year, obs_date.month)
+    if granularity == "quarterly":
+        quarter = ((obs_date.month - 1) // 3) + 1
+        return (obs_date.year, quarter)
+    return (obs_date.year,)
+
+
+def _time_bucket_label(bucket_key: tuple[int, ...], granularity: str) -> str:
+    if granularity == "daily":
+        year, month, day = bucket_key
+        return f"{year:04d}-{month:02d}-{day:02d}"
+    if granularity == "weekly":
+        year, week = bucket_key
+        return f"{year}-W{week:02d}"
+    if granularity == "monthly":
+        year, month = bucket_key
+        return f"{year}-{month:02d}"
+    if granularity == "quarterly":
+        year, quarter = bucket_key
+        return f"{year}-Q{quarter}"
+    year = bucket_key[0]
+    return str(year)
+
+
+def _safe_json_script(value: object) -> str:
+    return (
+        json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+        .replace("</", "<\\/")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
     )
 
 
@@ -1747,6 +2172,12 @@ def _require_metric_name_sequence(values: tuple[str, ...], field_name: str) -> N
     for value in values:
         if not value.strip():
             raise ValueError(f"{field_name} must not contain empty values")
+
+
+def _require_one_of(value: str, field_name: str, allowed_values: tuple[str, ...]) -> None:
+    normalized = value.strip().lower()
+    if normalized not in allowed_values:
+        raise ValueError(f"{field_name} must be one of: " + ", ".join(allowed_values))
 
 
 __all__ = [

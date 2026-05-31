@@ -79,7 +79,7 @@ STARTER_METRICS: list[MetricDefinition] = [
         label="Top-of-Book Depth",
         category="Liquidity",
         description="Visible size at the best bid and best ask, normalized by lot size.",
-        formula="(bidSize + askSize) / lot_size",
+        formula="(bidSize + askSize) / lotSize",
         formula_latex=r"\frac{\mathrm{bidSize}+\mathrm{askSize}}{\mathrm{lot\_size}}",
         interpretation="Higher values usually indicate more immediately available liquidity.",
         unit="lots",
@@ -88,19 +88,19 @@ STARTER_METRICS: list[MetricDefinition] = [
         supports_intraday=True,
         supports_symbol_level=True,
         required_tables=["quotes"],
-        required_columns=["bidSize", "askSize", "lot_size"],
+        required_columns=["bidSize", "askSize", "lotSize"],
     ),
     MetricDefinition(
         name="parkinson_volatility_bps",
         label="Parkinson Vola",
         category="Liquidity",
-        description="Parkinson volatility: range-based estimator derived from bid/ask high-low ranges.",
+        description="Parkinson volatility: range-based estimator derived from trade high-low ranges.",
         formula=(
-            "10000 * sqrt(mean((log(high/low))^2) / (4 * log(2))) "
-            "where high=max(askPrice), low=min(bidPrice)"
+            "10000 * sqrt((1 / (4 * log(2))) * (log(high/low))^2) "
+            "where high=max(tradePrice), low=min(tradePrice)"
         ),
         formula_latex=(
-            r"10000 \cdot \sqrt{\frac{\mathbb{E}\left[\left(\ln\!\left(\frac{H}{L}\right)\right)^2\right]}{4\ln 2}}"
+            r"10000 \cdot \sqrt{\frac{1}{4\ln 2}\left(\ln\!\left(\frac{H}{L}\right)\right)^2}"
         ),
         interpretation=(
             "Higher values indicate wider intrabucket price ranges and potentially "
@@ -111,11 +111,11 @@ STARTER_METRICS: list[MetricDefinition] = [
         default_aggregation="mean",
         supports_intraday=True,
         supports_symbol_level=True,
-        required_tables=["quotes"],
-        required_columns=["bidPrice", "askPrice"],
+        required_tables=["trades"],
+        required_columns=["tradePrice"],
         caveats=[
-            "Sensitive to stale/crossed quotes and sparse quote updates in a bucket.",
-            "Uses displayed quote range as a proxy for tradable high-low range.",
+            "Sensitive to sparse trade updates in a bucket.",
+            "Trade-based range can differ from executable quote-based range in thin names.",
         ],
     ),
 ]

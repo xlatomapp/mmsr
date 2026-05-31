@@ -50,6 +50,7 @@ class KdbMetricRunner:
         self.query_planner = KdbMetricQueryPlanner() if query_planner is None else query_planner
         self.cache_hooks = MetricDayCacheHooks() if cache_hooks is None else cache_hooks
         self._installed_calculation_namespaces: set[str] = set()
+        self._installed_report_config_by_namespace: dict[str, str] = {}
         self.isolate_calculation_namespace_per_run = isolate_calculation_namespace_per_run
         self.keep_isolated_calculation_namespace = keep_isolated_calculation_namespace
 
@@ -134,7 +135,10 @@ class KdbMetricRunner:
         )
         self.ensure_calculation_functions(plan.metric_queries[0].calculation_namespace)
         calculation_namespace = plan.metric_queries[0].calculation_namespace
-        self.client.execute(f"{calculation_namespace}.reportConfig:{plan.report_config_expression}")
+        current_report_config = self._installed_report_config_by_namespace.get(calculation_namespace)
+        if current_report_config != plan.report_config_expression:
+            self.client.execute(f"{calculation_namespace}.reportConfig:{plan.report_config_expression}")
+            self._installed_report_config_by_namespace[calculation_namespace] = plan.report_config_expression
         try:
             raw_result = self.client.execute(plan.query)
         finally:
@@ -202,6 +206,7 @@ class KdbMetricRunner:
         try:
             self.client.execute(f"delete {child} from `{parent}")
             self._installed_calculation_namespaces.discard(namespace)
+            self._installed_report_config_by_namespace.pop(namespace, None)
         except Exception:
             LOGGER.exception("Failed to cleanup ephemeral calculation namespace %s", namespace)
 

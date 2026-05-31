@@ -65,7 +65,7 @@
         from facts
     };
 
-{{ calculation_namespace }}.calcActivity:{[rawTrades;refs;params]
+{{ calculation_namespace }}.calcActivity:{[runDate;rawTrades;refs;params]
     trades: rawTrades lj `date`sym xkey refs;
     result: select
         turnover: sum tradePrice * tradeSize,
@@ -76,33 +76,47 @@
        sym,
        topixCapGrp
     from trades
-    where date within (params`start_date; params`end_date),
+    where date = runDate,
           tradePrice > 0,
           tradeSize > 0,
           not null sym;
     0!result
     };
 
-{{ calculation_namespace }}.calcLiquidity:{[rawQuotes;refs;params]
+{{ calculation_namespace }}.calcLiquidity:{[runDate;rawQuotes;refs;params]
     quotes: rawQuotes lj refs;
     result: select
         quoted_spread_bps: med 10000 * (askPrice - bidPrice) % ((askPrice + bidPrice) % 2),
-        top_of_book_depth: med (bidSize + askSize) % lot_size,
-        parkinson_volatility_bps: 10000 * sqrt (avg ((log (askPrice % bidPrice)) xexp 2) % (4 * log 2))
+        top_of_book_depth: med (bidSize + askSize) % lotSize
     by date,
        time_bucket: {{ calculation_namespace }}.timeBucketContinuous[time; params`bucket],
        sym,
        topixCapGrp
     from quotes
-    where date within (params`start_date; params`end_date),
+    where date = runDate,
           bidPrice > 0,
           askPrice > bidPrice,
-          lot_size > 0,
+          lotSize > 0,
           not null sym;
     0!result
     };
 
-{{ calculation_namespace }}.prepareToxicityReversion:{[rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;params]
+{{ calculation_namespace }}.calcParkinsonVolatility:{[runDate;rawTrades;refs;params]
+    trades: rawTrades lj refs;
+    result: select
+        parkinson_volatility_bps: 10000 * sqrt ((log ((max tradePrice) % (min tradePrice))) xexp 2) % (4 * log 2)
+    by date,
+       time_bucket: {{ calculation_namespace }}.timeBucketContinuous[time; params`bucket],
+       sym,
+       topixCapGrp
+    from trades
+    where date = runDate,
+          tradePrice > 0,
+          not null sym;
+    0!result
+    };
+
+{{ calculation_namespace }}.prepareToxicityReversion:{[runDate;rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;params]
     / Source functions in the day runner are expected to return one runDate.
     / The date predicates below are kept as defensive guards for direct
     / multi-day template calls, but production day execution should not depend on
@@ -123,7 +137,7 @@
             tradeSize,
             notional: tradePrice * tradeSize
         from rawPtsTrades
-        where date within (params`start_date; params`end_date),
+        where date = runDate,
               ((0=count params`venues) | venue in params`venues),
               ((not params`exclude_auction) | auction = 0),
               tradeSize > 0,
@@ -139,7 +153,7 @@
             venue,
             ptsMid: (bidPrice + askPrice) % 2
         from rawPtsQuotes
-        where date within (params`start_date; params`end_date),
+        where date = runDate,
               ((0=count params`venues) | venue in params`venues),
               bidPrice > 0,
               askPrice > bidPrice,
@@ -155,7 +169,7 @@
             askPrice,
             primaryMid: (bidPrice + askPrice) % 2
         from rawPrimaryQuotes
-        where date within (params`start_date; params`end_date),
+        where date = runDate,
               venue = params`primary_venue,
               bidPrice > 0,
               askPrice > bidPrice,
@@ -238,8 +252,9 @@
     0!result
     };
 
-{{ calculation_namespace }}.calcToxicityReversion:{[rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;params]
+{{ calculation_namespace }}.calcToxicityReversion:{[runDate;rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;params]
     prepared: {{ calculation_namespace }}.prepareToxicityReversion[
+        runDate;
         rawPtsTradeRows;
         rawPtsQuoteRows;
         rawPrimaryQuoteRows;
@@ -251,10 +266,11 @@
         params]
     };
 
-{{ calculation_namespace }}.calcToxicityReversionFamily:{[rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;paramsByMetric;metricNames]
+{{ calculation_namespace }}.calcToxicityReversionFamily:{[runDate;rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;paramsByMetric;metricNames]
     if[0=count metricNames; :()!()];
     firstParams: paramsByMetric first metricNames;
     prepared: {{ calculation_namespace }}.prepareToxicityReversion[
+        runDate;
         rawPtsTradeRows;
         rawPtsQuoteRows;
         rawPrimaryQuoteRows;
@@ -307,22 +323,26 @@
     `long$((endTs - startTs) % 0D00:00:00.001)
     };
 
-{{ calculation_namespace }}.runMetric:{[metricName;rawSources;metricParams]
+{{ calculation_namespace }}.runMetric:{[runDate;metricName;rawSources;metricParams]
     if[metricName in `turnover`volume`trade_count;
-        :{{ calculation_namespace }}.calcActivity[rawSources`trades;rawSources`refs;metricParams]
+        :{{ calculation_namespace }}.calcActivity[runDate;rawSources`trades;rawSources`refs;metricParams]
         ];
     if[metricName in `quoted_spread_bps`top_of_book_depth;
-        :{{ calculation_namespace }}.calcLiquidity[rawSources`quotes;rawSources`refs;metricParams]
+        :{{ calculation_namespace }}.calcLiquidity[runDate;rawSources`quotes;rawSources`refs;metricParams]
+        ];
+    if[metricName = `parkinson_volatility_bps;
+        :{{ calculation_namespace }}.calcParkinsonVolatility[runDate;rawSources`trades;rawSources`refs;metricParams]
         ];
     if[{{ calculation_namespace }}.isToxicityReversionMetric[metricName];
         :{{ calculation_namespace }}.calcToxicityReversion[
+            runDate;
             rawSources`pts_trades;
             rawSources`pts_quotes;
             rawSources`primary_quotes;
             rawSources`refs;
             metricParams]
         ];
-    '(`unsupportedMetric;metricName)
+    '": "sv string (`unsupportedMetric;metricName)
     };
 
 {{ calculation_namespace }}.runReportDay:{[runDate;reportConfig]
@@ -354,14 +374,15 @@
             resultDict: ()!();
             regularStart: .z.p;
             if[0<count regularMetrics;
-                resultDict,: regularMetrics!({[rawSources;metricParams;metricName]
-                    {{ calculation_namespace }}.runMetric[metricName;rawSources;metricParams[metricName]]
-                    }[rawSources;metricParams] each regularMetrics)
+                resultDict,: regularMetrics!({[runDate;rawSources;metricParams;metricName]
+                    {{ calculation_namespace }}.runMetric[runDate;metricName;rawSources;metricParams[metricName]]
+                    }[runDate;rawSources;metricParams] each regularMetrics)
                 ];
             regularEnd: .z.p;
             reversionStart: regularEnd;
             if[0<count reversionMetrics;
                 resultDict,: {{ calculation_namespace }}.calcToxicityReversionFamily[
+                    runDate;
                     rawSources`pts_trades;
                     rawSources`pts_quotes;
                     rawSources`primary_quotes;

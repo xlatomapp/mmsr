@@ -22,12 +22,14 @@ from mmsr.kdb.schema_contracts import (
     output_schema_contract_for_template,
     reference_data_input_schema_contract,
     toxicity_reversion_input_schema_contracts,
+    volatility_input_schema_contract,
 )
 from mmsr.metrics.base import MetricDefinition
 from mmsr.periods.models import IntradayBucketSpec, ReportPeriod
 
 _ACTIVITY_METRICS = frozenset({"turnover", "volume", "trade_count"})
-_LIQUIDITY_METRICS = frozenset({"quoted_spread_bps", "top_of_book_depth", "parkinson_volatility_bps"})
+_LIQUIDITY_METRICS = frozenset({"quoted_spread_bps", "top_of_book_depth"})
+_VOLATILITY_METRICS = frozenset({"parkinson_volatility_bps"})
 _REVERSION_METRIC_PATTERN = re.compile(r"^primary_quote_reversion_(?P<horizon>10ms|100ms|500ms|1s|5s|10s)_bps$")
 _REVERSION_GROUP_COLUMNS = ("venue", "horizon")
 _REVERSION_HORIZON_SORT_ORDER = {
@@ -46,11 +48,13 @@ _REVERSION_METRICS = frozenset(
 _METRIC_TEMPLATE_MAP = {
     **{metric_name: "activity" for metric_name in _ACTIVITY_METRICS},
     **{metric_name: "liquidity" for metric_name in _LIQUIDITY_METRICS},
+    **{metric_name: "volatility" for metric_name in _VOLATILITY_METRICS},
     **{metric_name: _REVERSION_TEMPLATE for metric_name in _REVERSION_METRICS},
 }
 _METRIC_TABLE_PARAMETER_MAP = {
     "activity": (("trades", "trades_table"), ("reference_data", "ref_table")),
     "liquidity": (("quotes", "quotes_table"), ("reference_data", "ref_table")),
+    "volatility": (("trades", "trades_table"), ("reference_data", "ref_table")),
     _REVERSION_TEMPLATE: (
         ("pts_trades", "pts_trades_table"),
         ("pts_quotes", "pts_quotes_table"),
@@ -204,7 +208,10 @@ class KdbMetricQueryPlanner:
             ("reference_data", *source_roles),
             clean_requests[0].source_functions,
         )
-        metric_params = _metric_parameter_dictionary(representative_requests)
+        metric_params = _metric_parameter_dictionary(
+            representative_requests,
+            include_date_bounds=False,
+        )
         universe_filters = _universe_filter_dictionary(clean_requests[0].parameters)
 
         report_config = _q_dictionary_expression(
@@ -227,9 +234,9 @@ class KdbMetricQueryPlanner:
             "report_config",
         )
 
-        query = f"""{calculation_namespace}.runReportDay[
-    {_q_date(clean_requests[0].period.start_date)};
-    {calculation_namespace}.reportConfig]"""
+        query = f"{calculation_namespace}.runReportDay["
+        query += f"{_q_date(clean_requests[0].period.start_date)};"
+        query += f"{calculation_namespace}.reportConfig]"
 
         return RenderedMetricDayQuery(
             query=query,
@@ -350,6 +357,23 @@ def _input_contracts_for_template(
                 template_name=template_name,
             ),
         )
+    if template_name == "volatility":
+        raw_extra = _raw_source_extra_columns(parameters)
+        ref_extra = _reference_extra_columns(query_group_by)
+        return (
+            volatility_input_schema_contract(
+                trades_table=_source_label("trades", source_functions),
+                extra_required_columns=raw_extra,
+            ),
+            reference_data_input_schema_contract(
+                reference_table=_source_label(
+                    "reference_data",
+                    source_functions,
+                ),
+                extra_required_columns=ref_extra,
+                template_name=template_name,
+            ),
+        )
     if template_name == _REVERSION_TEMPLATE:
         return toxicity_reversion_input_schema_contracts(
             pts_trades_table=_source_label(
@@ -446,6 +470,7 @@ def _single_metric_execution_block(
             template_name,
             params["calculation_namespace"],
             _metric_params_expression(request),
+            request.period.start_date,
         )
         + ";"
     )
@@ -459,15 +484,17 @@ def _metric_call_expression(
     template_name: str,
     calculation_namespace: str,
     metric_params: str,
+    run_date: date,
 ) -> str:
     """Return the q call that passes already-loaded raw rows into calc function."""
 
     calls = {
-        "activity": f"{calculation_namespace}.calcActivity[rawTrades;refs;{metric_params}]",
-        "liquidity": f"{calculation_namespace}.calcLiquidity[rawQuotes;refs;{metric_params}]",
+        "activity": f"{calculation_namespace}.calcActivity[{_q_date(run_date)};rawTrades;refs;{metric_params}]",
+        "liquidity": f"{calculation_namespace}.calcLiquidity[{_q_date(run_date)};rawQuotes;refs;{metric_params}]",
+        "volatility": f"{calculation_namespace}.calcParkinsonVolatility[{_q_date(run_date)};rawTrades;refs;{metric_params}]",
         _REVERSION_TEMPLATE: (
             f"{calculation_namespace}.calcToxicityReversion["
-            f"rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;{metric_params}]"
+            f"{_q_date(run_date)};rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;{metric_params}]"
         ),
     }
     try:
@@ -476,17 +503,25 @@ def _metric_call_expression(
         raise KdbMetricQueryPlanError(f"unsupported q template for metric call: {template_name!r}") from exc
 
 
-def _metric_params_expression(request: MetricRunRequest) -> str:
+def _metric_params_expression(
+    request: MetricRunRequest,
+    *,
+    include_date_bounds: bool = True,
+) -> str:
     """Return a q dictionary of scalar metric parameters for installed q functions."""
 
     template_name = template_for_metric(request.metric.name)
     bucket = _bucket_duration(request.period.bucket)
-    keys = ["bucket", "start_date", "end_date"]
-    values = [
-        bucket,
-        _q_date(request.period.start_date),
-        _q_date(request.period.end_date),
-    ]
+    keys = ["bucket"]
+    values = [bucket]
+    if include_date_bounds:
+        keys.extend(["start_date", "end_date"])
+        values.extend(
+            [
+                _q_date(request.period.start_date),
+                _q_date(request.period.end_date),
+            ]
+        )
 
     if template_name == _REVERSION_TEMPLATE:
         extra = _reversion_template_parameters(request)
@@ -606,11 +641,21 @@ def _source_function_dictionary(
     return _q_function_dictionary(keys, values, label="source_functions")
 
 
-def _metric_parameter_dictionary(requests: Sequence[MetricRunRequest]) -> str:
+def _metric_parameter_dictionary(
+    requests: Sequence[MetricRunRequest],
+    *,
+    include_date_bounds: bool = True,
+) -> str:
     """Return q dictionary keyed by metric name with each metric parameter dict."""
 
     keys = [request.metric.name for request in requests]
-    values = [_metric_params_expression(request) for request in requests]
+    values = [
+        _metric_params_expression(
+            request,
+            include_date_bounds=include_date_bounds,
+        )
+        for request in requests
+    ]
     return _q_dictionary_expression(keys, values, "metric parameter dictionary")
 
 

@@ -55,8 +55,10 @@ def test_mock_kdb_demo_executes_q_templates_and_builds_report() -> None:
     drilldown_page = result.document.pages[4]
     detail_page = result.document.pages[5]
     assert summary_page.html_blocks[0].title == "Report Meta"
-    assert summary_page.html_blocks[1].title == "Market KPI Snapshot"
-    assert summary_page.html_blocks[2].title == "Executive Market Overview"
+    assert summary_page.html_blocks[1].title == "Market Overview"
+    assert summary_page.html_blocks[2].title == "Detailed Metric Trends"
+    assert summary_page.html_blocks[3].title == "Market KPI Snapshot"
+    assert summary_page.html_blocks[4].title == "Executive Market Overview"
     assert len(summary_page.metric_tables[0].rows) == 6
     assert len(activity_page.plotly_charts) == 1
     assert len(liquidity_page.plotly_charts) == 1

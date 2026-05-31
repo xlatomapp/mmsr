@@ -197,7 +197,7 @@
         topixCapGrp:n#{{ source_namespace }}.topixCapGroups;
         market_segment:n#{{ source_namespace }}.marketSegments;
         sector:n#{{ source_namespace }}.sectors;
-        lot_size:n#100)
+        lotSize:n#100)
     };
 
 {{ source_namespace }}.symTimeGrid:{[runDate;refs]
@@ -237,6 +237,7 @@
 {{ source_namespace }}.quoteFromGrid:{[runDate;refs;venue]
     refsBySym:`sym xkey refs;
     q:{{ source_namespace }}.withRowNumber {{ source_namespace }}.symTimeGrid[runDate;refs] lj refsBySym;
+    dayInt:`long$`int$runDate;
     rows:q`row;
     legacySpreadJitter:0.06f * (rows mod 12);
     sidSyms:asc distinct q`sym;
@@ -248,7 +249,8 @@
     progress:`float${{ source_namespace }}.sessionProgress each q`time;
     noise:(sin 0.19f * ((q`row) + (sid * 3))) * volScale;
     mid:`float$raze enlist each ((openPx + progress * (closePx - openPx)) * (1f + noise));
-    spread:`float$raze enlist each (mid * ((spreadBps + 0f * legacySpreadJitter) % 10000f));
+    spreadJitterBps:0.35f * sin 0.11f * ((q`row) + sid * 2) + 0.25f * cos 0.03f * ((q`row) + dayInt);
+    spread:`float$raze enlist each (mid * ((spreadBps + spreadJitterBps) % 10000f));
     update
         venue:venue,
         bidPrice:mid - spread % 2,
@@ -299,7 +301,8 @@
     progress:`float${{ source_namespace }}.sessionProgress each q`time;
     noise:(sin 0.17f * ((q`row) + (sid * 7))) * (1.1f * volScale);
     mid:`float$raze enlist each ((openPx + progress * (closePx - openPx)) * (1f + noise));
-    spread:`float$raze enlist each (mid * ((spreadBps + 0.9f) % 10000f));
+    spreadJitterBps:0.42f * sin 0.09f * ((q`row) + sid * 3) + 0.22f * cos 0.04f * ((q`row) + (`long$`int$runDate));
+    spread:`float$raze enlist each (mid * ((spreadBps + 0.9f + spreadJitterBps) % 10000f));
     update
         venue:(count q)#{{ source_namespace }}.venues,
         bidPrice:mid - spread % 2,

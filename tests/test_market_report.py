@@ -1,7 +1,9 @@
 import pytest
+from datetime import date
 
 from mmsr.examples import build_offline_sample_metrics
-from mmsr.metrics.results import MetricComparison
+from mmsr.metrics.results import MetricComparison, MetricObservation, MetricTimeSeries
+from mmsr.report import market_report as market_report_module
 from mmsr.report import (
     MarketReportInput,
     MarketReportOptions,
@@ -56,7 +58,7 @@ def test_market_monitor_report_is_canonical_production_format() -> None:
     drilldown_page = document.pages[4]
     detail_page = document.pages[5]
 
-    assert len(summary_page.html_blocks) == 4
+    assert len(summary_page.html_blocks) == 5
     assert summary_page.html_blocks[0].title == "Report Meta"
     assert 'class="report-meta-strip report-control-strip"' in summary_page.html_blocks[0].body_html
     assert summary_page.html_blocks[1].title == "Market Overview"
@@ -66,12 +68,17 @@ def test_market_monitor_report_is_canonical_production_format() -> None:
     assert "Volatility" in summary_page.html_blocks[1].body_html
     assert "market-overview-card__spark" in summary_page.html_blocks[1].body_html
     assert "market-overview-card__bar" in summary_page.html_blocks[1].body_html
-    assert summary_page.html_blocks[2].title == "Market KPI Snapshot"
-    assert 'class="kpi-snapshot"' in summary_page.html_blocks[2].body_html
-    assert summary_page.html_blocks[3].title == "Executive Market Overview"
-    assert "Overall:</strong>" in summary_page.html_blocks[3].body_html
-    assert "<strong>Market activity:</strong>" in summary_page.html_blocks[3].body_html
-    assert "<strong>Displayed liquidity:</strong>" in summary_page.html_blocks[3].body_html
+    assert summary_page.html_blocks[2].title == "Detailed Metric Trends"
+    assert "data-detailed-trends-spec" in summary_page.html_blocks[2].body_html
+    assert "data-detailed-trends-select" in summary_page.html_blocks[2].body_html
+    assert "data-detailed-trends-insights-grid" not in summary_page.html_blocks[2].body_html
+    assert "data-detailed-trends-insight-focus" not in summary_page.html_blocks[2].body_html
+    assert summary_page.html_blocks[3].title == "Market KPI Snapshot"
+    assert 'class="kpi-snapshot"' in summary_page.html_blocks[3].body_html
+    assert summary_page.html_blocks[4].title == "Executive Market Overview"
+    assert "Overall:</strong>" in summary_page.html_blocks[4].body_html
+    assert "<strong>Market activity:</strong>" in summary_page.html_blocks[4].body_html
+    assert "<strong>Displayed liquidity:</strong>" in summary_page.html_blocks[4].body_html
     assert len(summary_page.metric_cards) == 3
     assert len(summary_page.plotly_charts) == 4
     assert summary_page.plotly_charts[0].title.startswith("Primary Intraday Signal")
@@ -231,7 +238,7 @@ def test_market_monitor_report_can_omit_appendix_and_limit_components() -> None:
         "Sector, Segment, and Market-Cap Drilldowns",
         "Intraday Detail",
     ]
-    assert len(document.pages[0].html_blocks) == 4
+    assert len(document.pages[0].html_blocks) == 5
     assert len(document.pages[0].metric_cards) == 2
     assert len(document.pages[0].plotly_charts) == 4
     assert len(document.pages[0].metric_tables[0].rows) == 3
@@ -243,6 +250,62 @@ def test_market_monitor_report_can_omit_appendix_and_limit_components() -> None:
     assert len(document.pages[4].metric_tables[0].rows) == 6
     assert all(len(chart.points) == 1 for chart in document.pages[5].time_series_charts)
     assert document.pages[5].heatmaps == []
+
+
+def test_market_monitor_report_validates_detailed_trends_granularity() -> None:
+    with pytest.raises(ValueError, match="detailed_metric_trends_granularity must be one of"):
+        MarketReportOptions(detailed_metric_trends_granularity="hourly")
+
+
+def test_market_monitor_report_can_enable_automated_insights() -> None:
+    document = build_market_monitor_report(
+        _input_from_mock_sample(),
+        options=MarketReportOptions(include_automated_insights=True),
+    )
+    summary_page = document.pages[0]
+    detailed_block = next(block for block in summary_page.html_blocks if block.title == "Detailed Metric Trends")
+    assert "data-detailed-trends-insights-grid" in detailed_block.body_html
+    assert "data-detailed-trends-insight-focus" in detailed_block.body_html
+
+
+def test_detailed_trends_metric_rollups_match_semantics() -> None:
+    turnover_series = MetricTimeSeries(
+        metric_name="turnover",
+        observations=(
+            MetricObservation("turnover", date(2026, 5, 1), None, {}, 10.0),
+            MetricObservation("turnover", date(2026, 5, 1), None, {}, 5.0),
+            MetricObservation("turnover", date(2026, 5, 2), None, {}, 8.0),
+        ),
+    )
+    spread_series = MetricTimeSeries(
+        metric_name="quoted_spread_bps",
+        observations=(
+            MetricObservation("quoted_spread_bps", date(2026, 5, 1), None, {}, 5.0),
+            MetricObservation("quoted_spread_bps", date(2026, 5, 1), None, {}, 7.0),
+            MetricObservation("quoted_spread_bps", date(2026, 5, 2), None, {}, 9.0),
+        ),
+    )
+    volatility_series = MetricTimeSeries(
+        metric_name="parkinson_volatility_bps",
+        observations=(
+            MetricObservation("parkinson_volatility_bps", date(2026, 5, 1), None, {}, 3.0),
+            MetricObservation("parkinson_volatility_bps", date(2026, 5, 2), None, {}, 4.0),
+        ),
+    )
+
+    turnover_daily = market_report_module._aggregate_metric_trend_series(
+        turnover_series, metric_name="turnover", granularity="daily"
+    )
+    spread_daily = market_report_module._aggregate_metric_trend_series(
+        spread_series, metric_name="quoted_spread_bps", granularity="daily"
+    )
+    volatility_weekly = market_report_module._aggregate_metric_trend_series(
+        volatility_series, metric_name="parkinson_volatility_bps", granularity="weekly"
+    )
+
+    assert [value for _, _, value in turnover_daily] == [15.0, 8.0]
+    assert [value for _, _, value in spread_daily] == [6.0, 9.0]
+    assert pytest.approx(volatility_weekly[0][2], rel=1e-9) == ((3.0**2 + 4.0**2) / 2.0) ** 0.5
 
 
 def test_market_monitor_report_can_disable_drilldown_page() -> None:
@@ -346,7 +409,8 @@ def test_market_summary_aggregates_bucket_level_duplicates_for_same_market_conte
     summary_page = document.pages[0]
     quoted_spread_cards = [card for card in summary_page.metric_cards if card.metric.name == "quoted_spread_bps"]
     assert len(quoted_spread_cards) == 1
-    assert "Top market drivers" in summary_page.html_blocks[3].body_html
+    executive_block = next(block for block in summary_page.html_blocks if block.title == "Executive Market Overview")
+    assert "Top market drivers" in executive_block.body_html
 
 
 def test_market_monitor_report_passes_custom_drilldown_options() -> None:
