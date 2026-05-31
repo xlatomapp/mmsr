@@ -40,6 +40,7 @@ from mmsr.report.sections import (
     build_intraday_time_bucket_chart,
     build_reference_target_intraday_profile_chart,
     build_reference_target_trend_chart,
+    build_summary_activity_distribution_html_block,
 )
 from mmsr.report.symbols import (
     DEFAULT_SYMBOL_GROUP_KEYS,
@@ -436,30 +437,28 @@ def _build_summary_page(
         definitions,
         options=options,
     )
-    turnover_distribution_chart = _build_turnover_intraday_distribution_chart(report_input, definitions, options=options)
-    ordered_summary_charts: list[PlotlyChart] = []
-    if turnover_distribution_chart is not None:
-        ordered_summary_charts.append(turnover_distribution_chart)
+    turnover_block = _build_turnover_distribution_summary_block(report_input, definitions, options=options)
     return ReportPage(
         title=base_page.title,
         html_blocks=(
             ([meta_strip_block] if meta_strip_block is not None else [])
             + ([market_overview_block] if market_overview_block is not None else [])
             + ([detailed_trends_block] if detailed_trends_block is not None else [])
+            + ([turnover_block] if turnover_block is not None else [])
         ),
         metric_cards=base_page.metric_cards,
-        plotly_charts=ordered_summary_charts,
+        plotly_charts=[],
         metric_tables=[],
         commentary_blocks=[],
     )
 
 
-def _build_turnover_intraday_distribution_chart(
+def _build_turnover_distribution_summary_block(
     report_input: MarketReportInput,
     definitions: Mapping[str, MetricDefinition],
     *,
     options: MarketReportOptions,
-) -> PlotlyChart | None:
+) -> HtmlBlock | None:
     if not report_input.reference_series:
         return None
     current_by_metric = {
@@ -479,12 +478,14 @@ def _build_turnover_intraday_distribution_chart(
     definition = definitions.get("turnover")
     if definition is None:
         return None
-    return build_activity_intraday_distribution_chart(
+    return build_summary_activity_distribution_html_block(
         "Turnover cumulative intraday distribution",
         reference_series=reference_series,
         target_series=target_series,
         metric_definition=definition,
         help_text=options.activity_distribution_help_text,
+        cumulative_figure_height=380,
+        share_figure_height=150,
     )
 
 

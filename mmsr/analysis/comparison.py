@@ -611,17 +611,25 @@ def compare_metric_timeseries(
         unit = _observation_unit_key(observation, policy)
         reference_index.setdefault(key, {}).setdefault(unit, []).append(observation.value)
 
+    # Current observations usually contain many rows with the same comparison key
+    # across different current dates. Cache aggregated reference distributions per
+    # key so we don't repeatedly rebuild identical arrays.
+    reference_values_by_key: dict[tuple[Hashable, ...], list[float | None]] = {}
+
     comparisons: list[MetricComparison] = []
     for observation in current_observations:
         key = _comparison_key(observation, policy)
-        reference_by_unit = reference_index.get(key, {})
-        reference_values = [
-            _aggregate_observation_values(
-                reference_by_unit[unit],
-                aggregation=reference_observation_aggregation,
-            )
-            for unit in _sorted_reference_units(reference_by_unit)
-        ]
+        reference_values = reference_values_by_key.get(key)
+        if reference_values is None:
+            reference_by_unit = reference_index.get(key, {})
+            reference_values = [
+                _aggregate_observation_values(
+                    reference_by_unit[unit],
+                    aggregation=reference_observation_aggregation,
+                )
+                for unit in _sorted_reference_units(reference_by_unit)
+            ]
+            reference_values_by_key[key] = reference_values
 
         comparisons.append(
             compare_to_reference_distribution(

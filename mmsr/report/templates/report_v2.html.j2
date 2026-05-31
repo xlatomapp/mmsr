@@ -260,7 +260,6 @@
       padding-top: 0;
     }
     .report-page--summary > .metric-grid,
-    .report-page--summary > .plotly-chart,
     .report-page--summary > .time-series-chart,
     .report-page--summary > .heatmap,
     .report-page--summary > .metric-table,
@@ -516,6 +515,10 @@
     .report-page--summary > div[data-block-title="Detailed Metric Trends"] > .html-block__body {
       overflow-x: hidden;
     }
+    .report-page--summary > div[data-block-title="Turnover cumulative intraday distribution"] {
+      grid-column: 1 / -1;
+      width: 100%;
+    }
     .detailed-trends__detail {
       overflow-x: hidden;
     }
@@ -555,6 +558,100 @@
     }
     .detailed-trends .js-plotly-plot,
     .detailed-trends .plot-container {
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+    .turnover-distribution {
+      padding: 0;
+      border: 0;
+      background: transparent;
+      width: 100%;
+    }
+    .turnover-distribution__header {
+      align-items: center;
+      border-bottom: 1px solid var(--mmsr-border);
+      display: flex;
+      justify-content: flex-start;
+      gap: 10px;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+    }
+    .turnover-distribution__title {
+      color: #111111;
+      font-size: 36px;
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: 0;
+      margin: 0;
+    }
+    .turnover-distribution__help {
+      margin-top: 0;
+      align-self: center;
+    }
+    .turnover-distribution__body {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+    }
+    .turnover-distribution__chart {
+      border: 1px solid var(--mmsr-border);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 2px 10px rgba(16, 39, 66, 0.06);
+      padding: 8px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .turnover-distribution__plot {
+      background: transparent;
+      border: none;
+      padding: 0;
+    }
+    .turnover-distribution__plot + .turnover-distribution__plot {
+      margin-top: 20px;
+    }
+    .turnover-distribution__aggregate {
+      margin-top: 12px;
+      border: 1px solid var(--mmsr-border);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .turnover-distribution__aggregate-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .turnover-distribution__aggregate-table thead th {
+      background: #f3f7fd;
+      color: var(--mmsr-muted);
+      font-weight: 700;
+      text-align: center;
+    }
+    .turnover-distribution__aggregate-table th,
+    .turnover-distribution__aggregate-table td {
+      border: 1px solid #dbe4f0;
+      padding: 6px 8px;
+      white-space: nowrap;
+    }
+    .turnover-distribution__aggregate-table tbody th {
+      background: #f9fbff;
+      color: #1f2d3d;
+      text-align: left;
+      font-weight: 700;
+    }
+    .turnover-distribution__aggregate-table tbody td {
+      text-align: center;
+      color: #213244;
+      font-variant-numeric: tabular-nums;
+    }
+    .turnover-distribution .plotly-chart__figure {
+      min-width: 0 !important;
+      width: 100%;
+    }
+    .turnover-distribution .js-plotly-plot,
+    .turnover-distribution .plot-container {
       width: 100% !important;
       max-width: 100% !important;
     }
@@ -1372,6 +1469,10 @@
             {% elif block.title == "Automated Insight Summary" %}
               <div class="html-block__body">{{ block.body_html | safe }}</div>
             {% elif block.title == "Detailed Metric Trends" %}
+              <div data-block-title="{{ block.title }}">
+                <div class="html-block__body">{{ block.body_html | safe }}</div>
+              </div>
+            {% elif block.title == "Turnover cumulative intraday distribution" %}
               <div data-block-title="{{ block.title }}">
                 <div class="html-block__body">{{ block.body_html | safe }}</div>
               </div>

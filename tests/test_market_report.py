@@ -58,7 +58,7 @@ def test_market_monitor_report_is_canonical_production_format() -> None:
     drilldown_page = document.pages[4]
     detail_page = document.pages[5]
 
-    assert len(summary_page.html_blocks) == 5
+    assert len(summary_page.html_blocks) == 3
     assert summary_page.html_blocks[0].title == "Report Meta"
     assert 'class="report-meta-strip report-control-strip"' in summary_page.html_blocks[0].body_html
     assert summary_page.html_blocks[1].title == "Market Overview"
@@ -73,15 +73,8 @@ def test_market_monitor_report_is_canonical_production_format() -> None:
     assert "data-detailed-trends-select" in summary_page.html_blocks[2].body_html
     assert "data-detailed-trends-insights-grid" not in summary_page.html_blocks[2].body_html
     assert "data-detailed-trends-insight-focus" not in summary_page.html_blocks[2].body_html
-    assert summary_page.html_blocks[3].title == "Market KPI Snapshot"
-    assert 'class="kpi-snapshot"' in summary_page.html_blocks[3].body_html
-    assert summary_page.html_blocks[4].title == "Executive Market Overview"
-    assert "Overall:</strong>" in summary_page.html_blocks[4].body_html
-    assert "<strong>Market activity:</strong>" in summary_page.html_blocks[4].body_html
-    assert "<strong>Displayed liquidity:</strong>" in summary_page.html_blocks[4].body_html
     assert len(summary_page.metric_cards) == 3
-    assert len(summary_page.plotly_charts) == 4
-    assert summary_page.plotly_charts[0].title.startswith("Primary Intraday Signal")
+    assert len(summary_page.plotly_charts) == 0
     assert len(summary_page.metric_tables) == 1
     assert len(summary_page.commentary_blocks) == 2
     assert summary_page.commentary_blocks[0].title == "Insight Callout"

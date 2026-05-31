@@ -8,14 +8,15 @@ metric or comparison data.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from datetime import time
 
 _AUCTION_BUCKET_LABELS: dict[str, str] = {
-    "AMO": "AM opening auction",
-    "AMC": "AM closing auction",
-    "PMO": "PM opening auction",
-    "PMC": "PM closing auction",
+    "AMO": "AM open",
+    "AMC": "AM close",
+    "PMO": "PM open",
+    "PMC": "PM close",
 }
 
 _GROUP_KEY_LABELS: dict[str, str] = {
@@ -93,9 +94,19 @@ def format_intraday_bucket_label(bucket: object | None) -> str | None:
     if "-" in raw:
         start, separator, end = raw.partition("-")
         if separator and start.strip() and end.strip():
-            return f"{start.strip()}–{end.strip()}"
+            return f"{_strip_time_seconds(start.strip())}–{_strip_time_seconds(end.strip())}"
+
+    # Strip trailing seconds from single time-point labels like "09:00:00" or "09:00:00.000"
+    stripped = _strip_time_seconds(raw)
+    if stripped != raw:
+        return stripped
 
     return raw
+
+
+def _strip_time_seconds(text: str) -> str:
+    """Strip trailing seconds from a time string like ``09:00:00`` → ``09:00``."""
+    return re.sub(r"^(\d{1,2}:\d{2}):\d{2}(?:\.\d+)?$", r"\1", text)
 
 
 def format_group_key_label(key: object) -> str:

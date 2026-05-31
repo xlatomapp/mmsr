@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from html import escape
 from math import isfinite
 from typing import Any
 
@@ -25,6 +27,7 @@ from mmsr.report.components import (
     CommentaryBlock,
     Heatmap,
     HeatmapCell,
+    HtmlBlock,
     MetricCard,
     MetricTable,
     MetricTableRow,
@@ -343,6 +346,7 @@ def build_activity_intraday_distribution_chart(
     target_series: MetricTimeSeries,
     metric_definition: MetricDefinition,
     help_text: str | None = None,
+    figure_height: int = 640,
 ) -> PlotlyChart:
     """Build a compact Plotly activity-distribution diagnostic.
 
@@ -377,6 +381,7 @@ def build_activity_intraday_distribution_chart(
         title=chart_title,
         metric_definition=metric_definition,
         prepared=prepared,
+        figure_height=figure_height,
     )
     return PlotlyChart(
         title=chart_title,
@@ -394,8 +399,8 @@ class _ActivityDistributionInputs:
     bucket_labels: tuple[str, ...]
     current_cumulative_pct: tuple[float, ...]
     reference_cumulative_pct_by_bucket: Mapping[str, tuple[float, ...]]
-    current_session_pct: Mapping[str, float]
-    reference_session_pct: Mapping[str, float]
+    current_bucket_pct: tuple[float, ...]
+    reference_bucket_pct: tuple[float, ...]
     reference_date_count: int
 
 
@@ -420,13 +425,16 @@ def _prepare_activity_distribution_inputs(
         reference_values_by_date_bucket,
         bucket_labels,
     )
+    current_bucket_pct = _bucket_percentages(current_bucket_values, bucket_labels)
+    reference_mean_bucket_values = _mean_values_by_bucket(reference_values_by_date_bucket)
+    reference_bucket_pct = _bucket_percentages(reference_mean_bucket_values, bucket_labels)
 
     return _ActivityDistributionInputs(
         bucket_labels=bucket_labels,
         current_cumulative_pct=current_cumulative_pct,
         reference_cumulative_pct_by_bucket=reference_cumulative_pct_by_bucket,
-        current_session_pct=_mean_daily_session_share_percentages(target_series.observations),
-        reference_session_pct=_mean_daily_session_share_percentages(reference_series.observations),
+        current_bucket_pct=current_bucket_pct,
+        reference_bucket_pct=reference_bucket_pct,
         reference_date_count=len(reference_values_by_date_bucket),
     )
 
@@ -436,6 +444,7 @@ def _activity_distribution_figure(
     title: str,
     metric_definition: MetricDefinition,
     prepared: _ActivityDistributionInputs,
+    figure_height: int = 640,
 ) -> dict[str, Any]:
     q1: list[float | None] = []
     median: list[float | None] = []
@@ -511,7 +520,7 @@ def _activity_distribution_figure(
         "data": traces,
         "layout": {
             "template": "plotly_white",
-            "height": 640,
+            "height": figure_height,
             "margin": {"l": 80, "r": 24, "t": 24, "b": 104},
             "barmode": "stack",
             "showlegend": True,
@@ -584,6 +593,277 @@ def _activity_distribution_data_summary(
         "null-filtered percentile box statistics; current period rendered as "
         f"mean cumulative percentages; {trace_count:,} Plotly traces embedded. "
         "Raw observation rows and full value tables are omitted from the HTML."
+    )
+
+
+def _build_cumulative_distribution_figure(
+    *,
+    metric_definition: MetricDefinition,
+    prepared: _ActivityDistributionInputs,
+    figure_height: int = 470,
+) -> dict[str, Any]:
+    """Build cumulative distribution with a compact delta-heatmap subplot."""
+
+    reference_median: list[float | None] = []
+    for bucket in prepared.bucket_labels:
+        values = prepared.reference_cumulative_pct_by_bucket.get(bucket, ())
+        if values:
+            reference_median.append(_percentile(values, 50))
+        else:
+            reference_median.append(None)
+
+    traces: list[dict[str, Any]] = [
+        {
+            "type": "scatter",
+            "mode": "lines+markers",
+            "name": "Reference median cumulative %",
+            "x": list(prepared.bucket_labels),
+            "y": reference_median,
+            "marker": {"symbol": "square", "size": 7, "color": "#8ea4bd"},
+            "line": {"width": 2, "color": "#8ea4bd"},
+            "xaxis": "x",
+            "yaxis": "y",
+            "hovertemplate": (
+                "%{x}<br>%{y:.2f}%<extra>Reference median</extra>"
+            ),
+        },
+        {
+            "type": "scatter",
+            "mode": "lines+markers",
+            "name": "Current mean cumulative %",
+            "x": list(prepared.bucket_labels),
+            "y": list(prepared.current_cumulative_pct),
+            "marker": {"symbol": "circle", "size": 8, "color": "#2d5d93"},
+            "line": {"width": 3, "color": "#2d5d93"},
+            "xaxis": "x",
+            "yaxis": "y",
+            "hovertemplate": "%{x}<br>%{y:.2f}%<extra>Current mean</extra>",
+        },
+        {
+            "type": "heatmap",
+            "x": list(prepared.bucket_labels),
+            "y": ["Delta (pp)"],
+            "z": [
+                [
+                    current - reference
+                    for current, reference in zip(
+                        prepared.current_bucket_pct,
+                        prepared.reference_bucket_pct,
+                        strict=True,
+                    )
+                ]
+            ],
+            "colorscale": "RdBu",
+            "reversescale": True,
+            "zmid": 0,
+            "hovertemplate": "%{y}<br>%{x}<br>%{z:.2f}<extra></extra>",
+            "xgap": 1,
+            "ygap": 2,
+            "xaxis": "x2",
+            "yaxis": "y2",
+            "showscale": True,
+        },
+    ]
+
+    return {
+        "data": traces,
+        "layout": {
+            "template": "plotly_white",
+            "height": figure_height,
+            "margin": {"l": 80, "r": 24, "t": 28, "b": 50},
+            "showlegend": True,
+            "legend": {"orientation": "h", "y": 0.41},
+            "xaxis": {
+                "domain": [0.0, 1.0],
+                "anchor": "y",
+                "type": "category",
+                "categoryorder": "array",
+                "categoryarray": list(prepared.bucket_labels),
+                "showticklabels": True,
+            },
+            "yaxis": {
+                "domain": [0.50, 1.0],
+                "anchor": "x",
+                "ticksuffix": "%",
+                "range": [0, 105],
+            },
+            "xaxis2": {
+                "domain": [0.0, 1.0],
+                "anchor": "y2",
+                "type": "category",
+                "categoryorder": "array",
+                "categoryarray": list(prepared.bucket_labels),
+                "showticklabels": False,
+            },
+            "yaxis2": {
+                "domain": [0.0, 0.22],
+                "anchor": "x2",
+                "categoryorder": "array",
+                "categoryarray": ["Delta (pp)"],
+            },
+        },
+        "config": {"displaylogo": False, "responsive": True},
+    }
+
+
+def _session_aggregate_percentages(
+    bucket_labels: Sequence[str],
+    bucket_pct: Sequence[float],
+) -> dict[str, float]:
+    aggregates = {
+        "AM open": 0.0,
+        "AM continuous session": 0.0,
+        "AM close": 0.0,
+        "PM open": 0.0,
+        "PM continuous session": 0.0,
+        "PM close": 0.0,
+    }
+    for bucket, value in zip(bucket_labels, bucket_pct, strict=True):
+        session = _activity_session_label(bucket)
+        if session in aggregates:
+            aggregates[session] += float(value)
+    return aggregates
+
+
+def _delta_cell_style(delta_pp: float, max_abs_delta_pp: float) -> str:
+    if max_abs_delta_pp <= 0:
+        return ""
+    strength = min(1.0, abs(delta_pp) / max_abs_delta_pp)
+    alpha = 0.08 + 0.34 * strength
+    if delta_pp > 0:
+        return f"background: rgba(15, 157, 88, {alpha:.3f}); color: #0b5d35;"
+    if delta_pp < 0:
+        return f"background: rgba(186, 26, 26, {alpha:.3f}); color: #7b1111;"
+    return ""
+
+
+def _build_session_aggregate_table_html(prepared: _ActivityDistributionInputs) -> str:
+    session_columns = (
+        ("AM open", "AM open"),
+        ("AM continuous session", "AM Zaraba"),
+        ("AM close", "AM close"),
+        ("PM open", "PM open"),
+        ("PM continuous session", "PM Zaraba"),
+        ("PM close", "PM close"),
+    )
+    current = _session_aggregate_percentages(prepared.bucket_labels, prepared.current_bucket_pct)
+    reference = _session_aggregate_percentages(prepared.bucket_labels, prepared.reference_bucket_pct)
+    delta = {key: current[key] - reference[key] for key, _ in session_columns}
+    max_abs_delta = max((abs(value) for value in delta.values()), default=0.0)
+
+    header_cells = "".join(f"<th>{escape(label)}</th>" for _, label in session_columns)
+    reference_cells = "".join(
+        f"<td>{reference[key]:.2f}%</td>" for key, _ in session_columns
+    )
+    current_cells = "".join(
+        f"<td>{current[key]:.2f}%</td>" for key, _ in session_columns
+    )
+    delta_cells = "".join(
+        (
+            f'<td style="{_delta_cell_style(delta[key], max_abs_delta)}">'
+            f"{delta[key]:+.2f}pp</td>"
+        )
+        for key, _ in session_columns
+    )
+
+    return (
+        '<div class="turnover-distribution__aggregate">'
+        '<table class="turnover-distribution__aggregate-table">'
+        "<thead><tr><th>Session</th>"
+        f"{header_cells}"
+        "</tr></thead>"
+        "<tbody>"
+        f"<tr><th>Reference</th>{reference_cells}</tr>"
+        f"<tr><th>Current</th>{current_cells}</tr>"
+        f"<tr><th>Delta</th>{delta_cells}</tr>"
+        "</tbody></table></div>"
+    )
+
+
+def build_summary_activity_distribution_html_block(
+    title: str,
+    *,
+    reference_series: MetricTimeSeries,
+    target_series: MetricTimeSeries,
+    metric_definition: MetricDefinition,
+    help_text: str | None = None,
+    cumulative_figure_height: int = 380,
+    share_figure_height: int = 180,
+) -> HtmlBlock:
+    """Build an HtmlBlock with two standalone Plotly figures for the summary page.
+
+    Produces a section with an external header (title + info icon) and a body
+    card containing two stacked Plotly figures: cumulative intraday distribution
+    and session/auction share bars. The figures carry no embedded annotations
+    or axis titles; context is provided by the external header.
+    """
+
+    chart_title = title.strip()
+    if not chart_title:
+        raise ValueError("title must not be empty")
+    if target_series.metric_name != metric_definition.name:
+        raise ValueError(
+            "metric_definition.name must match target_series.metric_name: "
+            f"{metric_definition.name} != {target_series.metric_name}"
+        )
+    if reference_series.metric_name != metric_definition.name:
+        raise ValueError(
+            "metric_definition.name must match reference_series.metric_name: "
+            f"{metric_definition.name} != {reference_series.metric_name}"
+        )
+    if help_text is not None and not help_text.strip():
+        raise ValueError("help_text must not be empty when supplied")
+
+    prepared = _prepare_activity_distribution_inputs(
+        target_series=target_series,
+        reference_series=reference_series,
+    )
+    cumulative_figure = _build_cumulative_distribution_figure(
+        metric_definition=metric_definition,
+        prepared=prepared,
+        figure_height=cumulative_figure_height,
+    )
+    aggregate_table_html = _build_session_aggregate_table_html(prepared)
+
+    cumulative_json = json.dumps(
+        cumulative_figure, ensure_ascii=False, separators=(",", ":")
+    ).replace("</", "<\\/")
+    help_html = ""
+    if help_text:
+        help_html = (
+            '<details class="metric-help turnover-distribution__help">'
+            f'<summary class="metric-help__summary metric-info" aria-label="Section help: {escape(chart_title)}">'
+            '<span class="metric-help__icon" aria-hidden="true">i</span>'
+            "</summary>"
+            '<div class="metric-help__body">'
+            f'<strong class="metric-help__title">Section help: {escape(chart_title)}</strong>'
+            f"<p>{escape(help_text)}</p>"
+            "</div>"
+            "</details>"
+        )
+
+    body_html = (
+        '<section class="turnover-distribution">'
+        '<div class="turnover-distribution__header">'
+        f'<h3 class="turnover-distribution__title">{escape(chart_title)}</h3>'
+        f"{help_html}"
+        "</div>"
+        '<div class="turnover-distribution__body">'
+        '<div class="turnover-distribution__chart">'
+        '<div class="turnover-distribution__plot">'
+        '<div class="plotly-chart__figure" data-mmsr-plotly></div>'
+        f'<script type="application/json" class="plotly-chart__spec">{cumulative_json}</script>'
+        "</div>"
+        f"{aggregate_table_html}"
+        "</div>"
+        "</div>"
+        "</section>"
+    )
+
+    return HtmlBlock(
+        title=chart_title,
+        body_html=body_html,
+        help_text=None if help_text is None else help_text.strip(),
     )
 
 
@@ -1057,6 +1337,16 @@ def _cumulative_bucket_percentages(
     return tuple(result)
 
 
+def _bucket_percentages(
+    values_by_bucket: Mapping[str, float],
+    bucket_labels: Sequence[str],
+) -> tuple[float, ...]:
+    total = sum(values_by_bucket.values())
+    if total <= 0:
+        return tuple(0.0 for _ in bucket_labels)
+    return tuple(values_by_bucket.get(bucket, 0.0) / total * 100 for bucket in bucket_labels)
+
+
 def _reference_cumulative_percentages_by_bucket(
     values_by_date_bucket: Mapping[object, Mapping[str, float]],
     bucket_labels: Sequence[str],
@@ -1079,12 +1369,12 @@ def _session_share_percentages(
 
 
 _ACTIVITY_SESSION_ORDER = (
-    "AM opening auction",
+    "AM open",
     "AM continuous session",
-    "AM closing auction",
-    "PM opening auction",
+    "AM close",
+    "PM open",
     "PM continuous session",
-    "PM closing auction",
+    "PM close",
     "Other",
 )
 
@@ -1093,20 +1383,20 @@ def _activity_session_label(bucket: object | None) -> str:
     raw = "" if bucket is None else str(bucket).strip()
     upper = raw.upper()
     if upper == "AMO":
-        return "AM opening auction"
+        return "AM open"
     if upper == "AMC":
-        return "AM closing auction"
+        return "AM close"
     if upper == "PMO":
-        return "PM opening auction"
+        return "PM open"
     if upper == "PMC":
-        return "PM closing auction"
+        return "PM close"
 
     label = _format_bucket_text(bucket) or raw
     label_lower = label.casefold()
-    if "opening auction" in label_lower:
-        return "AM opening auction" if "am" in label_lower else "PM opening auction"
-    if "closing auction" in label_lower:
-        return "AM closing auction" if "am" in label_lower else "PM closing auction"
+    if "opening auction" in label_lower or "am open" in label_lower or "pm open" in label_lower:
+        return "AM open" if "am" in label_lower else "PM open"
+    if "closing auction" in label_lower or "am close" in label_lower or "pm close" in label_lower:
+        return "AM close" if "am" in label_lower else "PM close"
 
     hour_minute = _leading_hour_minute(raw) or _leading_hour_minute(label)
     if hour_minute is None:
@@ -1126,18 +1416,24 @@ def _leading_hour_minute(text: str) -> tuple[int, int] | None:
 
 def _activity_bucket_sort_key(label: str) -> tuple[int, str]:
     canonical = label.casefold()
-    if "am opening auction" in canonical:
+    if "am opening auction" in canonical or canonical == "am open":
         return (0, label)
-    if "am closing auction" in canonical:
+    if "am closing auction" in canonical or canonical == "am close":
         return (200, label)
-    if "pm opening auction" in canonical:
+    if "pm opening auction" in canonical or canonical == "pm open":
         return (300, label)
-    if "pm closing auction" in canonical:
+    if "pm closing auction" in canonical or canonical == "pm close":
         return (500, label)
     hour_minute = _leading_hour_minute(label)
     if hour_minute is not None:
         hour, minute = hour_minute
-        return (100 + hour * 60 + minute, label)
+        minutes = hour * 60 + minute
+        if hour < 12:
+            # AM continuous session: sort between AM open (0) and AM close (200)
+            return (minutes - 530, label)
+        else:
+            # PM continuous session: sort between PM open (300) and PM close (500)
+            return (minutes - 440, label)
     return (900, label)
 
 
