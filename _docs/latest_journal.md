@@ -17,6 +17,48 @@ Use this file as the **active-step buffer**.
 
 ## Current Step Entry
 
+## 2026-05-31 11:00 JST — Summary-structure reset to visual-first layout
+
+### What changed
+- Per user request, shifted from incremental styling to structural summary-page changes:
+  - moved `Report Meta` rendering from the Market Summary body into the header right panel
+  - kept Market Summary title/page framing, but changed content order to visual-first:
+    - render `Market KPI Snapshot` first
+    - render charts (including `Primary Intraday Signal`) before the long executive narrative
+    - render `Executive Market Overview` after visuals
+  - skipped rendering the `Report Meta` block inside Market Summary so it is no longer misplaced in the summary body
+- Updated template tests to assert the new structural contract:
+  - header-level meta panel presence
+  - summary ordering anchored to rendered section tags, avoiding false matches from CSS text
+
+### Files changed
+- `_docs/journal.md`
+- `_docs/latest_journal.md`
+- `mmsr/report/templates/report.html.j2`
+- `tests/test_market_report.py`
+
+### Tests added or updated
+- `tests/test_market_report.py`
+
+### Validation
+- `conda run -n mmsr pytest -q tests/test_market_report.py tests/test_offline_demo.py tests/test_mock_kdb_demo.py` passed.
+- `PRE_COMMIT_HOME=/tmp/pre-commit-cache conda run -n mmsr pre-commit run --all-files` passed.
+
+### Current milestone
+- D5 polish + structure alignment.
+
+### Estimated milestone completion percentage
+- ~100%.
+
+### Remaining work for the milestone
+- Full template/body regeneration from reference is still optional and can be executed as a dedicated follow-up step if requested.
+
+### Single best next deterministic step
+- Intentionally omitted per user request.
+
+### Open questions
+- None.
+
 ## 2026-05-31 10:53 JST — D5 full report visual redesign pass (one-go implementation)
 
 ### What changed

@@ -126,15 +126,14 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert ".explorer-panel__subtitle {" in html
     assert "Executive Market Overview" in html
     assert "Market KPI Snapshot" in html
-    assert "Report Meta" in html
     assert "Universe" in html
     assert "Benchmark" in html
     assert "Export PDF" in html
+    assert "brand-header__meta" in html
     assert "report-control-strip" in html
     assert "report-export-link" in html
     assert "kpi-snapshot__mini" in html
     assert ".report-page--summary {" in html
-    assert '> .html-block[data-block-title="Report Meta"]' in html
     assert "grid-column: 2 / 3;" in html
     assert "grid-row: 2 / 4;" in html
     assert "kpi-snapshot__value" in html
@@ -160,20 +159,24 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert "report-page--activity" in html
     assert "report-page--liquidity" in html
     assert "report-page--daily-trends" in html
-    assert 'data-block-title="Report Meta"' in html
     assert 'data-block-title="Market KPI Snapshot"' in html
     assert 'data-block-title="Executive Market Overview"' in html
     assert html.index('<section class="html-block"') < html.index('<div class="metric-grid">')
-    assert html.index("Report Meta") < html.index("Market KPI Snapshot")
-    assert html.index("Market KPI Snapshot") < html.index("Executive Market Overview")
-    assert html.index("Top market drivers") < html.index("Primary Intraday Signal")
+    assert html.index('<section class="html-block" data-block-title="Market KPI Snapshot">') < html.index(
+        "Primary Intraday Signal"
+    )
+    assert html.index("Primary Intraday Signal") < html.index(
+        '<section class="html-block" data-block-title="Executive Market Overview">'
+    )
+    assert html.index("Top market drivers") > html.index("Primary Intraday Signal")
     assert html.index("Primary Intraday Signal") < html.index("Insight Callout")
     assert html.index("Insight Callout") < html.index("Current versus reference")
-    assert html.index('data-block-title="Report Meta"') < html.index('data-block-title="Market KPI Snapshot"')
-    assert html.index('data-block-title="Market KPI Snapshot"') < html.index(
-        'data-block-title="Executive Market Overview"'
+    assert html.index('<section class="html-block" data-block-title="Market KPI Snapshot">') < html.index(
+        '<section class="html-block" data-block-title="Executive Market Overview">'
     )
-    assert html.index("Executive Market Overview") < html.index("Current versus reference")
+    assert html.index('<section class="html-block" data-block-title="Executive Market Overview">') > html.index(
+        "Primary Intraday Signal"
+    )
     assert html.index("Top market drivers") < html.index("Current versus reference")
     assert html.index("Activity Distribution") < html.index("Displayed Liquidity")
     assert html.index("Displayed Liquidity") < html.index("Reference and Target Daily Trends")

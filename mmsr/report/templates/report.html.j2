@@ -51,6 +51,18 @@
       gap: 14px;
       grid-template-columns: minmax(0, 1fr) minmax(320px, 0.55fr);
     }
+    .brand-header__meta {
+      background: var(--mmsr-panel);
+      border: 1px solid var(--mmsr-border);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .brand-header__meta .html-block__body {
+      overflow: visible;
+    }
+    .brand-header__meta .report-meta-strip {
+      margin: 0;
+    }
     .brand-logo { max-height: 48px; max-width: 180px; object-fit: contain; }
     .brand-banner, .footer-banner { width: 100%; max-height: 120px; object-fit: contain; display: block; }
     .report-title { margin: 0; font-size: 40px; line-height: 1.1; letter-spacing: 0; }
@@ -842,6 +854,7 @@
     @media (max-width: 900px) {
       .report-shell { border-left: 0; border-right: 0; padding: 14px 12px 20px; }
       .brand-header__content { grid-template-columns: 1fr; }
+      .brand-header__meta { width: 100%; }
       .report-title { font-size: 31px; }
       .report-page__title { font-size: 23px; }
       .report-page--summary { grid-template-columns: 1fr; }
@@ -867,6 +880,14 @@
   </style>
 </head>
 <body>
+  {% set summary_meta = namespace(body_html='') %}
+  {% if document.pages %}
+    {% for block in document.pages[0].html_blocks %}
+      {% if block.title == 'Report Meta' %}
+        {% set summary_meta.body_html = block.body_html %}
+      {% endif %}
+    {% endfor %}
+  {% endif %}
   <main class="report-shell">
     <header class="brand-header">
       {% if document.branding.header_image_src %}
@@ -881,6 +902,11 @@
           <h1 class="report-title">{{ document.title }}</h1>
           {% if document.generated_at_text %}<div class="report-meta">Generated: {{ document.generated_at_text }}</div>{% endif %}
         </div>
+        {% if summary_meta.body_html %}
+          <section class="brand-header__meta" aria-label="Report metadata and controls">
+            <div class="html-block__body">{{ summary_meta.body_html | safe }}</div>
+          </section>
+        {% endif %}
       </div>
     </header>
 
@@ -900,15 +926,29 @@
           <span class="report-page__index">{{ loop.index }}</span>
           <h2 class="report-page__title">{{ page.title }}</h2>
         </div>
-        {% for block in page.html_blocks %}
-          <section class="html-block" data-block-title="{{ block.title }}">
-            <div class="component-heading">
-              <h3>{{ block.title }}</h3>
-              {{ help_control(block.title, block.help_text, "Section help") }}
-            </div>
-            <div class="html-block__body">{{ block.body_html | safe }}</div>
-          </section>
-        {% endfor %}
+        {% if page.title == "Market Summary" %}
+          {% for block in page.html_blocks %}
+            {% if block.title == "Market KPI Snapshot" %}
+              <section class="html-block" data-block-title="{{ block.title }}">
+                <div class="component-heading">
+                  <h3>{{ block.title }}</h3>
+                  {{ help_control(block.title, block.help_text, "Section help") }}
+                </div>
+                <div class="html-block__body">{{ block.body_html | safe }}</div>
+              </section>
+            {% endif %}
+          {% endfor %}
+        {% else %}
+          {% for block in page.html_blocks %}
+            <section class="html-block" data-block-title="{{ block.title }}">
+              <div class="component-heading">
+                <h3>{{ block.title }}</h3>
+                {{ help_control(block.title, block.help_text, "Section help") }}
+              </div>
+              <div class="html-block__body">{{ block.body_html | safe }}</div>
+            </section>
+          {% endfor %}
+        {% endif %}
 
         {% if page.metric_cards %}
           <div class="metric-grid">
@@ -931,6 +971,17 @@
         {% endfor %}
 
         {% if page.title == "Market Summary" %}
+          {% for block in page.html_blocks %}
+            {% if block.title == "Executive Market Overview" %}
+              <section class="html-block" data-block-title="{{ block.title }}">
+                <div class="component-heading">
+                  <h3>{{ block.title }}</h3>
+                  {{ help_control(block.title, block.help_text, "Section help") }}
+                </div>
+                <div class="html-block__body">{{ block.body_html | safe }}</div>
+              </section>
+            {% endif %}
+          {% endfor %}
           {% for block in page.commentary_blocks %}
             {% include "partials/commentary_block.html.j2" %}
           {% endfor %}
