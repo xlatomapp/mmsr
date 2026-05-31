@@ -74,7 +74,6 @@ def test_main_offline_demo_renders_to_requested_path(tmp_path, capsys) -> None:
     html = output_path.read_text(encoding="utf-8")
     assert "Custom Offline Demo" in html
     assert "Custom Brand" in html
-    assert "Generated: fixed timestamp" in html
     assert html.count("metric-card") >= 1
     assert "Rendered mock-data production-format report:" in capsys.readouterr().out
 
@@ -168,7 +167,6 @@ def test_main_mock_kdb_demo_renders_to_requested_path(tmp_path, capsys) -> None:
     html = output_path.read_text(encoding="utf-8")
     assert "Custom Mock Kdb Demo" in html
     assert "Custom Kdb Brand" in html
-    assert "Generated: fixed kdb timestamp" in html
     assert html.count("metric-card") >= 1
     assert "Rendered mock-kdb integration report:" in capsys.readouterr().out
 

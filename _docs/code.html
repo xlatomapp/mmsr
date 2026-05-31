@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Equity Microstructure Intelligence Report</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;900&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-low": "#f2f4f6",
+                        "on-secondary": "#ffffff",
+                        "surface-container": "#eceef0",
+                        "on-secondary-fixed": "#0b1c30",
+                        "error-container": "#ffdad6",
+                        "surface-container-high": "#e6e8ea",
+                        "on-surface-variant": "#42474f",
+                        "on-secondary-fixed-variant": "#38485d",
+                        "secondary-container": "#d0e1fb",
+                        "surface": "#f7f9fb",
+                        "surface-container-lowest": "#ffffff",
+                        "on-primary-fixed": "#001c37",
+                        "primary-container": "#0f4c81",
+                        "inverse-surface": "#2d3133",
+                        "outline-variant": "#c2c7d1",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-highest": "#e0e3e5",
+                        "surface-tint": "#2d6197",
+                        "inverse-primary": "#a0c9ff",
+                        "error": "#ba1a1a",
+                        "surface-bright": "#f7f9fb",
+                        "surface-dim": "#d8dadc",
+                        "on-error": "#ffffff",
+                        "on-tertiary-fixed": "#2f1400",
+                        "secondary-fixed": "#d3e4fe",
+                        "on-tertiary-fixed-variant": "#6f3800",
+                        "primary": "#00355f",
+                        "on-secondary-container": "#54647a",
+                        "outline": "#727780",
+                        "tertiary-fixed-dim": "#ffb780",
+                        "on-primary": "#ffffff",
+                        "tertiary-container": "#743b00",
+                        "secondary": "#505f76",
+                        "tertiary": "#532800",
+                        "primary-fixed": "#d2e4ff",
+                        "on-primary-container": "#8ebdf9",
+                        "inverse-on-surface": "#eff1f3",
+                        "on-background": "#191c1e",
+                        "primary-fixed-dim": "#a0c9ff",
+                        "secondary-fixed-dim": "#b7c8e1",
+                        "surface-variant": "#e0e3e5",
+                        "on-tertiary-container": "#f9a767",
+                        "on-error-container": "#93000a",
+                        "tertiary-fixed": "#ffdcc4",
+                        "on-surface": "#191c1e",
+                        "background": "#f7f9fb",
+                        "on-primary-fixed-variant": "#07497d"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "container-margin": "24px",
+                        "xs": "4px",
+                        "base": "4px",
+                        "xl": "32px",
+                        "gutter": "16px",
+                        "lg": "24px",
+                        "md": "16px"
+                    },
+                    "fontFamily": {
+                        "label-md": ["Inter"],
+                        "data-mono": ["JetBrains Mono"],
+                        "headline-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "data-mono": ["13px", { "lineHeight": "18px", "fontWeight": "500" }],
+                        "headline-sm": ["18px", { "lineHeight": "26px", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "display-lg": ["30px", { "lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "label-sm": ["11px", { "lineHeight": "14px", "fontWeight": "600" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .fill-icon { font-variation-settings: 'FILL' 1; }
+        
+        /* Custom scrollbar for data density */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #c2c7d1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #727780; }
+
+        @media print {
+            body { background: white; }
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex antialiased justify-center">
+<!-- Document Container -->
+<main class="w-full max-w-[1400px] bg-background min-h-screen px-8 py-10 flex flex-col gap-12">
+<!-- Report Header -->
+<header class="border-b border-outline-variant pb-6 flex flex-col xl:flex-row xl:items-end justify-between gap-6">
+<div>
+<div class="flex items-center gap-3 mb-2">
+<div class="w-8 h-8 rounded bg-primary-container flex items-center justify-center text-on-primary-container">
+<span class="material-symbols-outlined fill-icon text-[18px]">monitoring</span>
+</div>
+<span class="text-label-sm font-label-sm font-bold tracking-widest text-primary uppercase">Microstructure AI</span>
+</div>
+<h1 class="text-display-lg font-display-lg text-on-surface">Equity Microstructure Intelligence Report</h1>
+<p class="text-body-lg text-on-surface-variant mt-1">Japanese Market Quantitative Analysis</p>
+</div>
+<div class="flex flex-wrap items-center gap-6 bg-surface-container-lowest p-4 rounded-lg border border-outline-variant shadow-sm">
+<div class="flex flex-col">
+<span class="text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold mb-1">Period</span>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant">calendar_today</span>
+<span class="text-data-mono font-data-mono text-on-surface">2023-10-27 ~ 2023-11-27 (20 Days*)</span>
+</div>
+</div>
+<div class="w-px h-8 bg-outline-variant/50 hidden md:block"></div>
+<div class="flex flex-col">
+<span class="text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold mb-1">Universe</span>
+<span class="text-label-md font-label-md text-on-surface">TOPIX 500</span>
+</div>
+<div class="w-px h-8 bg-outline-variant/50 hidden md:block"></div>
+<div class="flex flex-col">
+<span class="text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold mb-1">Benchmark</span>
+<span class="text-label-md font-label-md text-on-surface">2023-09-25 ~ 2023-10-25 (20 Days*)</span>
+</div>
+<div class="ml-4 no-print">
+<button class="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg text-label-sm hover:bg-primary/90 transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[18px]">download</span> Export PDF
+                    </button>
+</div>
+</div>
+</header>
+<!-- SECTION 1: MARKET OVERVIEW -->
+<section>
+<div class="flex items-center justify-between mb-6 border-b border-outline-variant pb-2">
+<h2 class="text-headline-md font-headline-md text-on-surface">1. Market Overview</h2>
+<span class="text-label-sm text-on-surface-variant flex items-center gap-1 bg-surface-container px-2 py-1 rounded"><span class="w-2 h-2 rounded-full bg-[#10B981]"></span> EOD Data (TSE)</span>
+</div>
+<!-- KPI Grid (4 Columns) -->
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+<!-- Card 1: Traded Value -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-lg shadow-sm relative group">
+<div class="flex justify-between items-start mb-4">
+<span class="text-label-sm font-label-sm text-on-surface-variant">Traded Value (JPY)</span>
+<span class="material-symbols-outlined text-[16px] text-outline cursor-help" title="Total value traded across universe">info</span>
+</div>
+<div class="flex items-baseline gap-3 mb-4">
+<span class="text-display-lg font-display-lg text-on-surface">3.2T</span>
+<span class="text-data-mono font-data-mono text-sm text-[#10B981] flex items-center"><span class="material-symbols-outlined text-[14px]">arrow_upward</span> 4.2%</span>
+</div>
+<div class="h-12 w-full bg-surface-container rounded overflow-hidden flex items-end">
+<div class="w-full h-full bg-gradient-to-t from-secondary-container to-transparent opacity-50 relative border-b-2 border-primary"></div>
+</div>
+</div>
+<!-- Card 2: Quoted Spread -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-lg shadow-sm relative group">
+<div class="flex justify-between items-start mb-4">
+<span class="text-label-sm font-label-sm text-on-surface-variant">Quoted Spread (bps)</span>
+<span class="material-symbols-outlined text-[16px] text-outline cursor-help">info</span>
+</div>
+<div class="flex items-baseline gap-3 mb-4">
+<span class="text-display-lg font-display-lg text-on-surface">8.4</span>
+<span class="text-data-mono font-data-mono text-sm text-error flex items-center"><span class="material-symbols-outlined text-[14px]">arrow_upward</span> 12.1%</span>
+</div>
+<div class="h-12 w-full bg-surface-container rounded overflow-hidden flex items-end relative">
+<div class="absolute inset-0 flex items-end"><div class="w-full h-1/2 border-t border-error border-dashed opacity-50"></div></div>
+<div class="w-full h-2/3 bg-error-container opacity-30 border-t-2 border-error"></div>
+</div>
+</div>
+<!-- Card 3: Quoted Depth -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-lg shadow-sm relative group">
+<div class="flex justify-between items-start mb-4">
+<span class="text-label-sm font-label-sm text-on-surface-variant">Quoted Depth (Top 5)</span>
+<span class="material-symbols-outlined text-[16px] text-outline cursor-help">info</span>
+</div>
+<div class="flex items-baseline gap-3 mb-4">
+<span class="text-display-lg font-display-lg text-on-surface">420M</span>
+<span class="text-data-mono font-data-mono text-sm text-on-surface-variant flex items-center"><span class="material-symbols-outlined text-[14px]">remove</span> 0.5%</span>
+</div>
+<div class="h-12 w-full flex items-end gap-1">
+<div class="flex-1 bg-outline-variant h-[40%] rounded-t"></div>
+<div class="flex-1 bg-outline-variant h-[60%] rounded-t"></div>
+<div class="flex-1 bg-primary-fixed-dim h-[80%] rounded-t"></div>
+<div class="flex-1 bg-primary h-[100%] rounded-t"></div>
+<div class="flex-1 bg-outline-variant h-[50%] rounded-t"></div>
+</div>
+</div>
+<!-- Card 4: Price Impact -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-lg shadow-sm relative group">
+<div class="flex justify-between items-start mb-4">
+<span class="text-label-sm font-label-sm text-on-surface-variant">Price Impact (bps/10M)</span>
+<span class="material-symbols-outlined text-[16px] text-outline cursor-help">info</span>
+</div>
+<div class="flex items-baseline gap-3 mb-4">
+<span class="text-display-lg font-display-lg text-on-surface">2.1</span>
+<span class="text-data-mono font-data-mono text-sm text-[#10B981] flex items-center"><span class="material-symbols-outlined text-[14px]">arrow_downward</span> -3.2%</span>
+</div>
+<div class="h-12 w-full bg-surface-container rounded overflow-hidden flex items-end">
+<div class="w-full h-full bg-gradient-to-t from-primary-fixed to-transparent opacity-50 relative border-b-2 border-primary-container"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- SECTION 2: INTRADAY MICROSTRUCTURE -->
+<section>
+<div class="flex items-center justify-between mb-6 border-b border-outline-variant pb-2">
+<h2 class="text-headline-md font-headline-md text-on-surface">2. Intraday Microstructure</h2>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-8 shadow-sm">
+<!-- Chart Header -->
+<div class="flex items-center justify-between mb-8">
+<div>
+<h3 class="text-headline-sm font-headline-sm text-on-surface mb-1">Universe Aggregate Spread (bps)</h3>
+<p class="text-body-md text-on-surface-variant">Intraday evolution vs Benchmark</p>
+</div>
+<div class="flex items-center gap-6 text-label-md bg-surface p-2 rounded border border-outline-variant">
+<div class="flex items-center gap-2"><div class="w-4 h-1 bg-primary rounded"></div> Report Period</div>
+<div class="flex items-center gap-2"><div class="w-4 h-1 bg-outline-variant border-t-2 border-dashed"></div> Benchmark</div>
+</div>
+</div>
+<!-- Hero Chart Canvas (Mock) -->
+<div class="w-full h-80 border-l border-b border-outline-variant relative mb-6 ml-8">
+<!-- Y-Axis labels -->
+<div class="absolute -left-10 top-0 text-[11px] text-on-surface-variant font-data-mono">12.0</div>
+<div class="absolute -left-10 top-1/4 text-[11px] text-on-surface-variant font-data-mono">10.0</div>
+<div class="absolute -left-10 top-1/2 -translate-y-1/2 text-[11px] text-on-surface-variant font-data-mono">8.0</div>
+<div class="absolute -left-10 top-3/4 text-[11px] text-on-surface-variant font-data-mono">6.0</div>
+<div class="absolute -left-10 bottom-0 text-[11px] text-on-surface-variant font-data-mono">4.0</div>
+<!-- Grid Lines -->
+<div class="absolute w-full h-px bg-surface-container-high top-1/4"></div>
+<div class="absolute w-full h-px bg-surface-container-high top-1/2"></div>
+<div class="absolute w-full h-px bg-surface-container-high top-3/4"></div>
+<!-- Data Lines (CSS Mock) -->
+<div class="absolute w-full h-full">
+<!-- Benchmark Band -->
+<svg class="w-full h-full" preserveaspectratio="none" viewbox="0 0 100 100">
+<path d="M0,60 Q10,55 20,60 T40,65 T60,55 T80,60 T100,50 L100,70 Q80,80 60,75 T40,85 T20,80 T0,80 Z" fill="#f2f4f6" opacity="0.8"></path>
+<path d="M0,65 Q10,60 20,65 T40,70 T60,60 T80,65 T100,55" fill="none" stroke="#c2c7d1" stroke-dasharray="4,4" stroke-width="0.75"></path>
+<!-- Today Line (Elevated Spread Morning) -->
+<path d="M0,50 Q5,30 15,35 T30,40 T45,60 T65,55 T80,60 T100,50" fill="none" stroke="#00355f" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path>
+</svg>
+</div>
+</div>
+<!-- X-Axis Labels -->
+<div class="flex justify-between text-[11px] text-on-surface-variant font-data-mono px-2 ml-8">
+<span class="">09:00</span>
+<span class="">10:00</span>
+<span class="">11:30</span>
+<span class="">12:30</span>
+<span class="">14:00</span>
+<span class="">15:00</span>
+</div>
+<!-- Analytical Narrative Block -->
+<div class="mt-8 bg-secondary-container/30 border border-secondary-fixed-dim rounded-lg p-6 flex gap-4 items-start">
+<div class="mt-1 text-primary-container bg-surface-container-lowest p-2 rounded-full border border-outline-variant shadow-sm">
+<span class="material-symbols-outlined fill-icon">lightbulb</span>
+</div>
+<div>
+<h4 class="text-headline-sm font-headline-sm text-on-surface mb-2">Automated Insight Summary</h4>
+<p class="text-body-lg font-body-lg text-on-surface-variant leading-relaxed">
+                            Spreads widened by <strong class="text-error font-semibold">15%</strong> during the morning session (09:30-10:15) primarily driven by the Financials sector reacting to macro news. Depth remains 5% below benchmark levels, indicating reduced resting liquidity despite higher volatility. Reversion to mean was observed post-lunch session.
+                        </p>
+</div>
+</div>
+</div>
+</section>
+<!-- SECTION 3: METRIC EXPLORER & GROUP ANALYSIS -->
+<section>
+<div class="flex items-center justify-between mb-6 border-b border-outline-variant pb-2">
+<h2 class="text-headline-md font-headline-md text-on-surface">3. Metric Explorer &amp; Group Analysis</h2>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<!-- Heatmap Panel -->
+<div class="lg:col-span-1 bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm flex flex-col">
+<h3 class="text-label-md font-label-md text-on-surface font-semibold mb-4">Sector Heatmap (Spread vs Volatility)</h3>
+<div class="flex-1 grid grid-cols-2 gap-2">
+<!-- Mock Heatmap Cells -->
+<div class="bg-error-container p-3 rounded border border-error/20 flex flex-col justify-between">
+<span class="text-label-sm font-label-sm text-on-error-container">Financials</span>
+<span class="text-data-mono text-error font-bold">+18%</span>
+</div>
+<div class="bg-surface-container p-3 rounded border border-outline-variant flex flex-col justify-between">
+<span class="text-label-sm font-label-sm text-on-surface">Tech</span>
+<span class="text-data-mono text-on-surface-variant">+2%</span>
+</div>
+<div class="bg-[#10B981]/20 p-3 rounded border border-[#10B981]/30 flex flex-col justify-between">
+<span class="text-label-sm font-label-sm text-[#065F46]">Healthcare</span>
+<span class="text-data-mono text-[#065F46] font-bold">-5%</span>
+</div>
+<div class="bg-error-container/50 p-3 rounded border border-error/20 flex flex-col justify-between">
+<span class="text-label-sm font-label-sm text-on-error-container">Energy</span>
+<span class="text-data-mono text-error">+12%</span>
+</div>
+<div class="bg-surface-container p-3 rounded border border-outline-variant flex flex-col justify-between">
+<span class="text-label-sm font-label-sm text-on-surface">Industrials</span>
+<span class="text-data-mono text-on-surface-variant">0%</span>
+</div>
+<div class="bg-[#10B981]/20 p-3 rounded border border-[#10B981]/30 flex flex-col justify-between">
+<span class="text-label-sm font-label-sm text-[#065F46]">Utilities</span>
+<span class="text-data-mono text-[#065F46]">-3%</span>
+</div>
+<div class="bg-surface-container p-3 rounded border border-outline-variant flex flex-col justify-between">
+<span class="text-label-sm font-label-sm text-on-surface">Cons Disc</span>
+<span class="text-data-mono text-on-surface-variant">+1%</span>
+</div>
+<div class="bg-error-container p-3 rounded border border-error/20 flex flex-col justify-between">
+<span class="text-label-sm font-label-sm text-on-error-container">Materials</span>
+<span class="text-data-mono text-error font-bold">+15%</span>
+</div>
+</div>
+</div>
+<!-- Charts Panel -->
+<div class="lg:col-span-2 flex flex-col gap-6">
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm h-64 flex flex-col">
+<h3 class="text-label-md font-label-md text-on-surface font-semibold mb-4">Bid-Ask Spread by Market Cap</h3>
+<div class="flex-1 w-full flex items-end gap-4"><div class="flex-1 flex flex-col justify-end items-center group">
+<div class="flex items-end gap-1 h-full w-full justify-center px-2">
+<div class="w-8 bg-primary rounded-t shadow-sm" style="height: 85%;" title="Current: Small Cap"></div>
+<div class="w-8 bg-outline-variant/40 border-x border-t border-dashed border-outline-variant/60 rounded-t" style="height: 70%;" title="Reference: Small Cap"></div>
+</div>
+<span class="text-[10px] text-on-surface-variant mt-2 font-data-mono">Small Cap</span>
+</div>
+<div class="flex-1 flex flex-col justify-end items-center group">
+<div class="flex items-end gap-1 h-full w-full justify-center px-2">
+<div class="w-8 bg-primary rounded-t shadow-sm" style="height: 55%;" title="Current: Mid Cap"></div>
+<div class="w-8 bg-outline-variant/40 border-x border-t border-dashed border-outline-variant/60 rounded-t" style="height: 48%;" title="Reference: Mid Cap"></div>
+</div>
+<span class="text-[10px] text-on-surface-variant mt-2 font-data-mono">Mid Cap</span>
+</div>
+<div class="flex-1 flex flex-col justify-end items-center group">
+<div class="flex items-end gap-1 h-full w-full justify-center px-2">
+<div class="w-8 bg-primary rounded-t shadow-sm" style="height: 35%;" title="Current: Large Cap"></div>
+<div class="w-8 bg-outline-variant/40 border-x border-t border-dashed border-outline-variant/60 rounded-t" style="height: 38%;" title="Reference: Large Cap"></div>
+</div>
+<span class="text-[10px] text-on-surface-variant mt-2 font-data-mono">Large Cap</span>
+</div>
+<div class="flex-1 flex flex-col justify-end items-center group">
+<div class="flex items-end gap-1 h-full w-full justify-center px-2">
+<div class="w-8 bg-primary rounded-t shadow-sm" style="height: 18%;" title="Current: Mega Cap"></div>
+<div class="w-8 bg-outline-variant/40 border-x border-t border-dashed border-outline-variant/60 rounded-t" style="height: 22%;" title="Reference: Mega Cap"></div>
+</div>
+<span class="text-[10px] text-on-surface-variant mt-2 font-data-mono">Mega Cap</span>
+</div></div>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm h-64 flex flex-col">
+<h3 class="text-label-md font-label-md text-on-surface font-semibold mb-4">Quoted Depth Distribution</h3>
+<div class="flex-1 w-full relative border-l border-b border-outline-variant ml-6 mb-2 overflow-hidden">
+<div class="absolute -left-6 bottom-0 text-[10px] text-on-surface-variant font-data-mono">0</div>
+<div class="absolute -left-6 top-1 text-[10px] text-on-surface-variant font-data-mono">100</div>
+<svg class="w-full h-full" preserveaspectratio="none" viewbox="0 0 100 100">
+<path d="M0,90 L20,70 L40,30 L60,40 L80,20 L100,50" fill="none" stroke="#505f76" stroke-width="2"></path>
+<circle cx="40" cy="30" fill="#505f76" r="3"></circle>
+<circle cx="80" cy="20" fill="#505f76" r="3"></circle>
+</svg>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- SECTION 4: SECURITY DRILLDOWN & ANOMALY DETECTION -->
+<section>
+<div class="flex items-center justify-between mb-6 border-b border-outline-variant pb-2">
+<h2 class="text-headline-md font-headline-md text-on-surface">4. Security Drilldown &amp; Anomaly Detection</h2>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<!-- Screener Table -->
+<div class="lg:col-span-2 bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm flex flex-col">
+<div class="p-4 border-b border-outline-variant bg-surface flex justify-between items-center">
+<h3 class="text-label-md font-label-md text-on-surface font-semibold">Top Anomalies (Spread Dev vs Benchmark)</h3>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low text-[10px] uppercase tracking-wider text-on-surface-variant border-b border-outline-variant">
+<th class="p-3 font-semibold">Ticker</th>
+<th class="p-3 font-semibold">Name</th>
+<th class="p-3 font-semibold text-right">Spread (bps)</th>
+<th class="p-3 font-semibold text-right">Dev vs Bmk</th>
+<th class="p-3 font-semibold text-right">Volume (M)</th>
+</tr>
+</thead>
+<tbody class="text-sm font-data-mono text-on-surface">
+<tr class="border-b border-outline-variant hover:bg-surface-container-low cursor-pointer bg-error-container/10">
+<td class="p-3 font-bold text-primary">8306.T</td>
+<td class="p-3 font-body-md">Mitsubishi UFJ</td>
+<td class="p-3 text-right">12.4</td>
+<td class="p-3 text-right text-error">+45%</td>
+<td class="p-3 text-right">124.5</td>
+</tr>
+<tr class="border-b border-outline-variant hover:bg-surface-container-low cursor-pointer">
+<td class="p-3 font-bold text-primary">9984.T</td>
+<td class="p-3 font-body-md">SoftBank Group</td>
+<td class="p-3 text-right">8.1</td>
+<td class="p-3 text-right text-error">+22%</td>
+<td class="p-3 text-right">86.2</td>
+</tr>
+<tr class="border-b border-outline-variant hover:bg-surface-container-low cursor-pointer">
+<td class="p-3 font-bold text-primary">7203.T</td>
+<td class="p-3 font-body-md">Toyota Motor</td>
+<td class="p-3 text-right">4.5</td>
+<td class="p-3 text-right text-on-surface-variant">+5%</td>
+<td class="p-3 text-right">150.1</td>
+</tr>
+<tr class="border-b border-outline-variant hover:bg-surface-container-low cursor-pointer">
+<td class="p-3 font-bold text-primary">6861.T</td>
+<td class="p-3 font-body-md">Keyence</td>
+<td class="p-3 text-right">18.2</td>
+<td class="p-3 text-right text-[#10B981]">-8%</td>
+<td class="p-3 text-right">12.4</td>
+</tr>
+<tr class="hover:bg-surface-container-low cursor-pointer">
+<td class="p-3 font-bold text-primary">6758.T</td>
+<td class="p-3 font-body-md">Sony Group</td>
+<td class="p-3 text-right">6.8</td>
+<td class="p-3 text-right text-[#10B981]">-12%</td>
+<td class="p-3 text-right">45.8</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Detail Panel -->
+<div class="lg:col-span-1 bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm flex flex-col">
+<div class="mb-6 border-b border-outline-variant pb-4">
+<div class="flex items-center justify-between mb-2">
+<h3 class="text-headline-md font-headline-md text-on-surface">8306.T</h3>
+<span class="px-2 py-1 bg-error-container text-on-error-container text-[10px] rounded font-bold uppercase">Anomaly Alert</span>
+</div>
+<p class="text-body-md text-on-surface-variant">Mitsubishi UFJ Financial Group</p>
+</div>
+<div class="space-y-4 flex-1">
+<div class="flex justify-between items-center py-2 border-b border-outline-variant/50">
+<span class="text-label-sm text-on-surface-variant">Sector</span>
+<span class="text-label-md font-semibold text-on-surface">Financials</span>
+</div>
+<div class="flex justify-between items-center py-2 border-b border-outline-variant/50">
+<span class="text-label-sm text-on-surface-variant">Current Spread</span>
+<span class="text-data-mono font-bold text-error">12.4 bps</span>
+</div>
+<div class="flex justify-between items-center py-2 border-b border-outline-variant/50">
+<span class="text-label-sm text-on-surface-variant">Avg Spread</span>
+<span class="text-data-mono text-on-surface">8.5 bps</span>
+</div>
+<div class="flex justify-between items-center py-2 border-b border-outline-variant/50">
+<span class="text-label-sm text-on-surface-variant">Order Book Imbalance</span>
+<span class="text-data-mono text-[#10B981]">65% Bid Side</span>
+</div>
+<div class="flex justify-between items-center py-2 border-b border-outline-variant/50">
+<span class="text-label-sm text-on-surface-variant">Volatility (Intraday)</span>
+<span class="text-data-mono text-error">High</span>
+</div>
+</div>
+<div class="mt-6 bg-surface-container p-4 rounded-lg">
+<p class="text-[11px] text-on-surface-variant leading-relaxed">
+<strong class="text-on-surface">Context:</strong> Significant spread widening observed alongside a large bid-side order book imbalance, suggesting absorption of a block sell order or reaction to sector-specific news flow. Liquidity provisioning has temporarily retreated.
+                        </p>
+</div>
+</div>
+</div>
+</section>
+<!-- SECTION 5: PTS REVERSION ANALYSIS -->
+<section>
+<div class="flex items-center justify-between mb-6 border-b border-outline-variant pb-2">
+<h2 class="text-headline-md font-headline-md text-on-surface">5. Venue Reversion Analysis</h2>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<div class="lg:col-span-2 bg-surface-container-lowest border border-outline-variant rounded-xl p-8 shadow-sm">
+<!-- Chart Header -->
+<div class="flex items-center justify-between mb-8">
+<div>
+<h3 class="text-headline-sm font-headline-sm text-on-surface mb-1">Mean Reversion Speed (bps) by Latency</h3>
+<p class="text-body-md text-on-surface-variant">ODX vs SBIJ vs CHIJ Decay Curve</p>
+</div>
+<div class="flex items-center gap-6 text-label-md bg-surface p-2 rounded border border-outline-variant"><div class="flex items-center gap-2"><div class="w-4 h-1 bg-primary rounded"></div> ODX</div><div class="flex items-center gap-2"><div class="w-4 h-1 bg-secondary rounded"></div> SBIJ</div><div class="flex items-center gap-2"><div class="w-4 h-1 bg-tertiary-container rounded"></div> CHIJ</div></div>
+</div>
+<!-- Dual-Axis Bar Chart (Mock) -->
+<div class="w-full h-64 border-l border-b border-outline-variant relative mb-6 ml-8"><div class="absolute -left-10 top-0 text-[11px] text-on-surface-variant font-data-mono">2.0</div><div class="absolute -left-10 top-1/4 text-[11px] text-on-surface-variant font-data-mono">1.5</div><div class="absolute -left-10 top-1/2 -translate-y-1/2 text-[11px] text-on-surface-variant font-data-mono">1.0</div><div class="absolute -left-10 top-3/4 text-[11px] text-on-surface-variant font-data-mono">0.5</div><div class="absolute -left-10 bottom-0 text-[11px] text-on-surface-variant font-data-mono">0.0</div><div class="absolute w-full h-px bg-surface-container-high top-1/4"></div><div class="absolute w-full h-px bg-surface-container-high top-1/2"></div><div class="absolute w-full h-px bg-surface-container-high top-3/4"></div><div class="absolute w-full h-full"><svg class="w-full h-full" preserveaspectratio="none" viewbox="0 0 100 100"><path d="M0,20 L20,35 L40,55 L60,75 L80,85 L100,92" fill="none" stroke="#00355f" stroke-linejoin="round" stroke-width="2"></path><path d="M0,35 L20,50 L40,65 L60,82 L80,90 L100,95" fill="none" stroke="#505f76" stroke-linejoin="round" stroke-width="2"></path><path d="M0,25 L20,42 L40,60 L60,78 L80,88 L100,93" fill="none" stroke="#743b00" stroke-linejoin="round" stroke-width="2"></path></svg></div></div>
+<!-- X-Axis Labels -->
+<div class="flex justify-around text-[11px] text-on-surface-variant font-data-mono px-2 ml-8"><span>100ms</span><span>500ms</span><span>1s</span><span>5s</span><span>30s</span><span>1min</span></div>
+</div>
+<div class="lg:col-span-1 bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm flex flex-col justify-center">
+<div class="bg-primary-fixed/30 border border-primary-fixed-dim rounded-lg p-6 flex flex-col gap-4">
+<div class="text-primary bg-surface-container-lowest p-2 w-10 h-10 rounded-full border border-outline-variant shadow-sm flex items-center justify-center">
+<span class="material-symbols-outlined fill-icon">compare_arrows</span>
+</div>
+<h4 class="text-headline-sm font-headline-sm text-on-surface">Venue Dynamics</h4>
+<p class="text-body-md text-on-surface-variant leading-relaxed">ODX demonstrates superior price discovery at ultra-low latencies (&lt;500ms), with mean reversion speeds outperforming peer venues. As latency increases to 30s+, venue spreads converge significantly. This decay curve suggests that liquidity capture is most efficient on ODX for high-frequency strategies, while institutional block routing is less sensitive to venue choice at longer time horizons.</p>
+</div>
+</div>
+</div>
+</section>
+<!-- SECTION 6: DAILY METRIC TRENDS -->
+<section>
+<div class="flex items-center justify-between mb-6 border-b border-outline-variant pb-2">
+<h2 class="text-headline-md font-headline-md text-on-surface">6. Daily Metric Trends (Time Series)</h2>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-8 shadow-sm">
+<!-- Chart Header -->
+<div class="flex items-center justify-between mb-8">
+<div>
+<h3 class="text-headline-sm font-headline-sm text-on-surface mb-1">Aggregate Metrics Over Time</h3>
+<p class="text-body-md text-on-surface-variant">Daily evolution during reporting period</p>
+</div>
+<div class="flex items-center gap-6 text-label-md bg-surface p-2 rounded border border-outline-variant">
+<div class="flex items-center gap-2"><div class="w-4 h-1 bg-primary rounded"></div> Spread</div>
+<div class="flex items-center gap-2"><div class="w-4 h-1 bg-secondary rounded"></div> Depth</div>
+<div class="flex items-center gap-2"><div class="w-4 h-1 bg-error rounded"></div> Volatility</div>
+</div>
+</div>
+<!-- Time Series Chart Canvas (Mock) -->
+<div class="w-full h-80 border-l border-b border-outline-variant relative mb-6 ml-8">
+<!-- Y-Axis labels (Normalized) -->
+<div class="absolute -left-10 top-0 text-[11px] text-on-surface-variant font-data-mono">1.0</div>
+<div class="absolute -left-10 top-1/4 text-[11px] text-on-surface-variant font-data-mono">0.75</div>
+<div class="absolute -left-10 top-1/2 -translate-y-1/2 text-[11px] text-on-surface-variant font-data-mono">0.5</div>
+<div class="absolute -left-10 top-3/4 text-[11px] text-on-surface-variant font-data-mono">0.25</div>
+<div class="absolute -left-10 bottom-0 text-[11px] text-on-surface-variant font-data-mono">0.0</div>
+<!-- Grid Lines -->
+<div class="absolute w-full h-px bg-surface-container-high top-1/4"></div>
+<div class="absolute w-full h-px bg-surface-container-high top-1/2"></div>
+<div class="absolute w-full h-px bg-surface-container-high top-3/4"></div>
+<!-- Data Lines (CSS Mock) -->
+<div class="absolute w-full h-full">
+<svg class="w-full h-full" preserveaspectratio="none" viewbox="0 0 100 100">
+<!-- Spread Line -->
+<path d="M0,50 L10,55 L20,45 L30,60 L40,40 L50,50 L60,30 L70,45 L80,35 L90,55 L100,40" fill="none" stroke="#00355f" stroke-linejoin="round" stroke-width="2"></path>
+<!-- Depth Line -->
+<path d="M0,70 L10,65 L20,75 L30,60 L40,80 L50,70 L60,85 L70,65 L80,75 L90,60 L100,70" fill="none" stroke="#505f76" stroke-linejoin="round" stroke-width="2"></path>
+<!-- Volatility Line -->
+<path d="M0,30 L10,40 L20,25 L30,35 L40,20 L50,30 L60,15 L70,25 L80,10 L90,30 L100,20" fill="none" stroke="#ba1a1a" stroke-dasharray="4,2" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</div>
+</div>
+<!-- X-Axis Labels -->
+<div class="flex justify-between text-[11px] text-on-surface-variant font-data-mono px-2 ml-8">
+<span class="">Day 1</span>
+<span class="">Day 5</span>
+<span class="">Day 10</span>
+<span class="">Day 15</span>
+<span class="">Day 20</span>
+</div>
+</div>
+</section>
+<!-- Footer / End of Report -->
+<footer class="mt-12 pt-6 border-t border-outline-variant text-center pb-12 text-label-sm text-on-surface-variant flex flex-col items-center gap-2">
+<p class="">Generated by Microstructure AI | Strict Confidentiality Applied</p>
+<p class="text-[10px] text-outline">*Days refers to trading days (excluding weekends and exchange holidays).</p>
+</footer>
+</main>
+</body></html>

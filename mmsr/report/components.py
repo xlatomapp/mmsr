@@ -793,3 +793,4 @@ class ReportDocument:
     pages: list[ReportPage]
     branding: ReportBranding = field(default_factory=ReportBranding)
     generated_at_text: str | None = None
+    header_meta: Mapping[str, str] | None = None

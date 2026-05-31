@@ -6,7 +6,7 @@ from mmsr.report.components import (
     ReportDocument,
     ReportPage,
 )
-from mmsr.report.render_html import render_metric_card, render_report
+from mmsr.report.render_html import render_metric_card, render_report, render_report_v2
 
 QUOTED_SPREAD_BPS = next(m for m in STARTER_METRICS if m.name == "quoted_spread_bps")
 
@@ -56,3 +56,26 @@ def test_report_template_renders_branding_images() -> None:
     assert "Internal use only" in html
     assert "Executive Summary" in html
     assert "Spread widened." in html
+
+
+def test_report_v2_template_renders_fresh_top_header() -> None:
+    document = ReportDocument(
+        title="Equity Microstructure Intelligence Report",
+        branding=ReportBranding(brand_name="Microstructure AI"),
+        pages=[],
+        header_meta={
+            "subtitle": "Japanese Market Quantitative Analysis",
+            "period_text": "2023-10-27 to 2023-11-27 (20 days)",
+            "universe": "TSE",
+            "benchmark_period_text": "2023-09-25 to 2023-10-25 (20 days)",
+        },
+    )
+
+    html = render_report_v2(document)
+
+    assert "report-header-v2" in html
+    assert "Equity Microstructure Intelligence Report" in html
+    assert "TSE" in html
+    assert "2023-10-27 to 2023-11-27 (20 days)" in html
+    assert "2023-09-25 to 2023-10-25 (20 days)" in html
+    assert "Export PDF" in html

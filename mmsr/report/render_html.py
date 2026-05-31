@@ -94,3 +94,13 @@ def render_report(
     env = build_template_environment(template_dir)
     template = env.get_template("report.html.j2")
     return template.render(document=document)
+
+
+def render_report_v2(
+    document: ReportDocument,
+    template_dir: str | Path | None = None,
+) -> str:
+    """Render a fresh-format HTML report document."""
+    env = build_template_environment(template_dir)
+    template = env.get_template("report_v2.html.j2")
+    return template.render(document=document)

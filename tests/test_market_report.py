@@ -34,6 +34,11 @@ def test_market_monitor_report_is_canonical_production_format() -> None:
     assert isinstance(document, ReportDocument)
     assert document.title == "Japanese Market Microstructure Monitor"
     assert document.branding.brand_name == "Example Securities"
+    assert document.header_meta is not None
+    assert document.header_meta["subtitle"] == "Japanese Market Quantitative Analysis"
+    assert document.header_meta["universe"] == "TSE"
+    assert "day" in document.header_meta["period_text"]
+    assert "day" in document.header_meta["benchmark_period_text"]
     assert [page.title for page in document.pages] == [
         "Market Summary",
         "Activity Distribution",

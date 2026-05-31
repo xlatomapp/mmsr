@@ -80,8 +80,10 @@ class MarketReportOptions:
     """Presentation options for the canonical market monitor report."""
 
     title: str = "Japanese Market Microstructure Monitor"
+    subtitle: str = "Japanese Market Quantitative Analysis"
     brand_name: str | None = "mmsr"
     generated_at_text: str | None = None
+    universe_label: str = "TSE"
     summary_page_title: str = "Market Summary"
     detail_page_title: str = "Intraday Detail"
     executive_overview_title: str = "Executive Market Overview"
@@ -211,6 +213,8 @@ class MarketReportOptions:
 
     def __post_init__(self) -> None:
         _require_non_empty(self.title, "title")
+        _require_non_empty(self.subtitle, "subtitle")
+        _require_non_empty(self.universe_label, "universe_label")
         _require_optional_non_empty(self.brand_name, "brand_name")
         _require_optional_non_empty(self.generated_at_text, "generated_at_text")
         _require_non_empty(self.summary_page_title, "summary_page_title")
@@ -422,6 +426,7 @@ def build_market_monitor_report(
         generated_at_text=(
             None if resolved_options.generated_at_text is None else resolved_options.generated_at_text.strip()
         ),
+        header_meta=_build_document_header_meta(report_input, options=resolved_options),
     )
     if not resolved_options.include_metric_definitions_appendix:
         return document
@@ -553,6 +558,25 @@ def _build_summary_meta_strip_block(
         help_text="Page-1 run metadata for period, reference method, scope, and run tag.",
         body_html=body_html,
     )
+
+
+def _build_document_header_meta(
+    report_input: MarketReportInput,
+    *,
+    options: MarketReportOptions,
+) -> dict[str, str]:
+    current_dates = sorted(
+        {observation.date for series in report_input.current_series for observation in series.observations}
+    )
+    reference_dates = sorted(
+        {observation.date for series in report_input.reference_series for observation in series.observations}
+    )
+    return {
+        "subtitle": options.subtitle.strip(),
+        "period_text": _format_period_text(current_dates),
+        "benchmark_period_text": _format_period_text(reference_dates),
+        "universe": options.universe_label.strip(),
+    }
 
 
 def _format_period_text(dates: list[date]) -> str:

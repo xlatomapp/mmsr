@@ -133,6 +133,7 @@ def append_metric_definitions_appendix(
         pages=[*document.pages, appendix],
         branding=document.branding,
         generated_at_text=document.generated_at_text,
+        header_meta=document.header_meta,
     )
 
 
