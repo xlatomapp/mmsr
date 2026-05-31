@@ -244,8 +244,10 @@ def _build_symbol_anomaly_explorer_block(
         (
             '<button type="button" class="symbol-anomaly-explorer__row" '
             f'data-symbol-anomaly-index="{idx}" '
+            'aria-controls="symbol-anomaly-detail-panel" '
             f'aria-label="Select anomaly {escape(item["symbol"])} {escape(item["metric_label"])} '
-            f'status {escape(item["status"])}">'
+            f'status {escape(item["status"])}" '
+            'aria-pressed="false">'
             f'<span class="symbol-anomaly-explorer__symbol">{escape(item["symbol"])}</span>'
             f'<span class="symbol-anomaly-explorer__metric">{escape(item["metric_label"])}</span>'
             f'<span class="symbol-anomaly-explorer__status">{escape(item["status"])}</span>'
@@ -258,15 +260,18 @@ def _build_symbol_anomaly_explorer_block(
     body_html = (
         '<div class="symbol-anomaly-explorer" data-symbol-anomaly-explorer>'
         '<div class="symbol-anomaly-explorer__grid">'
-        '<div class="symbol-anomaly-explorer__left explorer-panel">'
-        '<h4 class="explorer-panel__title">Anomaly List</h4>'
-        '<p class="explorer-panel__subtitle">Select a row to update the detail panel.</p>'
+        '<div class="symbol-anomaly-explorer__left explorer-panel" '
+        'role="region" aria-labelledby="symbol-anomaly-list-title">'
+        '<h4 class="explorer-panel__title" id="symbol-anomaly-list-title">Anomaly List</h4>'
+        '<p class="explorer-panel__subtitle" id="symbol-anomaly-list-description">'
+        "Select a row to update the detail panel.</p>"
         f'<div class="symbol-anomaly-explorer__rows">{row_items}</div>'
         "</div>"
-        '<div class="symbol-anomaly-explorer__right explorer-panel">'
-        '<h4 class="explorer-panel__title">Selected Anomaly Detail</h4>'
-        '<div class="symbol-anomaly-explorer__detail" data-symbol-anomaly-detail '
-        'role="status" aria-live="polite"></div>'
+        '<div class="symbol-anomaly-explorer__right explorer-panel" '
+        'role="region" aria-labelledby="symbol-anomaly-detail-title">'
+        '<h4 class="explorer-panel__title" id="symbol-anomaly-detail-title">Selected Anomaly Detail</h4>'
+        '<div id="symbol-anomaly-detail-panel" class="symbol-anomaly-explorer__detail" '
+        'data-symbol-anomaly-detail role="status" aria-live="polite"></div>'
         "</div>"
         "</div>"
         f'<script type="application/json" data-symbol-anomaly-spec>{payload_json}</script>'

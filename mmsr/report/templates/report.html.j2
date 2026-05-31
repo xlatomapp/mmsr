@@ -1000,6 +1000,7 @@
               {responsive: true, displaylogo: false}
             );
             selectedLabel.textContent = "Selected group: " + groupName;
+            trendTarget.setAttribute("aria-label", "Selected group daily trend chart for " + groupName);
           };
 
           Plotly.newPlot(
@@ -1065,6 +1066,7 @@
           }
           rowButtons.forEach(function (button, buttonIndex) {
             button.classList.toggle("is-selected", buttonIndex === index);
+            button.setAttribute("aria-pressed", buttonIndex === index ? "true" : "false");
           });
           detailTarget.innerHTML =
             '<div class="symbol-anomaly-explorer__detail-item"><div class="symbol-anomaly-explorer__detail-label">Symbol</div><div class="symbol-anomaly-explorer__detail-value">' + row.symbol + "</div></div>" +

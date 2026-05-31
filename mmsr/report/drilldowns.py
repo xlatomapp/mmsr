@@ -326,26 +326,36 @@ def _build_group_metric_explorer_block(
     body_html = f"""
 <div class="drilldown-matrix-explorer" data-drilldown-matrix>
   <div class="drilldown-matrix-explorer__grid">
-    <div class="drilldown-matrix-explorer__panel explorer-panel">
-      <h4 class="explorer-panel__title">Group-Metric Heatmap</h4>
-      <p class="explorer-panel__subtitle">Rows are groups, columns are liquidity metrics.
+    <div
+      class="drilldown-matrix-explorer__panel explorer-panel"
+      role="region"
+      aria-labelledby="drilldown-heatmap-title">
+      <h4 class="explorer-panel__title" id="drilldown-heatmap-title">Group-Metric Heatmap</h4>
+      <p class="explorer-panel__subtitle" id="drilldown-heatmap-description">
+      Rows are groups, columns are liquidity metrics.
       Cells show mean % change, with mean z-score in parentheses for reference.</p>
       <div
         class="drilldown-matrix-explorer__chart"
         data-drilldown-heatmap
+        tabindex="0"
         role="img"
-        aria-label="Liquidity group-metric heatmap">
+        aria-label="Liquidity group-metric heatmap"
+        aria-describedby="drilldown-heatmap-description">
       </div>
       <p class="drilldown-matrix-explorer__legend">
         Cell format: mean % change (z-score reference).
       </p>
     </div>
-    <div class="drilldown-matrix-explorer__panel explorer-panel">
-      <h4 class="explorer-panel__title">Selected Group Daily Trend</h4>
-      <p class="explorer-panel__subtitle" data-drilldown-selected-group></p>
+    <div
+      class="drilldown-matrix-explorer__panel explorer-panel"
+      role="region"
+      aria-labelledby="drilldown-trend-title">
+      <h4 class="explorer-panel__title" id="drilldown-trend-title">Selected Group Daily Trend</h4>
+      <p class="explorer-panel__subtitle" data-drilldown-selected-group aria-live="polite"></p>
       <div
         class="drilldown-matrix-explorer__chart"
         data-drilldown-trend
+        tabindex="0"
         role="img"
         aria-label="Selected group daily trend chart">
       </div>

@@ -17,43 +17,55 @@ Use this file as the **active-step buffer**.
 
 ## Current Step Entry
 
-## 2026-05-31 — D5: section-level container hierarchy for pages 2-4
+## 2026-05-31 10:32 JST — D5 accessibility hardening for explorer panels
 
 ### What changed
-- Added page-type CSS classes for pages 2-4 (`report-page--activity`, `report-page--liquidity`, `report-page--daily-trends`) to the Jinja template.
-- Extended the template page-class logic to match page titles beyond just "Market Summary" using a cleaner `{% set %}` pattern.
-- Added consistent subsection framing CSS for chart-first pages:
-  - card-style containers (`background`, `border`, `border-radius: 10px`) wrapping each chart subsection
-  - chart-first layout rhythm with tighter first-chart spacing and consistent inter-chart margins
-  - section heading hierarchy at 18px for chart subsection titles
-- Added deterministic render assertions for:
-  - CSS selector presence for each page type's framing rules
-  - heading hierarchy CSS rules
-  - page-type class application in HTML (`report-page--activity`, `report-page--liquidity`, `report-page--daily-trends`)
-  - page ordering: Activity Distribution → Displayed Liquidity → Daily Trends
+- Performed the required task-start journal handoff:
+  - appended the previous completed D5 section-container entry from `_docs/latest_journal.md` to `_docs/journal.md`
+  - reset `_docs/latest_journal.md` back to its working-buffer template before implementation
+- Hardened the group matrix explorer accessibility semantics:
+  - added region labels for the heatmap and selected-trend panels
+  - linked the heatmap to its explanatory subtitle through `aria-describedby`
+  - made the Plotly heatmap and selected trend chart focusable with `tabindex="0"`
+  - added polite live-region semantics for selected group text
+  - updated selected-trend `aria-label` when the clicked group changes
+- Hardened the optional symbol anomaly explorer accessibility semantics:
+  - added labeled regions for the anomaly list and selected detail panel
+  - connected row buttons to the detail panel with `aria-controls`
+  - added deterministic `aria-pressed` state updates alongside the existing selected-row class
+  - kept the detail panel as a polite status/live region
+- Added regression assertions for these interactive-panel accessibility hooks in builder and rendered-report tests.
 
 ### Files changed
+- `_docs/journal.md`
+- `_docs/latest_journal.md`
+- `mmsr/report/drilldowns.py`
+- `mmsr/report/symbols.py`
 - `mmsr/report/templates/report.html.j2`
+- `tests/test_drilldowns.py`
 - `tests/test_market_report.py`
+- `tests/test_symbol_anomaly_pages.py`
 
-### Tests updated
+### Tests added or updated
+- `tests/test_drilldowns.py`
 - `tests/test_market_report.py`
+- `tests/test_symbol_anomaly_pages.py`
 
 ### Validation
-- `conda run -n mmsr pytest -q tests/test_market_report.py tests/test_offline_demo.py tests/test_mock_kdb_demo.py` passed (26 tests).
+- `conda run -n mmsr pytest -q tests/test_drilldowns.py tests/test_symbol_anomaly_pages.py tests/test_market_report.py tests/test_offline_demo.py tests/test_mock_kdb_demo.py` passed.
 - `PRE_COMMIT_HOME=/tmp/pre-commit-cache conda run -n mmsr pre-commit run --all-files` passed.
 
 ### Current milestone
-- D5 in progress.
+- D5 polish + accessibility.
 
-### Estimated completion
+### Estimated milestone completion percentage
 - ~100% of D5.
 
-### Remaining work
-- None for D5. The section-level container hierarchy for pages 2-4 is complete with framing, rhythm, and test assertions.
+### Remaining work for the milestone
+- None for this D5 accessibility hardening pass.
 
-### Best next deterministic implementation step
-- Begin D6: unified explorer panel styling pass for drilldown and anomaly sections. Ensure consistent visual treatment between matrix explorer panels, symbol anomaly rows, and detail panes.
+### Single best next deterministic step
+- Start the next redesign slice by tightening visual parity of the explorer panels: align matrix explorer and symbol anomaly panel density, panel spacing, and selected-state treatment with the reference report while preserving the existing accessibility hooks.
 
 ### Open questions
 - None.

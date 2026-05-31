@@ -224,8 +224,17 @@ def test_build_drilldown_report_page_formats_rows_with_metric_help() -> None:
     assert page.html_blocks[1].title == "Metric Explorer & Group Analysis"
     assert "data-drilldown-matrix-spec" in page.html_blocks[1].body_html
     assert "data-drilldown-heatmap" in page.html_blocks[1].body_html
+    assert 'role="region"' in page.html_blocks[1].body_html
+    assert 'aria-labelledby="drilldown-heatmap-title"' in page.html_blocks[1].body_html
+    assert 'id="drilldown-heatmap-title"' in page.html_blocks[1].body_html
+    assert 'id="drilldown-heatmap-description"' in page.html_blocks[1].body_html
+    assert 'aria-describedby="drilldown-heatmap-description"' in page.html_blocks[1].body_html
+    assert 'tabindex="0"' in page.html_blocks[1].body_html
     assert 'aria-label="Liquidity group-metric heatmap"' in page.html_blocks[1].body_html
     assert "data-drilldown-trend" in page.html_blocks[1].body_html
+    assert 'aria-labelledby="drilldown-trend-title"' in page.html_blocks[1].body_html
+    assert 'id="drilldown-trend-title"' in page.html_blocks[1].body_html
+    assert 'data-drilldown-selected-group aria-live="polite"' in page.html_blocks[1].body_html
     assert 'aria-label="Selected group daily trend chart"' in page.html_blocks[1].body_html
     assert 'class="drilldown-matrix-explorer__panel explorer-panel"' in page.html_blocks[1].body_html
     assert 'class="explorer-panel__title"' in page.html_blocks[1].body_html

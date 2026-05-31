@@ -112,7 +112,11 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
     assert "data-drilldown-matrix-spec" in html
     assert "data-drilldown-heatmap" in html
     assert 'aria-label="Liquidity group-metric heatmap"' in html
+    assert 'aria-describedby="drilldown-heatmap-description"' in html
+    assert 'tabindex="0"' in html
     assert 'aria-label="Selected group daily trend chart"' in html
+    assert 'data-drilldown-selected-group aria-live="polite"' in html
+    assert 'trendTarget.setAttribute("aria-label", "Selected group daily trend chart for " + groupName);' in html
     assert ".drilldown-matrix-explorer__grid {" in html
     assert "gap: 10px;" in html
     assert ".drilldown-matrix-explorer__panel h4 {" in html

@@ -109,7 +109,15 @@ def test_build_symbol_anomaly_page_renders_metric_table_with_scope_and_help() ->
     assert "data-symbol-anomaly-explorer" in page.html_blocks[0].body_html
     assert 'role="status"' in page.html_blocks[0].body_html
     assert 'aria-live="polite"' in page.html_blocks[0].body_html
+    assert 'role="region" aria-labelledby="symbol-anomaly-list-title"' in page.html_blocks[0].body_html
+    assert 'id="symbol-anomaly-list-title"' in page.html_blocks[0].body_html
+    assert 'id="symbol-anomaly-list-description"' in page.html_blocks[0].body_html
+    assert 'role="region" aria-labelledby="symbol-anomaly-detail-title"' in page.html_blocks[0].body_html
+    assert 'id="symbol-anomaly-detail-title"' in page.html_blocks[0].body_html
+    assert 'id="symbol-anomaly-detail-panel"' in page.html_blocks[0].body_html
     assert 'data-symbol-anomaly-index="0"' in page.html_blocks[0].body_html
+    assert 'aria-controls="symbol-anomaly-detail-panel"' in page.html_blocks[0].body_html
+    assert 'aria-pressed="false"' in page.html_blocks[0].body_html
     assert 'aria-label="Select anomaly 7203 Quoted Spread status Alert"' in page.html_blocks[0].body_html
     assert 'class="symbol-anomaly-explorer__left explorer-panel"' in page.html_blocks[0].body_html
     assert "Anomaly List" in page.html_blocks[0].body_html
@@ -565,6 +573,12 @@ def test_market_report_adds_symbol_detail_index_when_detail_pages_exist() -> Non
     assert "data-symbol-anomaly-spec" in html
     assert 'role="status"' in html
     assert 'aria-live="polite"' in html
+    assert 'aria-controls="symbol-anomaly-detail-panel"' in html
+    assert 'aria-pressed="false"' in html
+    assert 'id="symbol-anomaly-detail-panel"' in html
+    assert 'role="region" aria-labelledby="symbol-anomaly-list-title"' in html
+    assert 'role="region" aria-labelledby="symbol-anomaly-detail-title"' in html
+    assert 'button.setAttribute("aria-pressed", buttonIndex === index ? "true" : "false");' in html
     assert 'aria-label="Select anomaly 7203 Quoted Spread status Alert"' in html
     assert ".symbol-anomaly-explorer__row:focus-visible" in html
     assert ".symbol-anomaly-explorer__rows {" in html
