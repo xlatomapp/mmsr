@@ -1,7 +1,10 @@
+import json
+import re
 import pytest
 from datetime import date
 
 from mmsr.examples import build_offline_sample_metrics
+from mmsr.metrics.base import MetricDefinition
 from mmsr.metrics.results import MetricComparison, MetricObservation, MetricTimeSeries
 from mmsr.report import market_report as market_report_module
 from mmsr.report import (
@@ -21,6 +24,30 @@ def _input_from_mock_sample() -> MarketReportInput:
         comparisons=sample.comparisons,
         reference_series=sample.reference_series,
     )
+
+
+def _extract_detailed_trends_spec(body_html: str) -> dict[str, object]:
+    match = re.search(r'<script type="application/json" data-detailed-trends-spec>(.*?)</script>', body_html)
+    assert match is not None
+    return json.loads(match.group(1))
+
+
+def _extract_card_delta_pct(overview_html: str, card_label: str) -> float | None:
+    pattern = (
+        r'<article class="market-overview-card">.*?'
+        rf'<p class="market-overview-card__label">{re.escape(card_label)}</p>.*?'
+        r'<p class="market-overview-card__delta[^"]*">([^<]+)</p>'
+    )
+    match = re.search(pattern, overview_html, flags=re.DOTALL)
+    assert match is not None
+    text = match.group(1).strip()
+    if text == "no comparison":
+        return None
+    if text == "0.0%":
+        return 0.0
+    direction = 1.0 if text.startswith("↑") else -1.0
+    pct = float(text.split()[-1].rstrip("%")) / 100.0
+    return direction * pct
 
 
 def test_market_monitor_report_is_canonical_production_format() -> None:
@@ -299,6 +326,162 @@ def test_detailed_trends_metric_rollups_match_semantics() -> None:
     assert [value for _, _, value in turnover_daily] == [15.0, 8.0]
     assert [value for _, _, value in spread_daily] == [6.0, 9.0]
     assert pytest.approx(volatility_weekly[0][2], rel=1e-9) == ((3.0**2 + 4.0**2) / 2.0) ** 0.5
+
+
+def test_market_overview_card_delta_matches_detailed_trends_means() -> None:
+    document = build_market_monitor_report(
+        _input_from_mock_sample(),
+        options=MarketReportOptions(include_metric_definitions_appendix=False),
+    )
+    summary_page = document.pages[0]
+    overview_html = next(block.body_html for block in summary_page.html_blocks if block.title == "Market Overview")
+    detailed_html = next(block.body_html for block in summary_page.html_blocks if block.title == "Detailed Metric Trends")
+    spec = _extract_detailed_trends_spec(detailed_html)
+    metrics = spec["metrics"]
+    for card_label, metric_name in (
+        ("Traded Value", "turnover"),
+        ("Quoted Spread", "quoted_spread_bps"),
+        ("Top of book Depth", "top_of_book_depth"),
+        ("Volatility", "parkinson_volatility_bps"),
+    ):
+        detail = metrics[metric_name]
+        benchmark_mean = detail["benchmark_mean"]
+        target_mean = detail["target_mean"]
+        expected_pct = None if benchmark_mean in (None, 0) or target_mean is None else (target_mean - benchmark_mean) / benchmark_mean
+        observed_pct = _extract_card_delta_pct(overview_html, card_label)
+        if expected_pct is None:
+            assert observed_pct is None
+        else:
+            assert observed_pct == pytest.approx(expected_pct, abs=5e-4)
+
+
+def test_market_overview_spark_and_delta_sign_are_consistent() -> None:
+    metric_definitions = build_offline_sample_metrics().metric_definitions
+    current_positive = MetricTimeSeries(
+        metric_name="quoted_spread_bps",
+        observations=(
+            MetricObservation("quoted_spread_bps", date(2026, 5, 1), None, {}, 12.0),
+            MetricObservation("quoted_spread_bps", date(2026, 5, 2), None, {}, 13.0),
+            MetricObservation("quoted_spread_bps", date(2026, 5, 3), None, {}, 14.0),
+        ),
+    )
+    reference_positive = MetricTimeSeries(
+        metric_name="quoted_spread_bps",
+        observations=(
+            MetricObservation("quoted_spread_bps", date(2026, 4, 1), None, {}, 8.0),
+            MetricObservation("quoted_spread_bps", date(2026, 4, 2), None, {}, 9.0),
+        ),
+    )
+    positive_input = MarketReportInput(
+        metric_definitions=metric_definitions,
+        current_series=(current_positive,),
+        comparisons=(),
+        reference_series=(reference_positive,),
+    )
+    positive_block = market_report_module._build_market_overview_cards_block(positive_input, (), metric_definitions)
+    assert positive_block is not None
+    assert "Quoted Spread" in positive_block.body_html
+    assert "market-overview-card__delta--up" in positive_block.body_html
+
+    current_negative = MetricTimeSeries(
+        metric_name="quoted_spread_bps",
+        observations=(
+            MetricObservation("quoted_spread_bps", date(2026, 5, 1), None, {}, 6.0),
+            MetricObservation("quoted_spread_bps", date(2026, 5, 2), None, {}, 7.0),
+            MetricObservation("quoted_spread_bps", date(2026, 5, 3), None, {}, 7.5),
+        ),
+    )
+    negative_input = MarketReportInput(
+        metric_definitions=metric_definitions,
+        current_series=(current_negative,),
+        comparisons=(),
+        reference_series=(reference_positive,),
+    )
+    negative_block = market_report_module._build_market_overview_cards_block(negative_input, (), metric_definitions)
+    assert negative_block is not None
+    assert "Quoted Spread" in negative_block.body_html
+    assert "market-overview-card__delta--down" in negative_block.body_html
+
+
+def test_metric_aggregate_payload_handles_none_zero_and_granularity() -> None:
+    report_input = MarketReportInput(
+        metric_definitions={},
+        current_series=(
+            MetricTimeSeries(
+                metric_name="quoted_spread_bps",
+                observations=(
+                    MetricObservation("quoted_spread_bps", date(2026, 5, 1), None, {}, None),
+                    MetricObservation("quoted_spread_bps", date(2026, 5, 1), None, {}, 10.0),
+                    MetricObservation("quoted_spread_bps", date(2026, 5, 2), None, {}, 14.0),
+                ),
+            ),
+        ),
+        comparisons=(),
+        reference_series=(
+            MetricTimeSeries(
+                metric_name="quoted_spread_bps",
+                observations=(
+                    MetricObservation("quoted_spread_bps", date(2026, 4, 1), None, {}, 0.0),
+                    MetricObservation("quoted_spread_bps", date(2026, 4, 2), None, {}, 0.0),
+                ),
+            ),
+        ),
+    )
+    payloads = market_report_module._build_metric_aggregate_payloads(
+        report_input,
+        metric_names=("quoted_spread_bps",),
+        granularity="weekly",
+    )
+    payload = payloads["quoted_spread_bps"]
+    assert [value for _, value in payload.daily_current] == [10.0, 14.0]
+    assert len(payload.bucketed_current) == 1
+    assert payload.target_mean == pytest.approx(12.0)
+    assert payload.benchmark_mean == pytest.approx(0.0)
+    assert payload.delta_pct is None
+
+
+def test_turnover_distribution_renders_group_session_heatmap_table() -> None:
+    definition = MetricDefinition(
+        name="turnover",
+        label="Turnover",
+        category="Activity",
+        description="Summed traded value.",
+        formula="sum(price*qty)",
+        unit="JPY",
+        higher_is_better=True,
+        default_aggregation="sum",
+        supports_intraday=True,
+        supports_symbol_level=False,
+        required_tables=["trades"],
+        required_columns=["price", "qty"],
+    )
+    target = MetricTimeSeries(
+        metric_name="turnover",
+        observations=(
+            MetricObservation("turnover", date(2026, 5, 1), "AMO", {"topixCapGrp": "Large"}, 2_000_000_000.0),
+            MetricObservation("turnover", date(2026, 5, 1), "PMC", {"topixCapGrp": "Mid"}, 1_000_000_000.0),
+        ),
+    )
+    reference = MetricTimeSeries(
+        metric_name="turnover",
+        observations=(
+            MetricObservation("turnover", date(2026, 4, 1), "AMO", {"topixCapGrp": "Large"}, 1_000_000_000.0),
+            MetricObservation("turnover", date(2026, 4, 1), "PMC", {"topixCapGrp": "Mid"}, 2_000_000_000.0),
+        ),
+    )
+    block = market_report_module.build_summary_activity_distribution_html_block(
+        "Turnover cumulative intraday distribution",
+        reference_series=reference,
+        target_series=target,
+        metric_definition=definition,
+    )
+    assert "turnover-distribution__heatmap-table" in block.body_html
+    assert "TSE" in block.body_html
+    assert "TOPIX Large" in block.body_html
+    assert "TOPIX Mid" in block.body_html
+    assert "Non-TOPIX" in block.body_html
+    assert ">AMO<" in block.body_html
+    assert ">PMC<" in block.body_html
 
 
 def test_market_monitor_report_can_disable_drilldown_page() -> None:

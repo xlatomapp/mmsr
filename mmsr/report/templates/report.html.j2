@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ document.title }}</title>
-  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" defer></script>
+  {% if plotly_inline_js %}<script>{{ plotly_inline_js | safe }}</script>{% endif %}
   <style>
     :root {
       --mmsr-bg: #edf2f8;
@@ -1008,6 +1008,14 @@
   </main>
   <script>
     window.addEventListener("DOMContentLoaded", function () {
+      var withBasePlotlyConfig = function (config) {
+        var base = {
+          responsive: true,
+          displaylogo: false,
+          modeBarButtonsToRemove: ["lasso2d", "select2d"],
+        };
+        return Object.assign({}, base, config || {});
+      };
       var renderCharts = function () {
         if (!window.Plotly) {
           return;
@@ -1022,7 +1030,7 @@
             target,
             figure.data || [],
             figure.layout || {},
-            figure.config || {responsive: true, displaylogo: false}
+            withBasePlotlyConfig(figure.config || {})
           );
           target.dataset.mmsrRendered = "1";
         });
@@ -1075,7 +1083,7 @@
                 hovermode: "x unified",
                 height: 320,
               },
-              {responsive: true, displaylogo: false}
+              withBasePlotlyConfig({})
             );
             selectedLabel.textContent = "Selected group: " + groupName;
             trendTarget.setAttribute("aria-label", "Selected group daily trend chart for " + groupName);
@@ -1105,7 +1113,7 @@
               yaxis: {title: "Group", type: "category"},
               height: 320,
             },
-            {responsive: true, displaylogo: false}
+            withBasePlotlyConfig({})
           ).then(function () {
             renderTrend(defaultGroup);
           });

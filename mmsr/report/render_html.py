@@ -17,6 +17,18 @@ from mmsr.report.components import (
 )
 
 
+def _load_local_plotly_js(template_dir: str | Path | None = None) -> str:
+    """Load bundled Plotly JS so reports do not rely on CDN."""
+    if template_dir is None:
+        base_dir = Path(__file__).resolve().parent / "templates"
+    else:
+        base_dir = Path(template_dir)
+    plotly_path = base_dir / "assets" / "plotly.min.js"
+    if not plotly_path.exists():
+        return ""
+    return plotly_path.read_text(encoding="utf-8")
+
+
 def build_template_environment(template_dir: str | Path | None = None) -> Environment:
     """Build the Jinja environment used for HTML reports.
 
@@ -93,7 +105,7 @@ def render_report(
     """
     env = build_template_environment(template_dir)
     template = env.get_template("report.html.j2")
-    return template.render(document=document)
+    return template.render(document=document, plotly_inline_js=_load_local_plotly_js(template_dir))
 
 
 def render_report_v2(
@@ -103,4 +115,4 @@ def render_report_v2(
     """Render a fresh-format HTML report document."""
     env = build_template_environment(template_dir)
     template = env.get_template("report_v2.html.j2")
-    return template.render(document=document)
+    return template.render(document=document, plotly_inline_js=_load_local_plotly_js(template_dir))

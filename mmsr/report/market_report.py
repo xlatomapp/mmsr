@@ -362,6 +362,19 @@ class MarketReportOptions:
         _require_drilldown_group_keys(self.drilldown_group_keys)
 
 
+@dataclass(frozen=True)
+class _MetricAggregatePayload:
+    metric_name: str
+    daily_current: tuple[tuple[date, float], ...]
+    daily_reference: tuple[tuple[date, float], ...]
+    bucketed_current: tuple[tuple[tuple[int, ...], str, float], ...]
+    bucketed_reference: tuple[tuple[tuple[int, ...], str, float], ...]
+    spark_points: tuple[tuple[str, float], ...]
+    target_mean: float | None
+    benchmark_mean: float | None
+    delta_pct: float | None
+
+
 def build_market_monitor_report(
     report_input: MarketReportInput,
     *,
@@ -479,7 +492,7 @@ def _build_turnover_distribution_summary_block(
     if definition is None:
         return None
     return build_summary_activity_distribution_html_block(
-        "Turnover cumulative intraday distribution",
+        "Intraday Turnover Distribution",
         reference_series=reference_series,
         target_series=target_series,
         metric_definition=definition,
@@ -681,6 +694,16 @@ def _build_market_overview_cards_block(
 ) -> HtmlBlock | None:
     comparisons_by_metric = {comparison.metric_name: comparison for comparison in summary_metric_comparisons}
     volatility_metric_name = _pick_volatility_metric_name(comparisons_by_metric)
+    aggregate_by_metric = _build_metric_aggregate_payloads(
+        report_input,
+        metric_names=(
+            "turnover",
+            "quoted_spread_bps",
+            "top_of_book_depth",
+            *(() if volatility_metric_name is None else (volatility_metric_name,)),
+        ),
+        granularity="daily",
+    )
 
     card_specs = (
         ("Traded Value", "turnover"),
@@ -691,77 +714,18 @@ def _build_market_overview_cards_block(
     cards_html: list[str] = []
     for card_label, metric_name in card_specs:
         aggregation_text = _overview_card_aggregation_text(card_label)
-        comparison = None if metric_name is None else comparisons_by_metric.get(metric_name)
         definition = None if metric_name is None else definitions.get(metric_name)
-        if card_label == "Traded Value" and metric_name == "turnover":
-            turnover_override = _average_daily_value_comparison(report_input, "turnover")
-            if turnover_override is not None:
-                value_override, change_pct_override = turnover_override
-                value_text = _format_overview_card_value(value_override, "JPY")
-                delta_text = _format_overview_delta_text(change_pct_override)
-                delta_class = _delta_direction_class(change_pct_override)
-                cards_html.append(
-                    '    <article class="market-overview-card">'
-                    '<div class="market-overview-card__heading">'
-                    f'<p class="market-overview-card__label">{escape(card_label)}</p>'
-                    f'{_overview_metric_help_html(card_label, definition, aggregation_text)}'
-                    "</div>"
-                    f'<p class="market-overview-card__value">{escape(value_text)}</p>'
-                    f'<p class="market-overview-card__delta market-overview-card__delta--{escape(delta_class)}">{escape(delta_text)}</p>'
-                    f'{_overview_spark_bar_html(report_input, card_label, metric_name)}'
-                    "</article>"
-                )
-                continue
-        if card_label == "Volatility" and metric_name is not None:
-            volatility_override = _period_rms_value_comparison(report_input, metric_name)
-            if volatility_override is not None:
-                value_override, change_pct_override = volatility_override
-                unit = "bps" if definition is None else definition.unit
-                value_text = _format_overview_card_value(value_override, unit)
-                delta_text = _format_overview_delta_text(change_pct_override)
-                delta_class = _delta_direction_class(change_pct_override)
-                cards_html.append(
-                    '    <article class="market-overview-card">'
-                    '<div class="market-overview-card__heading">'
-                    f'<p class="market-overview-card__label">{escape(card_label)}</p>'
-                    f'{_overview_metric_help_html(card_label, definition, aggregation_text)}'
-                    "</div>"
-                    f'<p class="market-overview-card__value">{escape(value_text)}</p>'
-                    f'<p class="market-overview-card__delta market-overview-card__delta--{escape(delta_class)}">{escape(delta_text)}</p>'
-                    f'{_overview_spark_bar_html(report_input, card_label, metric_name)}'
-                    "</article>"
-                )
-                continue
+        aggregate = None if metric_name is None else aggregate_by_metric.get(metric_name)
         if card_label == "Volatility" and definition is None:
             definition = _parkinson_volatility_definition_fallback()
-        if card_label in {"Quoted Spread", "Top of book Depth"} and metric_name is not None:
-            period_mean_override = _period_mean_value_comparison(report_input, metric_name)
-            if period_mean_override is not None:
-                value_override, change_pct_override = period_mean_override
-                unit = "" if definition is None else definition.unit
-                value_text = _format_overview_card_value(value_override, unit)
-                delta_text = _format_overview_delta_text(change_pct_override)
-                delta_class = _delta_direction_class(change_pct_override)
-                cards_html.append(
-                    '    <article class="market-overview-card">'
-                    '<div class="market-overview-card__heading">'
-                    f'<p class="market-overview-card__label">{escape(card_label)}</p>'
-                    f'{_overview_metric_help_html(card_label, definition, aggregation_text)}'
-                    "</div>"
-                    f'<p class="market-overview-card__value">{escape(value_text)}</p>'
-                    f'<p class="market-overview-card__delta market-overview-card__delta--{escape(delta_class)}">{escape(delta_text)}</p>'
-                    f'{_overview_spark_bar_html(report_input, card_label, metric_name)}'
-                    "</article>"
-                )
-                continue
-        if comparison is None or definition is None:
+        if definition is None or aggregate is None or aggregate.target_mean is None:
             value_text = "n/a"
             delta_text = "no comparison"
             delta_class = "flat"
         else:
-            value_text = _format_overview_card_value(comparison.value, definition.unit)
-            delta_text = _format_overview_delta_text(comparison.change_pct)
-            delta_class = _delta_direction_class(comparison.change_pct)
+            value_text = _format_overview_card_value(aggregate.target_mean, definition.unit)
+            delta_text = _format_overview_delta_text(aggregate.delta_pct)
+            delta_class = _delta_direction_class(aggregate.delta_pct)
         cards_html.append(
             '    <article class="market-overview-card">'
             '<div class="market-overview-card__heading">'
@@ -770,7 +734,7 @@ def _build_market_overview_cards_block(
             "</div>"
             f'<p class="market-overview-card__value">{escape(value_text)}</p>'
             f'<p class="market-overview-card__delta market-overview-card__delta--{escape(delta_class)}">{escape(delta_text)}</p>'
-            f'{_overview_spark_bar_html(report_input, card_label, metric_name)}'
+            f'{_overview_spark_bar_html(aggregate)}'
             "</article>"
         )
 
@@ -779,26 +743,6 @@ def _build_market_overview_cards_block(
         help_text="Top-level market cards for traded value, spread, top-of-book depth, and volatility.",
         body_html='  <section class="market-overview-grid">\n' + "\n".join(cards_html) + "\n  </section>",
     )
-
-
-def _period_mean_value_comparison(report_input: MarketReportInput, metric_name: str) -> tuple[float, float | None] | None:
-    current_series = next((series for series in report_input.current_series if series.metric_name == metric_name), None)
-    reference_series = next((series for series in report_input.reference_series if series.metric_name == metric_name), None)
-    if current_series is None:
-        return None
-    current_daily = _metric_daily_rollups(metric_name, current_series)
-    if not current_daily:
-        return None
-    current_mean = sum(value for _, value in current_daily) / len(current_daily)
-    if reference_series is None:
-        return current_mean, None
-    reference_daily = _metric_daily_rollups(metric_name, reference_series)
-    if not reference_daily:
-        return current_mean, None
-    reference_mean = sum(value for _, value in reference_daily) / len(reference_daily)
-    if reference_mean == 0:
-        return current_mean, None
-    return current_mean, (current_mean - reference_mean) / reference_mean
 
 
 def _build_detailed_metric_trends_block(
@@ -830,30 +774,27 @@ def _build_detailed_metric_trends_block(
     if not metric_names:
         return None
 
+    aggregate_by_metric = _build_metric_aggregate_payloads(
+        report_input,
+        metric_names=metric_names,
+        granularity=options.detailed_metric_trends_granularity,
+    )
+
     payload_metrics: dict[str, dict[str, object]] = {}
     for metric_name in metric_names:
-        current_series = current_by_metric.get(metric_name)
-        reference_series = reference_by_metric.get(metric_name)
-        current_daily_rollups = [] if current_series is None else _metric_daily_rollups(metric_name, current_series)
-        reference_daily_rollups = [] if reference_series is None else _metric_daily_rollups(metric_name, reference_series)
-        current_points = _aggregate_metric_trend_series(
-            current_series,
-            metric_name=metric_name,
-            granularity=options.detailed_metric_trends_granularity,
-        )
-        reference_points = _aggregate_metric_trend_series(
-            reference_series,
-            metric_name=metric_name,
-            granularity=options.detailed_metric_trends_granularity,
-        )
+        aggregate = aggregate_by_metric.get(metric_name)
+        if aggregate is None:
+            continue
+        current_points = list(aggregate.bucketed_current)
+        reference_points = list(aggregate.bucketed_reference)
         if not current_points and not reference_points:
             continue
 
         labels = [label for _, label, _ in reference_points] + [label for _, label, _ in current_points]
         values = [value for _, _, value in reference_points] + [value for _, _, value in current_points]
         period_flags = (["benchmark"] * len(reference_points)) + (["target"] * len(current_points))
-        benchmark_mean = None if not reference_points else (sum(value for _, _, value in reference_points) / len(reference_points))
-        target_mean = None if not current_points else (sum(value for _, _, value in current_points) / len(current_points))
+        benchmark_mean = aggregate.benchmark_mean
+        target_mean = aggregate.target_mean
         definition = definitions.get(metric_name)
         metric_help = "No definition available."
         metric_description = "No definition available."
@@ -877,7 +818,11 @@ def _build_detailed_metric_trends_block(
             "description": metric_description,
             "unit_text": metric_unit,
             "formula_latex": metric_formula_latex,
-            "insights": _metric_trend_comments(metric_name, current_daily_rollups, reference_daily_rollups),
+            "insights": _metric_trend_comments(
+                metric_name,
+                list(aggregate.daily_current),
+                list(aggregate.daily_reference),
+            ),
         }
 
     if not payload_metrics:
@@ -1085,6 +1030,63 @@ def _metric_trend_comments(
     return comments
 
 
+def _series_period_mean(rolled_points: tuple[tuple[tuple[int, ...], str, float], ...]) -> float | None:
+    if not rolled_points:
+        return None
+    return sum(value for _, _, value in rolled_points) / len(rolled_points)
+
+
+def _period_delta_pct(target_mean: float | None, benchmark_mean: float | None) -> float | None:
+    if target_mean is None or benchmark_mean is None or benchmark_mean == 0:
+        return None
+    return (target_mean - benchmark_mean) / benchmark_mean
+
+
+def _build_metric_aggregate_payloads(
+    report_input: MarketReportInput,
+    *,
+    metric_names: Iterable[str],
+    granularity: str,
+) -> dict[str, _MetricAggregatePayload]:
+    current_by_metric = {series.metric_name: series for series in report_input.current_series}
+    reference_by_metric = {series.metric_name: series for series in report_input.reference_series}
+    payloads: dict[str, _MetricAggregatePayload] = {}
+    for metric_name in metric_names:
+        current_series = current_by_metric.get(metric_name)
+        reference_series = reference_by_metric.get(metric_name)
+        daily_current = tuple(() if current_series is None else _metric_daily_rollups(metric_name, current_series))
+        daily_reference = tuple(() if reference_series is None else _metric_daily_rollups(metric_name, reference_series))
+        bucketed_current = tuple(
+            _aggregate_metric_trend_series(
+                current_series,
+                metric_name=metric_name,
+                granularity=granularity,
+            )
+        )
+        bucketed_reference = tuple(
+            _aggregate_metric_trend_series(
+                reference_series,
+                metric_name=metric_name,
+                granularity=granularity,
+            )
+        )
+        spark_points = tuple(_bin_trend_points(list(daily_current)))
+        target_mean = _series_period_mean(bucketed_current)
+        benchmark_mean = _series_period_mean(bucketed_reference)
+        payloads[metric_name] = _MetricAggregatePayload(
+            metric_name=metric_name,
+            daily_current=daily_current,
+            daily_reference=daily_reference,
+            bucketed_current=bucketed_current,
+            bucketed_reference=bucketed_reference,
+            spark_points=spark_points,
+            target_mean=target_mean,
+            benchmark_mean=benchmark_mean,
+            delta_pct=_period_delta_pct(target_mean, benchmark_mean),
+        )
+    return payloads
+
+
 def _metric_interpretation_direction(metric_name: str, pct: float) -> str:
     if metric_name in {"quoted_spread_bps", "parkinson_volatility_bps"}:
         if pct >= 0:
@@ -1194,60 +1196,10 @@ def _pick_volatility_metric_name(comparisons_by_metric: Mapping[str, MetricCompa
     return None
 
 
-def _average_daily_total(series: MetricTimeSeries) -> float | None:
-    by_date: dict[date, float] = {}
-    for observation in series.observations:
-        if observation.value is None:
-            continue
-        by_date[observation.date] = by_date.get(observation.date, 0.0) + float(observation.value)
-    if not by_date:
-        return None
-    totals = list(by_date.values())
-    return sum(totals) / len(totals)
-
-
-def _average_daily_value_comparison(report_input: MarketReportInput, metric_name: str) -> tuple[float, float | None] | None:
-    current = next((item for item in report_input.current_series if item.metric_name == metric_name), None)
-    if current is None:
-        return None
-    current_avg = _average_daily_total(current)
-    if current_avg is None:
-        return None
-    reference = next((item for item in report_input.reference_series if item.metric_name == metric_name), None)
-    if reference is None:
-        return current_avg, None
-    reference_avg = _average_daily_total(reference)
-    if reference_avg is None or reference_avg == 0:
-        return current_avg, None
-    return current_avg, (current_avg - reference_avg) / reference_avg
-
-
 def _rms_value(values: list[float]) -> float | None:
     if not values:
         return None
     return sqrt(sum(value * value for value in values) / len(values))
-
-
-def _period_rms_value_comparison(
-    report_input: MarketReportInput, metric_name: str
-) -> tuple[float, float | None] | None:
-    current = next((item for item in report_input.current_series if item.metric_name == metric_name), None)
-    if current is None:
-        return None
-    current_values = [float(observation.value) for observation in current.observations if observation.value is not None]
-    current_rms = _rms_value(current_values)
-    if current_rms is None:
-        return None
-    reference = next((item for item in report_input.reference_series if item.metric_name == metric_name), None)
-    if reference is None:
-        return current_rms, None
-    reference_values = [
-        float(observation.value) for observation in reference.observations if observation.value is not None
-    ]
-    reference_rms = _rms_value(reference_values)
-    if reference_rms is None or reference_rms == 0:
-        return current_rms, None
-    return current_rms, (current_rms - reference_rms) / reference_rms
 
 
 def _format_overview_card_value(value: float | int | None, unit: str) -> str:
@@ -1353,35 +1305,16 @@ def _overview_metric_help_html(
         "</details>"
     )
 
-def _overview_spark_bar_html(
-    report_input: MarketReportInput,
-    card_label: str,
-    metric_name: str | None,
-) -> str:
-    resolved_metric_name = metric_name
-    if resolved_metric_name is None and card_label.casefold() == "volatility":
-        resolved_metric_name = "quoted_spread_bps"
-    if resolved_metric_name is None:
+def _overview_spark_bar_html(aggregate: _MetricAggregatePayload | None) -> str:
+    if aggregate is None or not aggregate.spark_points:
         return '<div class="market-overview-card__spark" aria-hidden="true"></div>'
-    series = next((item for item in report_input.current_series if item.metric_name == resolved_metric_name), None)
-    if series is None:
-        return '<div class="market-overview-card__spark" aria-hidden="true"></div>'
-
-    per_date = _aggregate_series_by_date(series)
-    if not per_date:
-        return '<div class="market-overview-card__spark" aria-hidden="true"></div>'
-
-    binned = _bin_trend_points(per_date)
-    if not binned:
-        return '<div class="market-overview-card__spark" aria-hidden="true"></div>'
-
-    values = [value for _, value in binned]
+    values = [value for _, value in aggregate.spark_points]
     min_value = min(values)
     max_value = max(values)
     spread = max_value - min_value
-    benchmark_mean = _benchmark_series_mean(report_input, resolved_metric_name)
+    benchmark_mean = aggregate.benchmark_mean
     bars: list[str] = []
-    for _, value in binned:
+    for _, value in aggregate.spark_points:
         if spread <= 0:
             height_pct = 55.0
         else:
@@ -1398,30 +1331,6 @@ def _overview_spark_bar_html(
             f'<span class="market-overview-card__spark-mean" style="bottom:{mean_pct:.1f}%"></span>'
         )
     return '<div class="market-overview-card__spark" aria-hidden="true">' + mean_line_html + "".join(bars) + "</div>"
-
-
-def _benchmark_series_mean(report_input: MarketReportInput, metric_name: str) -> float | None:
-    series = next((item for item in report_input.reference_series if item.metric_name == metric_name), None)
-    if series is None:
-        return None
-    values: list[float] = []
-    for observation in series.observations:
-        if observation.value is None:
-            continue
-        values.append(float(observation.value))
-    if not values:
-        return None
-    return sum(values) / len(values)
-
-
-def _aggregate_series_by_date(series: MetricTimeSeries) -> list[tuple[date, float]]:
-    buckets: dict[date, list[float]] = {}
-    for observation in series.observations:
-        if observation.value is None:
-            continue
-        numeric = float(observation.value)
-        buckets.setdefault(observation.date, []).append(numeric)
-    return sorted((bucket_date, sum(values) / len(values)) for bucket_date, values in buckets.items())
 
 
 def _bin_trend_points(points: list[tuple[date, float]]) -> list[tuple[str, float]]:
@@ -1676,7 +1585,7 @@ def _build_summary_story_charts(
         definition = _require_definition(metric_name, definitions)
         charts.append(
             build_activity_intraday_distribution_chart(
-                f"{definition.label} cumulative intraday distribution",
+                f"Intraday {definition.label} Distribution",
                 reference_series=reference_series,
                 target_series=target_series,
                 metric_definition=definition,
@@ -1737,7 +1646,7 @@ def _build_activity_distribution_page(
         definition = _require_definition(metric_name, definitions)
         charts.append(
             build_activity_intraday_distribution_chart(
-                f"{definition.label} cumulative intraday distribution",
+                f"Intraday {definition.label} Distribution",
                 reference_series=reference_series,
                 target_series=target_series,
                 metric_definition=definition,

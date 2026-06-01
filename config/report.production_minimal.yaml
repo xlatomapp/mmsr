@@ -53,10 +53,10 @@ reference_data:
 
 period:
   start_date: "2026-05-01"
-  end_date: "2026-05-22"
+  end_date: "2026-05-05"
 
 intraday:
-  bucket_size: "5m"
+  bucket_size: "1m"
   align_to_session: true
   auction_buckets:
     enabled: true
@@ -71,7 +71,7 @@ groups:
 
 reference:
   method: same_intraday_bucket
-  lookback_days: 20
+  lookback_days: 5
   statistic: median
   observation_unit: trading_day
   comparable_keys:

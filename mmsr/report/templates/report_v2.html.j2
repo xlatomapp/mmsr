@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ document.title }}</title>
-  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" defer></script>
+  {% if plotly_inline_js %}<script>{{ plotly_inline_js | safe }}</script>{% endif %}
   <script>
     window.MathJax = { tex: { inlineMath: [['\\(', '\\)']] } };
   </script>
@@ -515,7 +515,7 @@
     .report-page--summary > div[data-block-title="Detailed Metric Trends"] > .html-block__body {
       overflow-x: hidden;
     }
-    .report-page--summary > div[data-block-title="Turnover cumulative intraday distribution"] {
+    .report-page--summary > div[data-block-title="Intraday Turnover Distribution"] {
       grid-column: 1 / -1;
       width: 100%;
     }
@@ -595,56 +595,124 @@
       width: 100%;
     }
     .turnover-distribution__chart {
-      border: 1px solid var(--mmsr-border);
-      border-radius: 8px;
-      background: #fff;
-      box-shadow: 0 2px 10px rgba(16, 39, 66, 0.06);
-      padding: 8px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      padding: 0;
       width: 100%;
       box-sizing: border-box;
     }
-    .turnover-distribution__plot {
-      background: transparent;
-      border: none;
-      padding: 0;
+    .turnover-distribution__selected-title {
+      margin: 0 0 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #1f2d3d;
     }
-    .turnover-distribution__plot + .turnover-distribution__plot {
-      margin-top: 20px;
+    .turnover-distribution__cards {
+      display: grid;
+      grid-template-columns: minmax(200px, 20%) minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
     }
-    .turnover-distribution__aggregate {
-      margin-top: 12px;
+    .turnover-distribution__card {
       border: 1px solid var(--mmsr-border);
       border-radius: 8px;
-      overflow: hidden;
       background: #fff;
+      box-shadow: 0 1px 6px rgba(16, 39, 66, 0.06);
+      padding: 8px;
+      box-sizing: border-box;
     }
-    .turnover-distribution__aggregate-table {
+    .turnover-distribution__card--bar {
+      padding: 5px;
+    }
+    .turnover-distribution__card--table {
+      grid-column: 1 / -1;
+    }
+    .turnover-distribution__card-title {
+      margin: 0 0 6px;
+      font-size: 12px;
+      color: var(--mmsr-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-weight: 700;
+    }
+    .turnover-distribution__heatmap {
+      margin-top: 0;
+      overflow: auto;
+      background: transparent;
+      height: auto;
+    }
+    .turnover-distribution__heatmap-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 12px;
+      font-size: 10px;
     }
-    .turnover-distribution__aggregate-table thead th {
+    .turnover-distribution__heatmap-table thead th {
       background: #f3f7fd;
       color: var(--mmsr-muted);
-      font-weight: 700;
       text-align: center;
+      font-weight: 700;
+      position: sticky;
+      top: 0;
+      z-index: 1;
     }
-    .turnover-distribution__aggregate-table th,
-    .turnover-distribution__aggregate-table td {
+    .turnover-distribution__heatmap-table th,
+    .turnover-distribution__heatmap-table td {
       border: 1px solid #dbe4f0;
-      padding: 6px 8px;
+      padding: 3px 5px;
       white-space: nowrap;
+      vertical-align: middle;
     }
-    .turnover-distribution__aggregate-table tbody th {
+    .turnover-distribution__heatmap-table tbody th {
       background: #f9fbff;
       color: #1f2d3d;
       text-align: left;
       font-weight: 700;
     }
-    .turnover-distribution__aggregate-table tbody td {
+    .turnover-distribution__heatmap-cell {
       text-align: center;
-      color: #213244;
       font-variant-numeric: tabular-nums;
+    }
+    /* Lighter fixed RdBu-style bins */
+    .turnover-distribution__heatmap-cell--na { background: #fafbfc; }
+    .turnover-distribution__heatmap-cell--z0 { background: #f8fafc; }
+    .turnover-distribution__heatmap-cell--n1 { background: #fdf1ed; }
+    .turnover-distribution__heatmap-cell--n2 { background: #fbe5df; }
+    .turnover-distribution__heatmap-cell--n3 { background: #f8d4ca; }
+    .turnover-distribution__heatmap-cell--n4 { background: #f3c0b4; }
+    .turnover-distribution__heatmap-cell--p1 { background: #eef4fb; }
+    .turnover-distribution__heatmap-cell--p2 { background: #e3edf8; }
+    .turnover-distribution__heatmap-cell--p3 { background: #d1e3f4; }
+    .turnover-distribution__heatmap-cell--p4 { background: #bcd8ee; }
+    .turnover-distribution__heatmap-current,
+    .turnover-distribution__heatmap-delta {
+      display: block;
+      line-height: 1.2;
+    }
+    .turnover-distribution__heatmap-current {
+      color: #1f2d3d;
+      font-weight: 600;
+    }
+    .turnover-distribution__heatmap-delta {
+      font-size: 9px;
+    }
+    .turnover-distribution__heatmap-delta--up { color: #0f9d58; }
+    .turnover-distribution__heatmap-delta--down { color: #ba1a1a; }
+    .turnover-distribution__heatmap-delta--neutral { color: var(--mmsr-muted); }
+    .turnover-distribution__heatmap-row {
+      cursor: pointer;
+    }
+    .turnover-distribution__heatmap-row.is-selected th,
+    .turnover-distribution__heatmap-row.is-selected td {
+      border-top: 2px solid #2d5d93;
+      border-bottom: 2px solid #2d5d93;
+    }
+    .turnover-distribution__heatmap-row.is-selected th {
+      border-left: 2px solid #2d5d93;
+    }
+    .turnover-distribution__heatmap-row.is-selected td:last-child {
+      border-right: 2px solid #2d5d93;
     }
     .turnover-distribution .plotly-chart__figure {
       min-width: 0 !important;
@@ -654,6 +722,14 @@
     .turnover-distribution .plot-container {
       width: 100% !important;
       max-width: 100% !important;
+    }
+    @media (max-width: 980px) {
+      .turnover-distribution__cards {
+        grid-template-columns: 1fr;
+      }
+      .turnover-distribution__card--table {
+        grid-column: auto;
+      }
     }
     .metric-card {
       border: 1px solid var(--mmsr-border);
@@ -1472,7 +1548,7 @@
               <div data-block-title="{{ block.title }}">
                 <div class="html-block__body">{{ block.body_html | safe }}</div>
               </div>
-            {% elif block.title == "Turnover cumulative intraday distribution" %}
+            {% elif block.title == "Intraday Turnover Distribution" %}
               <div data-block-title="{{ block.title }}">
                 <div class="html-block__body">{{ block.body_html | safe }}</div>
               </div>
@@ -1593,6 +1669,14 @@
           positionMetricHelp(node);
         });
       });
+      var withBasePlotlyConfig = function (config) {
+        var base = {
+          responsive: true,
+          displaylogo: false,
+          modeBarButtonsToRemove: ["lasso2d", "select2d"],
+        };
+        return Object.assign({}, base, config || {});
+      };
       var renderCharts = function () {
         if (!window.Plotly) {
           return;
@@ -1607,7 +1691,7 @@
             target,
             figure.data || [],
             figure.layout || {},
-            figure.config || {responsive: true, displaylogo: false}
+            withBasePlotlyConfig(figure.config || {})
           );
           target.dataset.mmsrRendered = "1";
         });
@@ -1885,9 +1969,7 @@
                 dragmode: "zoom",
                 height: 460,
               },
-              {
-                responsive: true,
-                displaylogo: false,
+              withBasePlotlyConfig({
                 displayModeBar: true,
                 scrollZoom: false,
                 doubleClick: false,
@@ -1910,7 +1992,7 @@
                     },
                   },
                 ],
-              }
+              })
             ).then(function () {
               Plotly.Plots.resize(chartTarget);
             });
@@ -1961,14 +2043,12 @@
                 dragmode: false,
                 height: 240,
               },
-              {
-                responsive: true,
-                displaylogo: false,
+              withBasePlotlyConfig({
                 displayModeBar: false,
                 scrollZoom: false,
                 doubleClick: false,
                 staticPlot: true,
-              }
+              })
             );
           });
           var initialMetric = selector.value || spec.default_metric;
@@ -2039,7 +2119,7 @@
                 hovermode: "x unified",
                 height: 320,
               },
-              {responsive: true, displaylogo: false}
+              withBasePlotlyConfig({})
             );
             selectedLabel.textContent = "Selected group: " + groupName;
             trendTarget.setAttribute("aria-label", "Selected group daily trend chart for " + groupName);
@@ -2069,7 +2149,7 @@
               yaxis: {title: "Group", type: "category"},
               height: 320,
             },
-            {responsive: true, displaylogo: false}
+            withBasePlotlyConfig({})
           ).then(function () {
             renderTrend(defaultGroup);
           });

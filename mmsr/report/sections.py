@@ -602,7 +602,7 @@ def _build_cumulative_distribution_figure(
     prepared: _ActivityDistributionInputs,
     figure_height: int = 470,
 ) -> dict[str, Any]:
-    """Build cumulative distribution with a compact delta-heatmap subplot."""
+    """Build the cumulative distribution line-plot figure."""
 
     reference_median: list[float | None] = []
     for bucket in prepared.bucket_labels:
@@ -639,30 +639,6 @@ def _build_cumulative_distribution_figure(
             "yaxis": "y",
             "hovertemplate": "%{x}<br>%{y:.2f}%<extra>Current mean</extra>",
         },
-        {
-            "type": "heatmap",
-            "x": list(prepared.bucket_labels),
-            "y": ["Delta (pp)"],
-            "z": [
-                [
-                    current - reference
-                    for current, reference in zip(
-                        prepared.current_bucket_pct,
-                        prepared.reference_bucket_pct,
-                        strict=True,
-                    )
-                ]
-            ],
-            "colorscale": "RdBu",
-            "reversescale": True,
-            "zmid": 0,
-            "hovertemplate": "%{y}<br>%{x}<br>%{z:.2f}<extra></extra>",
-            "xgap": 1,
-            "ygap": 2,
-            "xaxis": "x2",
-            "yaxis": "y2",
-            "showscale": True,
-        },
     ]
 
     return {
@@ -670,11 +646,10 @@ def _build_cumulative_distribution_figure(
         "layout": {
             "template": "plotly_white",
             "height": figure_height,
-            "margin": {"l": 80, "r": 24, "t": 28, "b": 50},
+            "margin": {"l": 70, "r": 20, "t": 20, "b": 108},
             "showlegend": True,
-            "legend": {"orientation": "h", "y": 0.41},
+            "legend": {"orientation": "h", "x": 0.5, "xanchor": "center", "y": -0.26},
             "xaxis": {
-                "domain": [0.0, 1.0],
                 "anchor": "y",
                 "type": "category",
                 "categoryorder": "array",
@@ -682,27 +657,129 @@ def _build_cumulative_distribution_figure(
                 "showticklabels": True,
             },
             "yaxis": {
-                "domain": [0.50, 1.0],
+                "domain": [0.0, 1.0],
                 "anchor": "x",
                 "ticksuffix": "%",
                 "range": [0, 105],
             },
-            "xaxis2": {
-                "domain": [0.0, 1.0],
-                "anchor": "y2",
-                "type": "category",
-                "categoryorder": "array",
-                "categoryarray": list(prepared.bucket_labels),
-                "showticklabels": False,
-            },
-            "yaxis2": {
-                "domain": [0.0, 0.22],
-                "anchor": "x2",
-                "categoryorder": "array",
-                "categoryarray": ["Delta (pp)"],
-            },
         },
         "config": {"displaylogo": False, "responsive": True},
+    }
+
+
+def _build_session_mix_bar_figure(
+    *,
+    prepared: _ActivityDistributionInputs,
+    figure_height: int = 380,
+) -> dict[str, Any]:
+    """Build a compact stacked-bar figure for session mix (reference vs current)."""
+    current_session = _session_aggregate_percentages(prepared.bucket_labels, prepared.current_bucket_pct)
+    reference_session = _session_aggregate_percentages(prepared.bucket_labels, prepared.reference_bucket_pct)
+    session_order = (
+        ("AM open", "AMO"),
+        ("AM continuous session", "AMZ"),
+        ("AM close", "AMC"),
+        ("PM open", "PMO"),
+        ("PM continuous session", "PMZ"),
+        ("PM close", "PMC"),
+    )
+    session_colors = {
+        "AMO": "#dbe9f6",
+        "AM": "#b7d3ec",
+        "AMC": "#8eb8df",
+        "PMO": "#679ed2",
+        "PM": "#417fc0",
+        "PMC": "#2c5d99",
+    }
+    traces: list[dict[str, Any]] = []
+    for session_key, session_label in session_order:
+        ref_value = float(reference_session.get(session_key, 0.0))
+        cur_value = float(current_session.get(session_key, 0.0))
+        text = [
+            f"<b>{session_label}</b><br>{ref_value:.1f}%" if ref_value >= 20.0 else "",
+            f"<b>{session_label}</b><br>{cur_value:.1f}%" if cur_value >= 20.0 else "",
+        ]
+        traces.append(
+            {
+                "type": "bar",
+                "name": session_label,
+                "x": ["Reference", "Current"],
+                "y": [ref_value, cur_value],
+                "text": text,
+                "textposition": "inside",
+                "insidetextanchor": "middle",
+                "textfont": {"size": 11, "color": "#122033"},
+                "marker": {"color": session_colors.get(session_label, "#8eb8df")},
+                "width": 0.925,
+                "hoverinfo": "skip",
+                "hovertemplate": None,
+                "showlegend": False,
+            }
+        )
+
+    annotations: list[dict[str, Any]] = []
+    for x_label, values in (
+        ("Reference", [float(reference_session.get(key, 0.0)) for key, _ in session_order]),
+        ("Current", [float(current_session.get(key, 0.0)) for key, _ in session_order]),
+    ):
+        cumulative = 0.0
+        for (_, session_label), value in zip(session_order, values, strict=True):
+            top = cumulative + value
+            cumulative = top
+            if value >= 20.0 or value <= 0:
+                continue
+            ax = -30 if x_label == "Reference" else 30
+            if session_label == "AMC":
+                ay = 10
+            elif session_label == "PMO":
+                ay = -16
+            else:
+                ay = -10
+            annotations.append(
+                {
+                    "xref": "x",
+                    "yref": "y",
+                    "x": x_label,
+                    "y": top,
+                    "text": f"<b>{session_label}</b><br>{value:.1f}%",
+                    "showarrow": True,
+                    "arrowhead": 0,
+                    "arrowcolor": "#6f7d90",
+                    "arrowwidth": 1,
+                    "ax": ax,
+                    "ay": ay,
+                    "font": {"size": 10, "color": "#2f4054"},
+                    "xanchor": "right" if x_label == "Reference" else "left",
+                    "yanchor": "bottom",
+                }
+            )
+
+    return {
+        "data": traces,
+        "layout": {
+            "template": "plotly_white",
+            "height": figure_height,
+            "margin": {"l": 44, "r": 10, "t": 20, "b": 40},
+            "showlegend": False,
+            "xaxis": {
+                "type": "category",
+                "categoryorder": "array",
+                "categoryarray": ["Reference", "Current"],
+                "automargin": True,
+                "tickfont": {"size": 12, "color": "#1f2d3d"},
+                "tickangle": 0,
+                "fixedrange": True,
+            },
+            "yaxis": {
+                "ticksuffix": "%",
+                "range": [0, 105],
+                "tickfont": {"size": 11, "color": "#1f2d3d"},
+                "fixedrange": True,
+            },
+            "barmode": "stack",
+            "annotations": annotations,
+        },
+        "config": {"displaylogo": False, "responsive": True, "displayModeBar": False, "staticPlot": True},
     }
 
 
@@ -780,6 +857,274 @@ def _build_session_aggregate_table_html(prepared: _ActivityDistributionInputs) -
     )
 
 
+def _turnover_group_bucket(group: Mapping[str, object]) -> str | None:
+    topix_keys = ("topixCapGrp", "topix_cap_group")
+    has_topix_key = any(key in group for key in topix_keys)
+    for key in topix_keys:
+        value = group.get(key)
+        if value is None:
+            continue
+        text = str(value).strip().casefold()
+        if not text:
+            continue
+        if "non" in text and "topix" in text:
+            return "Non-TOPIX"
+        if "large" in text:
+            return "TOPIX Large"
+        if "mid" in text:
+            return "TOPIX Mid"
+        if "small" in text:
+            return "TOPIX Small"
+    if has_topix_key:
+        return "Non-TOPIX"
+    for key in ("market_cap_bucket", "marketCapBucket"):
+        value = group.get(key)
+        if value is None:
+            continue
+        text = str(value).strip().casefold()
+        if not text:
+            continue
+        if "large" in text:
+            return "TOPIX Large"
+        if "mid" in text:
+            return "TOPIX Mid"
+        if "small" in text:
+            return "TOPIX Small"
+    return None
+
+
+def _turnover_session_bucket_code(bucket: object | None) -> str:
+    if bucket is None:
+        return "PM"
+    raw = str(bucket).strip().upper()
+    if not raw:
+        return "PM"
+    if raw == "AMO":
+        return "AMO"
+    if raw == "PMC":
+        return "PMC"
+    if raw == "AMC":
+        return "AMC"
+    if raw == "PMO":
+        return "PMO"
+    upper = raw
+    if upper == "AMO":
+        return "AMO"
+    if upper == "PMC":
+        return "PMC"
+    if upper == "AMC":
+        return "AMC"
+    if upper == "PMO":
+        return "PMO"
+    if upper.startswith("09:") or upper.startswith("10:") or upper.startswith("11:"):
+        return "AM"
+    return "PM"
+
+
+def _turnover_heatmap_row_keys(observation: MetricObservation) -> tuple[str, ...]:
+    rows = ["TSE"]
+    bucket = _turnover_group_bucket(observation.group)
+    if bucket is not None:
+        rows.append(bucket)
+    return tuple(rows)
+
+
+def _mean_daily_turnover_by_row_session(
+    observations: Sequence[MetricObservation],
+) -> dict[str, dict[str, float]]:
+    by_date_row_session: dict[tuple[object, str, str], float] = {}
+    for observation in observations:
+        value = _finite_observation_value(observation)
+        if value is None:
+            continue
+        session = _turnover_session_code(observation.time_bucket)
+        for row in _turnover_heatmap_row_keys(observation):
+            key = (observation.date, row, session)
+            by_date_row_session[key] = by_date_row_session.get(key, 0.0) + value
+
+    rolled: dict[str, dict[str, list[float]]] = {}
+    for (_, row, session), total in by_date_row_session.items():
+        rolled.setdefault(row, {}).setdefault(session, []).append(total)
+    return {
+        row: {
+            session: (sum(values) / len(values))
+            for session, values in sessions.items()
+            if values
+        }
+        for row, sessions in rolled.items()
+    }
+
+
+def _mean_daily_session_share_by_row(
+    observations: Sequence[MetricObservation],
+) -> dict[str, dict[str, float]]:
+    by_date_row_session: dict[tuple[object, str, str], float] = {}
+    for observation in observations:
+        value = _finite_observation_value(observation)
+        if value is None:
+            continue
+        session = _turnover_session_bucket_code(observation.time_bucket)
+        for row in _turnover_heatmap_row_keys(observation):
+            key = (observation.date, row, session)
+            by_date_row_session[key] = by_date_row_session.get(key, 0.0) + value
+
+    row_daily_shares: dict[str, list[dict[str, float]]] = {}
+    by_date_row: dict[tuple[object, str], dict[str, float]] = {}
+    for (obs_date, row, session), total in by_date_row_session.items():
+        by_date_row.setdefault((obs_date, row), {})[session] = total
+    for (_, row), sessions in by_date_row.items():
+        total = sum(sessions.values())
+        if total <= 0:
+            continue
+        amo = sessions.get("AMO", 0.0)
+        amc = sessions.get("AMC", 0.0)
+        amz = sessions.get("AM", 0.0)
+        pmo = sessions.get("PMO", 0.0)
+        pmc = sessions.get("PMC", 0.0)
+        pmz = sessions.get("PM", 0.0)
+        share = {
+            "AMO": (amo / total * 100.0),
+            "PMC": (pmc / total * 100.0),
+            # Full AM/PM session shares, including open/close auctions.
+            "AM": ((amo + amz + amc) / total * 100.0),
+            "PM": ((pmo + pmz + pmc) / total * 100.0),
+        }
+        row_daily_shares.setdefault(row, []).append(share)
+
+    result: dict[str, dict[str, float]] = {}
+    for row, daily in row_daily_shares.items():
+        if not daily:
+            continue
+        result[row] = {
+            session: (sum(item.get(session, 0.0) for item in daily) / len(daily))
+            for session in ("AMO", "PMC", "AM", "PM")
+        }
+    return result
+
+
+def _turnover_cell_delta_pct(current: float | None, reference: float | None) -> float | None:
+    if current is None or reference is None or reference == 0:
+        return None
+    return (current - reference) / reference
+
+
+def _turnover_delta_cell_class(delta_pct: float | None) -> str:
+    if delta_pct is None:
+        return "neutral"
+    if delta_pct > 0:
+        return "up"
+    if delta_pct < 0:
+        return "down"
+    return "neutral"
+
+
+def _turnover_heatmap_delta_bucket(delta_pct: float | None) -> str:
+    """Return fixed RdBu bucket name for deterministic, data-independent colors."""
+    if delta_pct is None:
+        return "na"
+    if delta_pct <= -0.05:
+        return "n4"
+    if delta_pct <= -0.03:
+        return "n3"
+    if delta_pct <= -0.01:
+        return "n2"
+    if delta_pct < 0:
+        return "n1"
+    if delta_pct == 0:
+        return "z0"
+    if delta_pct < 0.01:
+        return "p1"
+    if delta_pct < 0.03:
+        return "p2"
+    if delta_pct < 0.05:
+        return "p3"
+    return "p4"
+
+
+def _build_turnover_group_session_heatmap_table_html(
+    *,
+    target_series: MetricTimeSeries,
+    reference_series: MetricTimeSeries,
+) -> str:
+    row_order = ("TSE", "TOPIX Large", "TOPIX Mid", "TOPIX Small", "Non-TOPIX")
+    session_order = ("AMO", "PMC", "AM", "PM")
+    current_share = _mean_daily_session_share_by_row(target_series.observations)
+    reference_share = _mean_daily_session_share_by_row(reference_series.observations)
+    header_cells = "".join(f"<th>{escape(session)}</th>" for session in session_order)
+
+    row_html: list[str] = []
+    for row_index, row in enumerate(row_order):
+        cells: list[str] = []
+        for session in session_order:
+            current_value = current_share.get(row, {}).get(session)
+            reference_value = reference_share.get(row, {}).get(session)
+            delta_pct = _turnover_cell_delta_pct(current_value, reference_value)
+            current_text = "n/a" if current_value is None else f"{current_value:.1f}%"
+            delta_text = "n/a" if delta_pct is None else f"{delta_pct:+.1%}"
+            delta_class = _turnover_delta_cell_class(delta_pct)
+            delta_bucket = _turnover_heatmap_delta_bucket(delta_pct)
+            cells.append(
+                f'<td class="turnover-distribution__heatmap-cell turnover-distribution__heatmap-cell--{escape(delta_bucket)}">'
+                f'<span class="turnover-distribution__heatmap-current">{escape(current_text)}</span>'
+                f'<span class="turnover-distribution__heatmap-delta turnover-distribution__heatmap-delta--{escape(delta_class)}">{escape(delta_text)}</span>'
+                "</td>"
+            )
+        selected_attr = "true" if row_index == 0 else "false"
+        selected_class = " is-selected" if row_index == 0 else ""
+        row_html.append(f'<tr class="turnover-distribution__heatmap-row{selected_class}" data-turnover-row="{escape(row)}" aria-selected="{selected_attr}"><th>{escape(row)}</th>{"".join(cells)}</tr>')
+
+    return (
+        '<div class="turnover-distribution__heatmap">'
+        '<table class="turnover-distribution__heatmap-table">'
+        "<thead><tr><th>Group</th>"
+        f"{header_cells}"
+        "</tr></thead>"
+        f"<tbody>{''.join(row_html)}</tbody>"
+        "</table>"
+        "</div>"
+    )
+
+
+def _filter_series_for_turnover_row(series: MetricTimeSeries, row: str) -> MetricTimeSeries:
+    if row == "TSE":
+        return series
+    filtered = tuple(
+        observation for observation in series.observations if _turnover_group_bucket(observation.group) == row
+    )
+    return MetricTimeSeries(metric_name=series.metric_name, observations=filtered)
+
+
+def _build_turnover_row_plot_payload(
+    *,
+    target_series: MetricTimeSeries,
+    reference_series: MetricTimeSeries,
+    metric_definition: MetricDefinition,
+    cumulative_figure_height: int,
+) -> dict[str, object]:
+    rows = ("TSE", "TOPIX Large", "TOPIX Mid", "TOPIX Small", "Non-TOPIX")
+    by_row: dict[str, dict[str, object]] = {}
+    for row in rows:
+        row_target = _filter_series_for_turnover_row(target_series, row)
+        row_reference = _filter_series_for_turnover_row(reference_series, row)
+        prepared = _prepare_activity_distribution_inputs(
+            target_series=row_target,
+            reference_series=row_reference,
+        )
+        by_row[row] = {
+            "title": f"Universe: {row}",
+            "line_figure": _build_cumulative_distribution_figure(
+                metric_definition=metric_definition,
+                prepared=prepared,
+                figure_height=cumulative_figure_height,
+            ),
+            "bar_figure": _build_session_mix_bar_figure(
+                prepared=prepared,
+                figure_height=max(260, cumulative_figure_height),
+            ),
+        }
+    return {"default_row": "TSE", "rows": by_row}
+
+
 def build_summary_activity_distribution_html_block(
     title: str,
     *,
@@ -823,10 +1168,34 @@ def build_summary_activity_distribution_html_block(
         prepared=prepared,
         figure_height=cumulative_figure_height,
     )
-    aggregate_table_html = _build_session_aggregate_table_html(prepared)
+    universe_table_html = _build_turnover_group_session_heatmap_table_html(
+        target_series=target_series,
+        reference_series=reference_series,
+    )
+    row_plot_payload = _build_turnover_row_plot_payload(
+        target_series=target_series,
+        reference_series=reference_series,
+        metric_definition=metric_definition,
+        cumulative_figure_height=cumulative_figure_height,
+    )
+    default_row = str(row_plot_payload.get("default_row", "TSE"))
+    rows_payload = row_plot_payload.get("rows", {})
+    default_row_payload = rows_payload.get(default_row, {})
+    initial_title = str(default_row_payload.get("title", f"Universe: {default_row}"))
 
-    cumulative_json = json.dumps(
-        cumulative_figure, ensure_ascii=False, separators=(",", ":")
+    line_json = json.dumps(
+        default_row_payload.get("line_figure", cumulative_figure), ensure_ascii=False, separators=(",", ":")
+    ).replace("</", "<\\/")
+    bar_json = json.dumps(
+        default_row_payload.get(
+            "bar_figure",
+            _build_session_mix_bar_figure(prepared=prepared, figure_height=max(260, cumulative_figure_height)),
+        ),
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).replace("</", "<\\/")
+    row_plot_json = json.dumps(
+        row_plot_payload, ensure_ascii=False, separators=(",", ":")
     ).replace("</", "<\\/")
     help_html = ""
     if help_text:
@@ -838,6 +1207,7 @@ def build_summary_activity_distribution_html_block(
             '<div class="metric-help__body">'
             f'<strong class="metric-help__title">Section help: {escape(chart_title)}</strong>'
             f"<p>{escape(help_text)}</p>"
+            "<p>Delta heatmap bins: ≤-5%, -5..-3, -3..-1, -1..0, 0, 0..1, 1..3, 3..5, ≥5.</p>"
             "</div>"
             "</details>"
         )
@@ -850,13 +1220,53 @@ def build_summary_activity_distribution_html_block(
         "</div>"
         '<div class="turnover-distribution__body">'
         '<div class="turnover-distribution__chart">'
-        '<div class="turnover-distribution__plot">'
-        '<div class="plotly-chart__figure" data-mmsr-plotly></div>'
-        f'<script type="application/json" class="plotly-chart__spec">{cumulative_json}</script>'
+        f'<h4 class="turnover-distribution__selected-title" data-turnover-selected-title>{escape(initial_title)}</h4>'
+        '<div class="turnover-distribution__cards">'
+        '<div class="turnover-distribution__card turnover-distribution__card--bar">'
+        '<div class="turnover-distribution__card-title">Session Mix</div>'
+        '<div class="plotly-chart__figure" data-turnover-bar-plot></div>'
+        f'<script type="application/json" class="turnover-bar-chart__spec">{bar_json}</script>'
         "</div>"
-        f"{aggregate_table_html}"
+        '<div class="turnover-distribution__card turnover-distribution__card--line">'
+        '<div class="turnover-distribution__card-title">Cumulative Intraday Curve</div>'
+        '<div class="plotly-chart__figure" data-turnover-line-plot></div>'
+        f'<script type="application/json" class="turnover-line-chart__spec">{line_json}</script>'
+        "</div>"
+        '<div class="turnover-distribution__card turnover-distribution__card--table">'
+        '<div class="turnover-distribution__card-title">Universe Session Table</div>'
+        f"{universe_table_html}"
         "</div>"
         "</div>"
+        f'<script type="application/json" data-turnover-row-plot-spec>{row_plot_json}</script>'
+        "</div>"
+        "</div>"
+        '<script>'
+        '(function(){'
+        'var bind=function(){'
+        'if(!window.Plotly){return;}'
+        'document.querySelectorAll(".turnover-distribution").forEach(function(container){'
+        'var specNode=container.querySelector("[data-turnover-row-plot-spec]");'
+        'var lineTarget=container.querySelector("[data-turnover-line-plot]");'
+        'var barTarget=container.querySelector("[data-turnover-bar-plot]");'
+        'var titleNode=container.querySelector("[data-turnover-selected-title]");'
+        'if(!specNode||!lineTarget||!barTarget){return;}'
+        'var spec=JSON.parse(specNode.textContent||"{}");'
+        'var rows=spec.rows||{};'
+        'var rowNodes=Array.prototype.slice.call(container.querySelectorAll("[data-turnover-row]"));'
+        'var renderRow=function(rowKey){'
+        'var row=rows[rowKey]; if(!row){return;}'
+        'if(titleNode&&row.title){titleNode.textContent=row.title;}'
+        'Plotly.react(lineTarget,(row.line_figure||{}).data||[],(row.line_figure||{}).layout||{},(row.line_figure||{}).config||{responsive:true,displaylogo:false});'
+        'Plotly.react(barTarget,(row.bar_figure||{}).data||[],(row.bar_figure||{}).layout||{},(row.bar_figure||{}).config||{responsive:true,displaylogo:false,displayModeBar:false,staticPlot:true});'
+        'rowNodes.forEach(function(node){var on=(node.getAttribute("data-turnover-row")===rowKey);node.classList.toggle("is-selected",on);node.setAttribute("aria-selected",on?"true":"false");});'
+        '};'
+        'rowNodes.forEach(function(node){node.addEventListener("click",function(){renderRow(node.getAttribute("data-turnover-row")||"");});});'
+        'renderRow(spec.default_row||"TSE");'
+        '});'
+        '};'
+        'if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",bind);}else{bind();}'
+        '})();'
+        '</script>'
         "</section>"
     )
 
