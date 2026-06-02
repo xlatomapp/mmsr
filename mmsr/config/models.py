@@ -288,6 +288,53 @@ class KdbRawDataFunctionsConfig:
 
 
 @dataclass(frozen=True)
+class KdbUnifiedMetricCacheFunctionsConfig:
+    """Optional user-owned q functions for unified day-result cache IO."""
+
+    namespace: str = ".mmsr"
+    use_load: bool = False
+    load: str | None = None
+    use_persist: bool = False
+    persist: str | None = None
+    persist_mode: str = "upsert"
+
+    def __post_init__(self) -> None:
+        _validate_q_namespace(self.namespace, "cache_functions.namespace")
+        if self.load is not None:
+            _validate_q_function(self.load, "cache_functions.load")
+        if self.persist is not None:
+            _validate_q_function(self.persist, "cache_functions.persist")
+        if self.persist_mode not in {"overwrite", "upsert"}:
+            raise ValueError("cache_functions.persist_mode must be one of: overwrite, upsert")
+        if self.use_load and self.load is None:
+            raise ValueError("cache_functions.load must be configured when cache_functions.use_load is true")
+        if self.use_persist and self.persist is None:
+            raise ValueError("cache_functions.persist must be configured when cache_functions.use_persist is true")
+
+    def to_config_mapping(self) -> dict[str, str | bool]:
+        """Return qualified q cache function config for unified day-result cache IO."""
+
+        functions: dict[str, str | bool] = {
+            "use_load": self.use_load,
+            "use_persist": self.use_persist,
+            "persist_mode": self.persist_mode,
+        }
+        if self.load is not None:
+            functions["load"] = _qualified_q_function(
+                self.namespace,
+                self.load,
+                "cache_functions.load",
+            )
+        if self.persist is not None:
+            functions["persist"] = _qualified_q_function(
+                self.namespace,
+                self.persist,
+                "cache_functions.persist",
+            )
+        return functions
+
+
+@dataclass(frozen=True)
 class KdbExecutionConfig:
     """kdb execution namespace and raw source-function configuration.
 
@@ -298,6 +345,7 @@ class KdbExecutionConfig:
 
     calculation_namespace: str = ".mmsr"
     raw_data_functions: KdbRawDataFunctionsConfig = field(default_factory=KdbRawDataFunctionsConfig)
+    cache_functions: KdbUnifiedMetricCacheFunctionsConfig = field(default_factory=KdbUnifiedMetricCacheFunctionsConfig)
     enforce_daily_raw_scope: bool = True
     symbol_chunk_size: int | None = None
     symbol_chunk_group_by: tuple[str, ...] | list[str] = ("sym",)
@@ -333,6 +381,11 @@ class KdbExecutionConfig:
         """Return the configured raw data source-function mapping."""
 
         return self.raw_data_functions.to_source_functions()
+
+    def cache_function_mapping(self) -> dict[str, str | bool]:
+        """Return the configured unified day-result cache function config."""
+
+        return self.cache_functions.to_config_mapping()
 
 
 @dataclass(frozen=True)

@@ -4,6 +4,7 @@ from mmsr.config.models import (
     HtmlTemplateConfig,
     IntradayConfig,
     KdbExecutionConfig,
+    KdbUnifiedMetricCacheFunctionsConfig,
     KdbRawDataFunctionsConfig,
     ReferenceComparisonConfig,
     ReportConfig,
@@ -186,6 +187,11 @@ def test_kdb_config_defaults_to_namespace_scoped_raw_data_functions() -> None:
         "pts_quotes": ".mmsr.getQuote",
         "primary_quotes": ".mmsr.getQuote",
     }
+    assert config.kdb.cache_function_mapping() == {
+        "use_load": False,
+        "use_persist": False,
+        "persist_mode": "upsert",
+    }
     assert isinstance(config.symbols, SymbolUniverseConfig)
     assert config.symbols.qualified_function() == ".mmsr.getRef"
 
@@ -211,6 +217,51 @@ def test_kdb_raw_data_functions_allow_user_namespace_and_role_overrides() -> Non
         "pts_quotes": ".sb.mmsr.getPtsQuote",
         "primary_quotes": ".sb.mmsr.getPrimaryQuote",
     }
+
+
+def test_kdb_cache_functions_allow_user_namespace_and_overrides() -> None:
+    config = KdbExecutionConfig(
+        raw_data_functions=KdbRawDataFunctionsConfig(namespace=".sb.mmsr"),
+        cache_functions=KdbUnifiedMetricCacheFunctionsConfig(
+            namespace=".cache.mmsr",
+            use_load=True,
+            load="loadUnifiedDay",
+            use_persist=True,
+            persist=".cache.custom.persistUnifiedDay",
+            persist_mode="overwrite",
+        ),
+    )
+
+    assert config.cache_function_mapping() == {
+        "use_load": True,
+        "load": ".cache.mmsr.loadUnifiedDay",
+        "use_persist": True,
+        "persist": ".cache.custom.persistUnifiedDay",
+        "persist_mode": "overwrite",
+    }
+
+
+def test_kdb_cache_functions_validate_enabled_functions_and_mode() -> None:
+    for factory, expected in [
+        (
+            lambda: KdbUnifiedMetricCacheFunctionsConfig(use_load=True),
+            "cache_functions.load",
+        ),
+        (
+            lambda: KdbUnifiedMetricCacheFunctionsConfig(use_persist=True),
+            "cache_functions.persist",
+        ),
+        (
+            lambda: KdbUnifiedMetricCacheFunctionsConfig(persist_mode="append"),
+            "cache_functions.persist_mode",
+        ),
+    ]:
+        try:
+            factory()
+        except ValueError as exc:
+            assert expected in str(exc)
+        else:
+            raise AssertionError(f"Expected invalid cache function config for {expected}")
 
 
 def test_kdb_namespace_config_rejects_global_or_invalid_names() -> None:

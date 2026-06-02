@@ -46,6 +46,17 @@ data:
       # Primary quotes provide the TSE/primary at-trade and future mids.
       primary_quote: "getQuote"
       reference_data: "getRef"
+    # Optional unified day-result cache hooks owned by the user.
+    # load[date] should return the same unified fact table shape as runReportDay.
+    # persist[date; data; mode] should return 1b/0b for success/failure where
+    # mode is `overwrite` or `upsert`.
+    cache_functions:
+      namespace: ".sb.mmsr"
+      use_load: false
+      load: "loadUnifiedMetricFacts"
+      use_persist: false
+      persist: "persistUnifiedMetricFacts"
+      persist_mode: "upsert"
 calendar:
   source: kdb
   namespace: ".sb.mmsr"

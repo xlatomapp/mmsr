@@ -16,6 +16,7 @@ from mmsr.config.models import (
     HtmlTemplateConfig,
     IntradayConfig,
     KdbExecutionConfig,
+    KdbUnifiedMetricCacheFunctionsConfig,
     KdbRawDataFunctionsConfig,
     ReferenceComparisonConfig,
     ReferenceDataConfig,
@@ -198,6 +199,7 @@ def _kdb_config(
     reference_data_section: Mapping[str, Any] | None = None,
 ) -> KdbExecutionConfig:
     raw_functions = _mapping(section.get("raw_data_functions", {}), "data.kdb.raw_data_functions")
+    cache_functions = _mapping(section.get("cache_functions", {}), "data.kdb.cache_functions")
     reference_data_section = reference_data_section or {}
     reference_function = raw_functions.get("reference_data", reference_data_section.get("function", "getRef"))
     return KdbExecutionConfig(
@@ -212,6 +214,14 @@ def _kdb_config(
             reference_data=str(reference_function),
             venue_trade=_optional_string(raw_functions.get("venue_trade")),
             venue_quote=_optional_string(raw_functions.get("venue_quote")),
+        ),
+        cache_functions=KdbUnifiedMetricCacheFunctionsConfig(
+            namespace=str(cache_functions.get("namespace", ".mmsr")),
+            use_load=bool(cache_functions.get("use_load", False)),
+            load=_optional_string(cache_functions.get("load")),
+            use_persist=bool(cache_functions.get("use_persist", False)),
+            persist=_optional_string(cache_functions.get("persist")),
+            persist_mode=str(cache_functions.get("persist_mode", "upsert")),
         ),
         enforce_daily_raw_scope=bool(section.get("enforce_daily_raw_scope", True)),
         symbol_chunk_size=(None if section.get("symbol_chunk_size") is None else int(section["symbol_chunk_size"])),

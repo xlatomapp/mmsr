@@ -9,7 +9,7 @@
     $[`sym in cols t; @[t;`sym;{`p#x}]; t]
     };
 
-// flip to table
+/ flip to table
 {{ calculation_namespace }}.metricAggSpec:
     flip flip raze enlist each (
         `metric`level`sourceTable`dependsOn`groupBy`aggExpr`weightCol`filterExpr`outputCol`enabled`version!
@@ -52,9 +52,9 @@
             (`trade_count;`period;`trade_count_daily;`trade_count;`topixCapGrp;`mean;`;"";`trade_count;1b;`v1);
 
         `metric`level`sourceTable`dependsOn`groupBy`aggExpr`weightCol`filterExpr`outputCol`enabled`version!
-            (`quoted_spread_bps;`intraday;`quotes_raw;`askPrice`bidPrice`time;`date`timeBucket`sym`topixCapGrp;`twap_quote_ms;`quoteWeightMs;"excludeAuctionIfPresent";`quoted_spread_bps;1b;`v1);
+            (`quoted_spread_bps;`intraday;`quotes_raw;`askPrice`bidPrice`time;`date`timeBucket`sym`topixCapGrp;`twap_quote_ms;`quoteWeightMs;"";`quoted_spread_bps;1b;`v1);
         `metric`level`sourceTable`dependsOn`groupBy`aggExpr`weightCol`filterExpr`outputCol`enabled`version!
-            (`quoted_spread_bps;`daily;`quotes_raw;`askPrice`bidPrice`time;`date`sym`topixCapGrp;`twap_quote_ms;`quoteWeightMs;"excludeAuctionIfPresent";`quoted_spread_bps;1b;`v1);
+            (`quoted_spread_bps;`daily;`quotes_raw;`askPrice`bidPrice`time;`date`sym`topixCapGrp;`twap_quote_ms;`quoteWeightMs;"";`quoted_spread_bps;1b;`v1);
         `metric`level`sourceTable`dependsOn`groupBy`aggExpr`weightCol`filterExpr`outputCol`enabled`version!
             (`quoted_spread_bps;`weekly;`spread_daily;`quoted_spread_bps;`year`week`topixCapGrp;`mean;`;"";`quoted_spread_bps;1b;`v1);
         `metric`level`sourceTable`dependsOn`groupBy`aggExpr`weightCol`filterExpr`outputCol`enabled`version!
@@ -65,9 +65,9 @@
             (`quoted_spread_bps;`period;`spread_daily;`quoted_spread_bps;`topixCapGrp;`mean;`;"";`quoted_spread_bps;1b;`v1);
 
         `metric`level`sourceTable`dependsOn`groupBy`aggExpr`weightCol`filterExpr`outputCol`enabled`version!
-            (`top_of_book_depth;`intraday;`quotes_raw;`bidSize`askSize`lotSize;`date`timeBucket`sym`topixCapGrp;`median;`;"excludeAuctionIfPresent";`top_of_book_depth;1b;`v1);
+            (`top_of_book_depth;`intraday;`quotes_raw;`bidSize`askSize`lotSize;`date`timeBucket`sym`topixCapGrp;`median;`;"";`top_of_book_depth;1b;`v1);
         `metric`level`sourceTable`dependsOn`groupBy`aggExpr`weightCol`filterExpr`outputCol`enabled`version!
-            (`top_of_book_depth;`daily;`quotes_raw;`bidSize`askSize`lotSize;`date`sym`topixCapGrp;`median;`;"excludeAuctionIfPresent";`top_of_book_depth;1b;`v1);
+            (`top_of_book_depth;`daily;`quotes_raw;`bidSize`askSize`lotSize;`date`sym`topixCapGrp;`median;`;"";`top_of_book_depth;1b;`v1);
         `metric`level`sourceTable`dependsOn`groupBy`aggExpr`weightCol`filterExpr`outputCol`enabled`version!
             (`top_of_book_depth;`weekly;`depth_daily;`top_of_book_depth;`year`week`topixCapGrp;`mean;`;"";`top_of_book_depth;1b;`v1);
         `metric`level`sourceTable`dependsOn`groupBy`aggExpr`weightCol`filterExpr`outputCol`enabled`version!
@@ -205,7 +205,6 @@
         ];
     if[calcFamily = `liquidity;
         rawQuotes: rawSources[sourceKey] lj rawSources`refs;
-        hasAuction:`auction in cols rawQuotes;
         sortedQuotes:`date`sym`time xasc rawQuotes;
         dayEnd: 0D24:00:00;
         quotesWithNext: update nextTime:next time by date,sym from sortedQuotes;
@@ -226,7 +225,6 @@
            topixCapGrp
         from quotesWeighted
         where date = runDate,
-              {{ calculation_namespace }}.metricAggSpecApplyAuctionFilter[auction;hasAuction;dailySpec;metricParams],
               bidPrice > 0,
               askPrice > bidPrice,
               lotSize > 0,
@@ -461,7 +459,8 @@
 {{ calculation_namespace }}.canonicalizeMetricFacts:{[facts;metricName]
     withMetricValue: $[metricName in cols facts; update metricValue: facts metricName from facts; facts];
     presentCols: {{ calculation_namespace }}.metricFactCanonicalCols inter cols withMetricValue;
-    0!flip presentCols!({[t;c] t c}[withMetricValue] each presentCols)
+    colData: (flip 0!withMetricValue) presentCols;
+    0!flip presentCols!colData
     };
 
 {{ calculation_namespace }}.rollupMetricResult:{[facts;metricName;aggregationLevels]
@@ -549,7 +548,6 @@
 {{ calculation_namespace }}.calcLiquidity:{[runDate;rawQuotes;refs;params]
     intradaySpec: {{ calculation_namespace }}.metricAggSpecGet[`quoted_spread_bps;`intraday];
     quotes: rawQuotes lj refs;
-    hasAuction:`auction in cols quotes;
     sortedQuotes:`date`sym`time xasc quotes;
     bucketStart: (params`bucket) xbar sortedQuotes`time;
     bucketEnd: bucketStart + params`bucket;
@@ -572,7 +570,6 @@
        topixCapGrp
     from quotesWeighted
     where date = runDate,
-          {{ calculation_namespace }}.metricAggSpecApplyAuctionFilter[auction;hasAuction;intradaySpec;params],
           bidPrice > 0,
           askPrice > bidPrice,
           lotSize > 0,
@@ -926,7 +923,7 @@
                 chunkCount;
                 symbolCount]
             }[rolledMetricDict;refLoadMs;chunkCalcMs;rollupMs;totalMs;chunkCount;symbolCount] each metricNames);
-    unifiedResult: $[0=count factTables; ([]); 0!(uj/) factTables];
+    unifiedResult: $[0=count factTables; (); 0!(uj/) factTables];
     
     if[`topixCapGrp in cols unifiedResult;
         unifiedResult: delete topixCapGrp from unifiedResult

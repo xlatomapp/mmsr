@@ -62,18 +62,19 @@ MMSR installs reusable q aggregation helpers such as `.desk.mmsr.sumNotional`,
 configs should not hard-code static session start/end times.
 
 The live data path is intentionally streaming-by-result rather than persisted in
-kdb. Production execution is batched by one trading day and one symbol chunk.
-For each day/chunk batch, the rendered q query builds `refs` from the raw
-reference universe, calls each configured raw source function at most once for
-the source roles required by the configured metrics, and then passes the loaded
-raw tables into MMSR calculation functions such as
-`.desk.mmsr.calcActivity[rawTrades;refs;params]` or `.desk.mmsr.calcLiquidity[rawQuotes;refs;params]`. The top-level q expression returns a
-dictionary keyed by metric name, where each value is the aggregated result table
-for that metric. PyKX returns that dictionary to Python through
-`KdbClient.execute`; `KdbMetricRunner` validates each metric output schema and
-normalizes each table into `MetricTimeSeries` for report rendering and reference
-comparison. MMSR does not persist result tables in kdb unless a future
-operator-owned sink is explicitly added.
+kdb unless the operator explicitly configures a cache/persist function.
+Production execution is batched by one trading day and one symbol chunk. For
+each day/chunk batch, the rendered q query builds `refs` from the raw reference
+universe, calls each configured raw source function at most once for the source
+roles required by the configured metrics, and then passes the loaded raw tables
+into MMSR calculation functions such as
+`.desk.mmsr.calcActivity[rawTrades;refs;params]` or
+`.desk.mmsr.calcLiquidity[rawQuotes;refs;params]`. The top-level q expression
+returns one unified fact table for that trading day. Each row carries the
+structural fields needed by the report such as `metricName`, `metricValue`,
+`date`, `timeBucket`, `groupType`, `groupValue`, `aggregationLevel`, and
+`level`. `KdbMetricRunner` validates that unified schema and normalizes rows
+into `MetricTimeSeries` for report rendering and reference comparison.
 
 
 `config/report.production_minimal.yaml` is the recommended first live-kdb
@@ -128,6 +129,47 @@ mmsr render \
   --detailed-trends-granularity daily \
   --include-automated-insights
 ```
+
+### Optional q day-cache load/persist hooks
+
+If you want MMSR to load a precomputed unified day-result table from kdb before
+running `runReportDay`, or persist the computed unified table after execution,
+configure `data.kdb.cache_functions`.
+
+The contract is:
+
+- `load[date] -> table`
+  - input: one trading day
+  - output: the same unified day-result table shape that `runReportDay` returns
+- `persist[date; data; mode] -> 1b | 0b`
+  - inputs:
+    - one trading day
+    - unified day-result table
+    - mode string: `"overwrite"` or `"upsert"`
+  - output: boolean success flag
+
+Example:
+
+```yaml
+data:
+  kdb:
+    cache_functions:
+      namespace: ".sb.mmsr"
+      use_load: true
+      load: "loadUnifiedMetricFacts"
+      use_persist: true
+      persist: "persistUnifiedMetricFacts"
+      persist_mode: "upsert"
+```
+
+When `use_load` is enabled, MMSR calls the configured q function first. The
+returned table is schema-validated against the unified day-runner contract and
+then filtered down to the requested metrics/scopes in Python. When
+`use_persist` is enabled, MMSR calls the configured q persist function after a
+successful `runReportDay` execution. A false return from the persist function is
+treated as an execution error.
+
+The q day-table cache contract above is the supported production cache boundary.
 
 For full-universe reports, omit repeated `--symbol` filters and let the
 configured symbol function choose the analysis universe for each trading day.

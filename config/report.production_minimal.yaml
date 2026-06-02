@@ -37,6 +37,13 @@ data:
       # Primary quotes provide the TSE/primary at-trade and future mids.
       primary_quote: "getQuote"
       reference_data: "getRef"
+    cache_functions:
+      namespace: ".sb.mmsr"
+      use_load: false
+      load: "loadUnifiedMetricFacts"
+      use_persist: false
+      persist: "persistUnifiedMetricFacts"
+      persist_mode: "upsert"
 
 calendar:
   source: kdb

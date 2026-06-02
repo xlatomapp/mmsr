@@ -823,7 +823,10 @@ def summarize_production_report_plan(
     )
     calendar = _kdb_calendar_source(client, report_config)
     symbol_source = _kdb_symbol_source(client, report_config)
-    runner = KdbMetricRunner(client)
+    runner = KdbMetricRunner(
+        client,
+        q_day_cache_functions=report_config.kdb.cache_function_mapping(),
+    )
     runner.install_calculation_functions(report_config.kdb.calculation_namespace)
     executor = KdbProductionExecutor(
         runner=runner,
@@ -880,7 +883,10 @@ def preflight_production_report(
     )
     calendar = _kdb_calendar_source(client, report_config)
     symbol_source = _kdb_symbol_source(client, report_config)
-    runner = KdbMetricRunner(client)
+    runner = KdbMetricRunner(
+        client,
+        q_day_cache_functions=report_config.kdb.cache_function_mapping(),
+    )
     runner.install_calculation_functions(report_config.kdb.calculation_namespace)
     preflight = KdbProductionPreflight(
         runner=runner,
@@ -955,6 +961,7 @@ def render_production_report_file(
     symbol_source = _kdb_symbol_source(client, report_config)
     runner = KdbMetricRunner(
         client,
+        q_day_cache_functions=report_config.kdb.cache_function_mapping(),
         isolate_calculation_namespace_per_run=isolate_calculation_namespace_per_run,
         keep_isolated_calculation_namespace=keep_isolated_calculation_namespace,
     )
