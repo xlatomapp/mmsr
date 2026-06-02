@@ -328,6 +328,27 @@ def test_detailed_trends_metric_rollups_match_semantics() -> None:
     assert pytest.approx(volatility_weekly[0][2], rel=1e-9) == ((3.0**2 + 4.0**2) / 2.0) ** 0.5
 
 
+def test_metric_daily_rollups_ignore_nan_values() -> None:
+    volatility_series = MetricTimeSeries(
+        metric_name="parkinson_volatility_bps",
+        observations=(
+            MetricObservation("parkinson_volatility_bps", date(2026, 5, 1), None, {}, float("nan")),
+            MetricObservation("parkinson_volatility_bps", date(2026, 5, 1), None, {}, 3.0),
+            MetricObservation("parkinson_volatility_bps", date(2026, 5, 2), None, {}, 4.0),
+        ),
+    )
+
+    daily = market_report_module._metric_daily_rollups("parkinson_volatility_bps", volatility_series)
+    weekly = market_report_module._aggregate_metric_trend_series(
+        volatility_series,
+        metric_name="parkinson_volatility_bps",
+        granularity="weekly",
+    )
+
+    assert daily == [(date(2026, 5, 1), 3.0), (date(2026, 5, 2), 4.0)]
+    assert pytest.approx(weekly[0][2], rel=1e-9) == ((3.0**2 + 4.0**2) / 2.0) ** 0.5
+
+
 def test_market_overview_card_delta_matches_detailed_trends_means() -> None:
     document = build_market_monitor_report(
         _input_from_mock_sample(),
@@ -438,6 +459,45 @@ def test_metric_aggregate_payload_handles_none_zero_and_granularity() -> None:
     assert payload.target_mean == pytest.approx(12.0)
     assert payload.benchmark_mean == pytest.approx(0.0)
     assert payload.delta_pct is None
+
+
+def test_detailed_trends_block_remains_present_when_metrics_have_no_bucket_points() -> None:
+    metric_definitions = build_offline_sample_metrics().metric_definitions
+    current_series = (
+        MetricTimeSeries(
+            metric_name="turnover",
+            observations=(
+                MetricObservation("turnover", date(2026, 5, 1), None, {}, None),
+            ),
+        ),
+    )
+    reference_series = (
+        MetricTimeSeries(
+            metric_name="turnover",
+            observations=(
+                MetricObservation("turnover", date(2026, 4, 1), None, {}, None),
+            ),
+        ),
+    )
+    block = market_report_module._build_detailed_metric_trends_block(
+        MarketReportInput(
+            metric_definitions=metric_definitions,
+            current_series=current_series,
+            comparisons=(),
+            reference_series=reference_series,
+        ),
+        metric_definitions,
+        options=MarketReportOptions(
+            detailed_metric_trends_metric_names=("turnover",),
+            detailed_metric_trends_default_metric="turnover",
+        ),
+    )
+
+    assert block is not None
+    spec = _extract_detailed_trends_spec(block.body_html)
+    assert spec["ordered_metrics"] == ["turnover"]
+    assert spec["metrics"]["turnover"]["labels"] == []
+    assert spec["metrics"]["turnover"]["values"] == []
 
 
 def test_turnover_distribution_renders_group_session_heatmap_table() -> None:

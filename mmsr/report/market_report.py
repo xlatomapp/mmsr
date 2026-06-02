@@ -18,7 +18,8 @@ from statistics import median
 
 from mmsr.analysis.trends import classify_trend_from_daily_values
 from mmsr.metrics.base import MetricDefinition
-from mmsr.metrics.results import MetricComparison, MetricTimeSeries
+from mmsr.metrics.results import MetricComparison, MetricObservation, MetricTimeSeries
+from mmsr.presentation.labels import format_intraday_bucket_label
 from mmsr.report.components import CommentaryBlock, HtmlBlock, PlotlyChart, ReportBranding, ReportDocument, ReportPage
 from mmsr.report.drilldowns import (
     DEFAULT_DRILLDOWN_GROUP_KEYS,
@@ -41,6 +42,7 @@ from mmsr.report.sections import (
     build_reference_target_intraday_profile_chart,
     build_reference_target_trend_chart,
     build_summary_activity_distribution_html_block,
+    build_summary_liquidity_distribution_html_block,
 )
 from mmsr.report.symbols import (
     DEFAULT_SYMBOL_GROUP_KEYS,
@@ -118,6 +120,10 @@ class MarketReportOptions:
         "observations are reduced to cumulative-percent box statistics by "
         "bucket; the current period is shown as a line with circle markers; "
         "session and auction shares are shown as horizontal stacked bars."
+    )
+    liquidity_distribution_help_text: str = (
+        "Cumulative intraday distribution for liquidity-state metrics. "
+        "Select metric from the left table and universe from the bottom table."
     )
     include_activity_distribution_page: bool = True
     activity_distribution_metric_names: tuple[str, ...] = (
@@ -375,6 +381,33 @@ class _MetricAggregatePayload:
     delta_pct: float | None
 
 
+def _observation_level(observation: MetricObservation) -> str:
+    raw_level = observation.metadata.get("level")
+    if raw_level is not None:
+        text = str(raw_level).strip().lower()
+        if text in {"intraday", "daily"}:
+            return text
+    bucket = observation.time_bucket
+    if bucket is None:
+        return "daily"
+    bucket_text = str(bucket).strip().upper()
+    if bucket_text in {"DAILY", "WEEKLY", "MONTHLY", "QUARTERLY", "PERIOD"}:
+        return "daily"
+    return "intraday"
+
+
+def _series_for_level(series: MetricTimeSeries, level: str) -> MetricTimeSeries:
+    return MetricTimeSeries(
+        metric_name=series.metric_name,
+        observations=tuple(
+            observation
+            for observation in series.observations
+            if _observation_level(observation) == level
+        ),
+        metadata=series.metadata,
+    )
+
+
 def build_market_monitor_report(
     report_input: MarketReportInput,
     *,
@@ -451,6 +484,7 @@ def _build_summary_page(
         options=options,
     )
     turnover_block = _build_turnover_distribution_summary_block(report_input, definitions, options=options)
+    liquidity_block = _build_liquidity_distribution_summary_block(report_input, definitions, options=options)
     return ReportPage(
         title=base_page.title,
         html_blocks=(
@@ -458,6 +492,7 @@ def _build_summary_page(
             + ([market_overview_block] if market_overview_block is not None else [])
             + ([detailed_trends_block] if detailed_trends_block is not None else [])
             + ([turnover_block] if turnover_block is not None else [])
+            + ([liquidity_block] if liquidity_block is not None else [])
         ),
         metric_cards=base_page.metric_cards,
         plotly_charts=[],
@@ -475,12 +510,12 @@ def _build_turnover_distribution_summary_block(
     if not report_input.reference_series:
         return None
     current_by_metric = {
-        series.metric_name: series
+        series.metric_name: _series_for_level(series, "intraday")
         for series in report_input.current_series
         if not _series_has_symbol_scope(series, options.symbol_group_keys)
     }
     reference_by_metric = {
-        series.metric_name: series
+        series.metric_name: _series_for_level(series, "intraday")
         for series in report_input.reference_series
         if not _series_has_symbol_scope(series, options.symbol_group_keys)
     }
@@ -500,6 +535,413 @@ def _build_turnover_distribution_summary_block(
         cumulative_figure_height=380,
         share_figure_height=150,
     )
+
+
+def _build_liquidity_distribution_summary_block(
+    report_input: MarketReportInput,
+    definitions: Mapping[str, MetricDefinition],
+    *,
+    options: MarketReportOptions,
+) -> HtmlBlock | None:
+    if not report_input.reference_series:
+        return None
+    current_by_metric = {
+        series.metric_name: _series_for_level(series, "intraday")
+        for series in report_input.current_series
+        if not _series_has_symbol_scope(series, options.symbol_group_keys)
+    }
+    reference_by_metric = {
+        series.metric_name: _series_for_level(series, "intraday")
+        for series in report_input.reference_series
+        if not _series_has_symbol_scope(series, options.symbol_group_keys)
+    }
+    metric_names = ["quoted_spread_bps", "top_of_book_depth", "parkinson_volatility_bps"]
+    missing: list[str] = []
+    for metric_name in metric_names:
+        if metric_name not in current_by_metric:
+            missing.append(f"{metric_name} (current)")
+        if metric_name not in reference_by_metric:
+            missing.append(f"{metric_name} (reference)")
+        if metric_name not in definitions:
+            missing.append(f"{metric_name} (definition)")
+    if missing:
+        raise ValueError(
+            "Intraday Liquidity Distribution requires explicit metrics with no fallback: "
+            + ", ".join(missing)
+        )
+    target = {metric_name: current_by_metric[metric_name] for metric_name in metric_names}
+    reference = {metric_name: reference_by_metric[metric_name] for metric_name in metric_names}
+    metric_defs = {metric_name: definitions[metric_name] for metric_name in metric_names}
+    default_metric = "quoted_spread_bps" if "quoted_spread_bps" in metric_defs else metric_names[0]
+    payload = _build_liquidity_distribution_payload(
+        target_by_metric=target,
+        reference_by_metric=reference,
+        metric_definitions=metric_defs,
+        default_metric=default_metric,
+        figure_height=380,
+    )
+    return build_summary_liquidity_distribution_html_block(
+        "Intraday Liquidity Distribution",
+        payload=payload,
+        help_text=(
+            options.liquidity_distribution_help_text
+            + " Methodology: "
+            + " ".join(
+                f"{_liquidity_metric_label(metric_name, metric_defs[metric_name])}: {_metric_aggregation_methodology(metric_name)}"
+                for metric_name in metric_names
+            )
+        ),
+    )
+
+
+def _liquidity_metric_label(metric_name: str, metric_definition: MetricDefinition) -> str:
+    if metric_name == "quoted_spread_bps":
+        return "Spread"
+    if metric_name == "top_of_book_depth":
+        return "Top book depth"
+    if metric_name == "parkinson_volatility_bps":
+        return "Volatility"
+    return metric_definition.label
+
+
+def _metric_aggregation_methodology(metric_name: str) -> str:
+    if metric_name in {"turnover", "volume", "trade_count"}:
+        return (
+            "Intraday: sum within each symbol and time bucket, then summed across the selected scope. "
+            "Daily: sum within each symbol-day, then summed across the selected scope. "
+            "Period: average of daily scope totals."
+        )
+    if metric_name == "quoted_spread_bps":
+        return (
+            "Intraday: time-weighted average spread within each symbol bucket, then average across the selected scope. "
+            "Daily: time-weighted average spread within each symbol-day, then average across the selected scope. "
+            "Period: average of daily scope values."
+        )
+    if metric_name == "top_of_book_depth":
+        return (
+            "Intraday: median top-of-book depth within each symbol bucket, then average across the selected scope. "
+            "Daily: median top-of-book depth within each symbol-day, then average across the selected scope. "
+            "Period: average of daily scope values."
+        )
+    if metric_name == "parkinson_volatility_bps":
+        return (
+            "Intraday: Parkinson high-low range within each symbol bucket, requiring at least two trades, then average across the selected scope. "
+            "Daily: Parkinson high-low range within each symbol-day, requiring at least two trades, then average across the selected scope. "
+            "Period: RMS of daily scope volatility values."
+        )
+    return "Metric-specific rollup."
+
+
+def _metric_help_text(definition: MetricDefinition | None, metric_name: str) -> str:
+    methodology = _metric_aggregation_methodology(metric_name)
+    if definition is None:
+        return methodology
+    unit_text = definition.unit.strip() or "n/a"
+    description = definition.description.strip() or "No definition available."
+    return f"{description} Unit: {unit_text}. Aggregation methodology: {methodology}"
+
+
+def _liquidity_group_bucket(group: Mapping[str, object]) -> str | None:
+    topix_keys = ("topixCapGrp", "topix_cap_group")
+    has_topix_key = any(key in group for key in topix_keys)
+    for key in topix_keys:
+        value = group.get(key)
+        if value is None:
+            continue
+        text = str(value).strip().casefold()
+        if not text:
+            continue
+        if "non" in text and "topix" in text:
+            return "Non-TOPIX"
+        if "large" in text:
+            return "TOPIX Large"
+        if "mid" in text:
+            return "TOPIX Mid"
+        if "small" in text:
+            return "TOPIX Small"
+    if has_topix_key:
+        return "Non-TOPIX"
+    for key in ("market_cap_bucket", "marketCapBucket"):
+        value = group.get(key)
+        if value is None:
+            continue
+        text = str(value).strip().casefold()
+        if not text:
+            continue
+        if "large" in text:
+            return "TOPIX Large"
+        if "mid" in text:
+            return "TOPIX Mid"
+        if "small" in text:
+            return "TOPIX Small"
+    return None
+
+
+def _filter_series_for_liquidity_row(series: MetricTimeSeries, row: str) -> MetricTimeSeries:
+    if row == "TSE":
+        return series
+    filtered = tuple(
+        observation
+        for observation in series.observations
+        if _liquidity_group_bucket(observation.group) == row
+    )
+    return MetricTimeSeries(metric_name=series.metric_name, observations=filtered)
+
+
+def _liquidity_aggregate_from_bucket_series(metric_name: str, values_by_bucket: Mapping[str, float]) -> float | None:
+    values = [value for value in values_by_bucket.values() if isfinite(value)]
+    if not values:
+        return None
+    return _aggregate_values(metric_name, values)
+
+
+def _aggregate_values(metric_name: str, values: list[float]) -> float | None:
+    if not values:
+        return None
+    if metric_name in {"quoted_spread_bps", "top_of_book_depth"}:
+        return float(median(values))
+    if metric_name == "parkinson_volatility_bps":
+        return sqrt(sum(value * value for value in values) / len(values))
+    return sum(values) / len(values)
+
+
+def _bucket_label(bucket: object | None) -> str:
+    label = format_intraday_bucket_label(bucket)
+    if label is None:
+        return "Full day"
+    return str(label)
+
+
+def _liquidity_daily_bucket_values(metric_name: str, series: MetricTimeSeries) -> dict[object, dict[str, float]]:
+    raw: dict[object, dict[str, list[float]]] = {}
+    for observation in series.observations:
+        if observation.value is None:
+            continue
+        numeric = float(observation.value)
+        if not isfinite(numeric):
+            continue
+        bucket = _bucket_label(observation.time_bucket)
+        raw.setdefault(observation.date, {}).setdefault(bucket, []).append(numeric)
+    return {
+        day: {
+            bucket: value
+            for bucket, bucket_values in by_bucket.items()
+            if (value := _aggregate_values(metric_name, bucket_values)) is not None
+        }
+        for day, by_bucket in raw.items()
+    }
+
+
+def _liquidity_period_bucket_values(
+    metric_name: str,
+    values_by_date_bucket: Mapping[object, Mapping[str, float]],
+) -> dict[str, float]:
+    bucket_values: dict[str, list[float]] = {}
+    for by_bucket in values_by_date_bucket.values():
+        for bucket, value in by_bucket.items():
+            bucket_values.setdefault(bucket, []).append(value)
+    return {
+        bucket: value
+        for bucket, values in bucket_values.items()
+        if (value := _aggregate_values(metric_name, values)) is not None
+    }
+
+
+def _liquidity_bucket_sort_key(label: str) -> tuple[int, int, int, str]:
+    key = label.strip().upper()
+    if key == "AMO":
+        return (0, 0, 0, key)
+    if key == "AMC":
+        return (2, 0, 0, key)
+    if key == "PMO":
+        return (3, 0, 0, key)
+    if key == "PMC":
+        return (5, 0, 0, key)
+    if ":" in key:
+        try:
+            hh, mm = key.split(":", 1)
+            return (1 if int(hh) < 12 else 4, int(hh), int(mm), key)
+        except ValueError:
+            return (6, 0, 0, key)
+    return (6, 0, 0, key)
+
+
+def _build_liquidity_bin_value_figure(
+    *,
+    metric_definition: MetricDefinition,
+    current_by_bucket: Mapping[str, float],
+    reference_by_bucket: Mapping[str, float],
+    figure_height: int,
+) -> dict[str, object]:
+    bucket_labels = sorted(set(current_by_bucket.keys()) | set(reference_by_bucket.keys()), key=_liquidity_bucket_sort_key)
+    current_values = [current_by_bucket.get(bucket) for bucket in bucket_labels]
+    reference_values = [reference_by_bucket.get(bucket) for bucket in bucket_labels]
+    return {
+        "data": [
+            {
+                "type": "scatter",
+                "mode": "lines+markers",
+                "name": "Reference",
+                "x": bucket_labels,
+                "y": reference_values,
+                "marker": {"symbol": "square", "size": 7, "color": "#8ea4bd"},
+                "line": {"width": 2, "color": "#8ea4bd"},
+                "hovertemplate": "%{x}<br>%{y:.4g}<extra>Reference</extra>",
+            },
+            {
+                "type": "scatter",
+                "mode": "lines+markers",
+                "name": "Current",
+                "x": bucket_labels,
+                "y": current_values,
+                "marker": {"symbol": "circle", "size": 8, "color": "#2d5d93"},
+                "line": {"width": 3, "color": "#2d5d93"},
+                "hovertemplate": "%{x}<br>%{y:.4g}<extra>Current</extra>",
+            },
+        ],
+        "layout": {
+            "template": "plotly_white",
+            "height": figure_height,
+            "margin": {"l": 70, "r": 20, "t": 20, "b": 108},
+            "showlegend": True,
+            "legend": {"orientation": "h", "x": 0.5, "xanchor": "center", "y": -0.26},
+            "xaxis": {
+                "anchor": "y",
+                "type": "category",
+                "categoryorder": "array",
+                "categoryarray": bucket_labels,
+                "showticklabels": True,
+            },
+            "yaxis": {
+                "anchor": "x",
+                "title": metric_definition.unit or metric_definition.label,
+            },
+        },
+        "config": {"displaylogo": False, "responsive": True},
+    }
+
+
+def _delta_pct(current: float | None, reference: float | None) -> float | None:
+    if current is None or reference is None or reference == 0:
+        return None
+    return (current - reference) / reference
+
+
+def _delta_bucket(delta_pct: float | None) -> str:
+    if delta_pct is None:
+        return "na"
+    if delta_pct <= -0.05:
+        return "n4"
+    if delta_pct < -0.03:
+        return "n3"
+    if delta_pct < -0.01:
+        return "n2"
+    if delta_pct < 0:
+        return "n1"
+    if delta_pct == 0:
+        return "z0"
+    if delta_pct < 0.01:
+        return "p1"
+    if delta_pct < 0.03:
+        return "p2"
+    if delta_pct < 0.05:
+        return "p3"
+    return "p4"
+
+
+def _delta_class(delta_pct: float | None) -> str:
+    if delta_pct is None:
+        return "neutral"
+    if delta_pct > 0:
+        return "up"
+    if delta_pct < 0:
+        return "down"
+    return "neutral"
+
+
+def _build_liquidity_distribution_payload(
+    *,
+    target_by_metric: Mapping[str, MetricTimeSeries],
+    reference_by_metric: Mapping[str, MetricTimeSeries],
+    metric_definitions: Mapping[str, MetricDefinition],
+    default_metric: str,
+    figure_height: int,
+) -> dict[str, object]:
+    rows = ("TSE", "TOPIX Large", "TOPIX Mid", "TOPIX Small", "Non-TOPIX")
+    metric_names = tuple(metric_definitions.keys())
+    row_figure_payload: dict[str, dict[str, dict[str, object]]] = {}
+    metric_rows_by_universe: dict[str, list[dict[str, str]]] = {}
+    universe_rows: list[dict[str, object]] = []
+
+    for row in rows:
+        row_metrics: dict[str, dict[str, object]] = {}
+        metric_rows: list[dict[str, str]] = []
+        universe_cells: list[dict[str, str]] = []
+        for metric_name in metric_names:
+            definition = metric_definitions[metric_name]
+            row_target = _filter_series_for_liquidity_row(target_by_metric[metric_name], row)
+            row_reference = _filter_series_for_liquidity_row(reference_by_metric[metric_name], row)
+            current_by_bucket = _liquidity_period_bucket_values(
+                metric_name,
+                _liquidity_daily_bucket_values(metric_name, row_target),
+            )
+            reference_by_bucket = _liquidity_period_bucket_values(
+                metric_name,
+                _liquidity_daily_bucket_values(metric_name, row_reference),
+            )
+            line_figure = _build_liquidity_bin_value_figure(
+                metric_definition=definition,
+                current_by_bucket=current_by_bucket,
+                reference_by_bucket=reference_by_bucket,
+                figure_height=figure_height,
+            )
+            row_metrics[metric_name] = {
+                "title": f"Universe: {row} | Metric: {_liquidity_metric_label(metric_name, definition)}",
+                "line_figure": line_figure,
+            }
+
+            current_value = _liquidity_aggregate_from_bucket_series(metric_name, current_by_bucket)
+            reference_value = _liquidity_aggregate_from_bucket_series(metric_name, reference_by_bucket)
+            delta_pct = _delta_pct(current_value, reference_value)
+            metric_rows.append(
+                {
+                    "metric_name": metric_name,
+                    "label": _liquidity_metric_label(metric_name, definition),
+                    "reference_text": _format_metric_value(reference_value, definition.unit),
+                    "current_text": _format_metric_value(current_value, definition.unit),
+                }
+            )
+            universe_cells.append(
+                {
+                    "metric_name": metric_name,
+                    "current_text": _format_metric_value(current_value, definition.unit),
+                    "delta_text": "n/a" if delta_pct is None else f"{delta_pct:+.1%}",
+                    "delta_bucket": _delta_bucket(delta_pct),
+                    "delta_class": _delta_class(delta_pct),
+                }
+            )
+        row_figure_payload[row] = row_metrics
+        metric_rows_by_universe[row] = metric_rows
+        universe_rows.append(
+            {
+                "row": row,
+                "label": row,
+                "selected": row == "TSE",
+                "cells": universe_cells,
+            }
+        )
+
+    return {
+        "default_row": "TSE",
+        "default_metric": default_metric,
+        "rows": row_figure_payload,
+        "metric_columns": [
+            {"metric_name": metric_name, "label": _liquidity_metric_label(metric_name, metric_definitions[metric_name])}
+            for metric_name in metric_names
+        ],
+        "metric_rows_by_universe": metric_rows_by_universe,
+        "universe_rows": universe_rows,
+    }
 
 
 def _build_summary_meta_strip_block(
@@ -591,12 +1033,12 @@ def _build_primary_intraday_signal_chart(
 
     metric_name = options.primary_intraday_signal_metric_name
     current_by_metric = {
-        series.metric_name: series
+        series.metric_name: _series_for_level(series, "intraday")
         for series in report_input.current_series
         if not _series_has_symbol_scope(series, options.symbol_group_keys)
     }
     reference_by_metric = {
-        series.metric_name: series
+        series.metric_name: _series_for_level(series, "intraday")
         for series in report_input.reference_series
         if not _series_has_symbol_scope(series, options.symbol_group_keys)
     }
@@ -787,8 +1229,6 @@ def _build_detailed_metric_trends_block(
             continue
         current_points = list(aggregate.bucketed_current)
         reference_points = list(aggregate.bucketed_reference)
-        if not current_points and not reference_points:
-            continue
 
         labels = [label for _, label, _ in reference_points] + [label for _, label, _ in current_points]
         values = [value for _, _, value in reference_points] + [value for _, _, value in current_points]
@@ -802,7 +1242,7 @@ def _build_detailed_metric_trends_block(
         metric_formula_latex = ""
         if definition is not None:
             unit_text = definition.unit.strip() or "n/a"
-            metric_help = f"{definition.description.strip()} Unit: {unit_text}."
+            metric_help = _metric_help_text(definition, metric_name)
             metric_description = definition.description.strip()
             metric_unit = unit_text
             metric_formula_latex = "" if definition.formula_latex is None else definition.formula_latex
@@ -818,6 +1258,7 @@ def _build_detailed_metric_trends_block(
             "description": metric_description,
             "unit_text": metric_unit,
             "formula_latex": metric_formula_latex,
+            "aggregation_text": _metric_aggregation_methodology(metric_name),
             "insights": _metric_trend_comments(
                 metric_name,
                 list(aggregate.daily_current),
@@ -987,11 +1428,17 @@ def _build_automated_insight_summary_block(
 
 
 def _metric_daily_rollups(metric_name: str, series: MetricTimeSeries) -> list[tuple[date, float]]:
+    series = _series_for_level(series, "daily")
+    if metric_name == "quoted_spread_bps":
+        return _spread_daily_rollups(series)
     per_date: dict[date, list[float]] = {}
     for observation in series.observations:
         if observation.value is None:
             continue
-        per_date.setdefault(observation.date, []).append(float(observation.value))
+        value = float(observation.value)
+        if not isfinite(value):
+            continue
+        per_date.setdefault(observation.date, []).append(value)
     rolled: list[tuple[date, float]] = []
     for obs_date, values in per_date.items():
         rollup = _metric_rollup(metric_name, values, is_daily=True)
@@ -1000,6 +1447,44 @@ def _metric_daily_rollups(metric_name: str, series: MetricTimeSeries) -> list[tu
         rolled.append((obs_date, rollup))
     rolled.sort(key=lambda item: item[0])
     return rolled
+
+
+def _spread_daily_rollups(series: MetricTimeSeries) -> list[tuple[date, float]]:
+    per_date_symbol: dict[tuple[date, str], list[float]] = {}
+    for observation in series.observations:
+        if observation.value is None:
+            continue
+        value = float(observation.value)
+        if not isfinite(value):
+            continue
+        symbol = _observation_symbol(observation)
+        key = (observation.date, symbol)
+        per_date_symbol.setdefault(key, []).append(value)
+
+    per_date_symbol_avg: dict[date, list[float]] = {}
+    for (obs_date, _), bucket_values in per_date_symbol.items():
+        if not bucket_values:
+            continue
+        per_date_symbol_avg.setdefault(obs_date, []).append(sum(bucket_values) / len(bucket_values))
+
+    rolled: list[tuple[date, float]] = []
+    for obs_date, symbol_values in per_date_symbol_avg.items():
+        if not symbol_values:
+            continue
+        rolled.append((obs_date, sum(symbol_values) / len(symbol_values)))
+    rolled.sort(key=lambda item: item[0])
+    return rolled
+
+
+def _observation_symbol(observation: MetricObservation) -> str:
+    for key in ("sym", "symbol"):
+        value = observation.group.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return "__unknown__"
 
 
 def _metric_trend_comments(
@@ -1054,6 +1539,8 @@ def _build_metric_aggregate_payloads(
     for metric_name in metric_names:
         current_series = current_by_metric.get(metric_name)
         reference_series = reference_by_metric.get(metric_name)
+        current_series = None if current_series is None else _series_for_level(current_series, "daily")
+        reference_series = None if reference_series is None else _series_for_level(reference_series, "daily")
         daily_current = tuple(() if current_series is None else _metric_daily_rollups(metric_name, current_series))
         daily_reference = tuple(() if reference_series is None else _metric_daily_rollups(metric_name, reference_series))
         bucketed_current = tuple(
@@ -1109,7 +1596,10 @@ def _aggregate_metric_trend_series(
     for observation in series.observations:
         if observation.value is None:
             continue
-        daily_values.setdefault(observation.date, []).append(float(observation.value))
+        value = float(observation.value)
+        if not isfinite(value):
+            continue
+        daily_values.setdefault(observation.date, []).append(value)
     if not daily_values:
         return []
 
@@ -1245,14 +1735,14 @@ def _delta_direction_class(change_pct: float | None) -> str:
 
 
 def _overview_card_aggregation_text(card_label: str) -> str:
-    if card_label == "Traded Value":
-        return "Aggregation: Avg daily total (market)"
-    if card_label == "Quoted Spread":
-        return "Aggregation: Daily median, then period average"
-    if card_label == "Top of book Depth":
-        return "Aggregation: Daily median (lots), then period average"
-    if card_label == "Volatility":
-        return "Aggregation: Daily volatility, then period RMS (sqrt(mean(v^2)))"
+    metric_name = {
+        "Traded Value": "turnover",
+        "Quoted Spread": "quoted_spread_bps",
+        "Top of book Depth": "top_of_book_depth",
+        "Volatility": "parkinson_volatility_bps",
+    }.get(card_label)
+    if metric_name is not None:
+        return f"Aggregation: {_metric_aggregation_methodology(metric_name)}"
     return "Aggregation: Period summary"
 
 
@@ -1565,12 +2055,12 @@ def _build_summary_story_charts(
         return []
 
     current_by_metric = {
-        series.metric_name: series
+        series.metric_name: _series_for_level(series, "intraday")
         for series in report_input.current_series
         if not _series_has_symbol_scope(series, options.symbol_group_keys)
     }
     reference_by_metric = {
-        series.metric_name: series
+        series.metric_name: _series_for_level(series, "intraday")
         for series in report_input.reference_series
         if not _series_has_symbol_scope(series, options.symbol_group_keys)
     }
@@ -1724,11 +2214,15 @@ def _build_daily_trend_page(
     if not options.include_daily_trend_page or not report_input.reference_series:
         return None
 
-    reference_by_metric = {series.metric_name: series for series in report_input.reference_series}
+    reference_by_metric = {
+        series.metric_name: _series_for_level(series, "daily")
+        for series in report_input.reference_series
+    }
     charts = []
     for target_series in report_input.current_series:
         if _is_toxicity_reversion_metric(target_series.metric_name):
             continue
+        target_series = _series_for_level(target_series, "daily")
         definition = _require_definition(target_series.metric_name, definitions)
         charts.append(
             build_reference_target_trend_chart(

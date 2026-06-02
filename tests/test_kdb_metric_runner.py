@@ -81,7 +81,7 @@ def test_calculation_bootstrap_batches_reversion_horizons_inside_day_runner() ->
     assert ".desk.mmsr.calcToxicityReversionFamily" in bootstrap
     assert "reversionMetrics: metricNames where .desk.mmsr.isToxicityReversionMetric each metricNames;" in bootstrap
     assert ".desk.mmsr.calcToxicityReversionFamily[" in bootstrap
-    assert "regularMetrics!({[rawSources;metricParams;metricName]" in bootstrap
+    assert ".desk.mmsr.runRegularMetricsBatched[" in bootstrap
 
 
 def test_calculation_bootstrap_prepares_reversion_common_joins_once() -> None:
@@ -125,9 +125,10 @@ def test_calculation_bootstrap_loads_sources_once_per_chunk() -> None:
     assert ".desk.mmsr.loadReportSources[" in run_day_body
     assert run_day_body.count("loadReportSources[") == 1
     # Regular metrics dispatched from the same rawSources
-    assert "regularMetrics!({[rawSources;metricParams;metricName]" in run_day_body
+    assert ".desk.mmsr.runRegularMetricsBatched[" in run_day_body
     # Reversion family dispatched from the same rawSources
-    assert ".desk.mmsr.calcToxicityReversionFamily[\n                    rawSources`pts_trades;" in run_day_body
+    assert ".desk.mmsr.calcToxicityReversionFamily[" in run_day_body
+    assert "rawSources`pts_trades;" in run_day_body
 
 
 def test_calculation_bootstrap_has_no_noop_native_function_wrappers() -> None:
@@ -147,7 +148,7 @@ def test_kdb_metric_runner_renders_activity_query_and_normalizes_column_result()
     client = FakeKdbClient(
         {
             "date": [date(2026, 5, 1), date(2026, 5, 2)],
-            "time_bucket": ["09:00", "09:05"],
+            "timeBucket": ["09:00", "09:05"],
             "market_segment": ["Prime", "Prime"],
             "turnover": [1000.0, 1250.0],
             "volume": [100, 125],
@@ -177,10 +178,10 @@ def test_kdb_metric_runner_renders_activity_query_and_normalizes_column_result()
         "sample_size": 3,
     }
 
-    query = client.queries[0]
+    query = client.queries[-1]
     assert "rawTrades: (.sb.mmsr.getTrade[2026.05.01;0!refs]);" in query
     assert (
-        ".mmsr.calcActivity[rawTrades;refs;(`bucket;`start_date;`end_date)!(0D00:05:00.000;2026.05.01;2026.05.02)]"
+        ".mmsr.calcActivity[2026.05.01;rawTrades;refs;(`bucket;`start_date;`end_date)!(0D00:05:00.000;2026.05.01;2026.05.02)]"
         in query
     )
     assert "(`bucket;`start_date;`end_date)!(0D00:05:00.000;2026.05.01;2026.05.02)" in query
@@ -194,7 +195,7 @@ def test_kdb_metric_runner_can_bound_starter_query_to_single_symbol() -> None:
     client = FakeKdbClient(
         {
             "date": [date(2026, 5, 1)],
-            "time_bucket": ["09:00"],
+            "timeBucket": ["09:00"],
             "sym": ["7203"],
             "turnover": [1000.0],
             "volume": [100],
@@ -214,7 +215,7 @@ def test_kdb_metric_runner_can_bound_starter_query_to_single_symbol() -> None:
     )
 
     assert series.observations[0].group == {"sym": "7203"}
-    assert 'sym = `$"7203"' in client.queries[0]
+    assert 'sym = `$"7203"' in client.queries[-1]
 
 
 def test_kdb_metric_runner_renders_liquidity_query_without_group_columns() -> None:
@@ -222,7 +223,7 @@ def test_kdb_metric_runner_renders_liquidity_query_without_group_columns() -> No
     client = FakeKdbClient(
         {
             "date": [date(2026, 5, 1)],
-            "time_bucket": ["AMO"],
+            "timeBucket": ["AMO"],
             "quoted_spread_bps": [12.5],
             "top_of_book_depth": [5000],
         }
@@ -240,10 +241,10 @@ def test_kdb_metric_runner_renders_liquidity_query_without_group_columns() -> No
 
     assert series.values == (12.5,)
     assert series.observations[0].group == {}
-    query = client.queries[0]
+    query = client.queries[-1]
     assert "rawQuotes: (.sb.mmsr.getQuote[2026.05.01;0!refs]);" in query
     assert (
-        ".mmsr.calcLiquidity[rawQuotes;refs;(`bucket;`start_date;`end_date)!(0D00:05:00.000;2026.05.01;2026.05.02)]"
+        ".mmsr.calcLiquidity[2026.05.01;rawQuotes;refs;(`bucket;`start_date;`end_date)!(0D00:05:00.000;2026.05.01;2026.05.02)]"
         in query
     )
     assert "(`bucket;`start_date;`end_date)!(0D00:05:00.000;2026.05.01;2026.05.02)" in query
@@ -251,26 +252,27 @@ def test_kdb_metric_runner_renders_liquidity_query_without_group_columns() -> No
     assert ".calcLiquidity" in query
 
 
-def test_kdb_metric_runner_day_query_returns_metric_tables() -> None:
+def test_kdb_metric_runner_day_query_returns_unified_metric_facts() -> None:
     registry = build_default_registry()
     client = FakeKdbClient(
-        {
-            "turnover": {
-                "date": [date(2026, 5, 1)],
-                "time_bucket": ["09:00"],
-                "sym": ["7203"],
-                "turnover": [1000.0],
-                "volume": [100],
-                "trade_count": [3],
+        [
+            {
+                "metricName": "turnover",
+                "date": date(2026, 5, 1),
+                "timeBucket": "09:00",
+                "sym": "7203",
+                "metricValue": 1000.0,
+                "level": "intraday",
             },
-            "quoted_spread_bps": {
-                "date": [date(2026, 5, 1)],
-                "time_bucket": ["09:00"],
-                "sym": ["7203"],
-                "quoted_spread_bps": [12.5],
-                "top_of_book_depth": [5000],
+            {
+                "metricName": "quoted_spread_bps",
+                "date": date(2026, 5, 1),
+                "timeBucket": "09:00",
+                "sym": "7203",
+                "metricValue": 12.5,
+                "level": "intraday",
             },
-        }
+        ]
     )
     runner = KdbMetricRunner(client)  # type: ignore[arg-type]
     common = {
@@ -305,11 +307,124 @@ def test_kdb_metric_runner_day_query_returns_metric_tables() -> None:
     ]
     assert series[0].values == (1000.0,)
     assert series[1].values == (12.5,)
-    query = client.queries[0]
-    assert ".mmsr.runReportDay[" in query
-    assert "`metricNames" in query
-    assert '`$"turnover"' in query
-    assert '`$"quoted_spread_bps"' in query
+    config_query = client.queries[0]
+    run_query = client.queries[-1]
+    assert "`metricNames" in config_query
+    assert '`$"turnover"' in config_query
+    assert '`$"quoted_spread_bps"' in config_query
+    assert ".mmsr.runReportDay[" in run_query
+
+
+def test_day_runner_accepts_unified_metric_fact_rows() -> None:
+    registry = build_default_registry()
+    client = FakeKdbClient(
+        [
+            {
+                "metricName": "turnover",
+                "date": date(2026, 5, 1),
+                "timeBucket": "09:00",
+                "sym": "7203",
+                "metricValue": 1000.0,
+                "level": "intraday",
+            },
+            {
+                "metricName": "quoted_spread_bps",
+                "date": date(2026, 5, 1),
+                "timeBucket": "09:00",
+                "sym": "7203",
+                "metricValue": 12.5,
+                "level": "intraday",
+            },
+        ]
+    )
+    runner = KdbMetricRunner(client)  # type: ignore[arg-type]
+    common = {
+        "period": ReportPeriod(
+            start_date=date(2026, 5, 1),
+            end_date=date(2026, 5, 1),
+            sessions=[
+                TradingSession(start=time(9, 0), end=time(11, 30), name="AM"),
+                TradingSession(start=time(12, 30), end=time(15, 30), name="PM"),
+            ],
+            bucket=IntradayBucketSpec("5m"),
+        ),
+        "group_by": ["sym"],
+        "source_functions": {
+            "reference_data": ".sb.mmsr.getRef",
+            "trades": ".sb.mmsr.getTrade",
+            "quotes": ".sb.mmsr.getQuote",
+        },
+        "parameters": {"symbols": ("7203",)},
+    }
+
+    series = runner.run_day(
+        [
+            MetricRunRequest(metric=registry.get("turnover"), **common),
+            MetricRunRequest(metric=registry.get("quoted_spread_bps"), **common),
+        ]
+    )
+
+    assert [item.metric_name for item in series] == ["turnover", "quoted_spread_bps"]
+    assert series[0].values == (1000.0,)
+    assert series[1].values == (12.5,)
+
+
+def test_day_runner_filters_unified_rows_to_requested_group_scope() -> None:
+    registry = build_default_registry()
+    client = FakeKdbClient(
+        [
+            {
+                "metricName": "turnover",
+                "date": date(2026, 5, 1),
+                "timeBucket": "DAILY",
+                "metricValue": 2000.0,
+                "groupType": "market",
+                "groupValue": "TSE",
+                "level": "daily",
+            },
+            {
+                "metricName": "turnover",
+                "date": date(2026, 5, 1),
+                "timeBucket": "DAILY",
+                "metricValue": 1000.0,
+                "groupType": "topixCapGrp",
+                "groupValue": "Large",
+                "level": "daily",
+            },
+        ]
+    )
+    runner = KdbMetricRunner(client)  # type: ignore[arg-type]
+    common = {
+        "period": ReportPeriod(
+            start_date=date(2026, 5, 1),
+            end_date=date(2026, 5, 1),
+            sessions=[
+                TradingSession(start=time(9, 0), end=time(11, 30), name="AM"),
+                TradingSession(start=time(12, 30), end=time(15, 30), name="PM"),
+            ],
+            bucket=IntradayBucketSpec("5m"),
+        ),
+        "source_functions": {
+            "reference_data": ".sb.mmsr.getRef",
+            "trades": ".sb.mmsr.getTrade",
+            "quotes": ".sb.mmsr.getQuote",
+        },
+        "parameters": {"symbols": ("7203",)},
+    }
+
+    series = runner.run_day(
+        [
+            MetricRunRequest(
+                metric=registry.get("turnover"),
+                group_by=["topixCapGrp"],
+                **common,
+            ),
+        ]
+    )
+
+    assert len(series) == 1
+    assert series[0].values == (1000.0,)
+    assert series[0].observations[0].group == {"topixCapGrp": "Large"}
 
 
 def test_kdb_metric_runner_renders_reversion_query_and_normalizes_venue_horizon() -> None:
@@ -318,7 +433,7 @@ def test_kdb_metric_runner_renders_reversion_query_and_normalizes_venue_horizon(
     client = FakeKdbClient(
         {
             "date": [date(2026, 5, 1), date(2026, 5, 1)],
-            "time_bucket": ["09:00", "09:00"],
+            "timeBucket": ["09:00", "09:00"],
             "venue": ["TSE", "SBIJ"],
             "horizon": ["100ms", "100ms"],
             "sym": ["7203", "7203"],
@@ -393,7 +508,7 @@ def test_activity_runner_validates_output_schema_before_normalization() -> None:
     client = FakeKdbClient(
         {
             "date": [date(2026, 5, 1)],
-            "time_bucket": ["09:00"],
+            "timeBucket": ["09:00"],
             "volume": [100],
             "turnover": [1000.0],
         }
@@ -418,7 +533,7 @@ def test_liquidity_runner_validates_output_schema_before_normalization() -> None
     client = FakeKdbClient(
         {
             "date": [date(2026, 5, 1)],
-            "time_bucket": ["09:00"],
+            "timeBucket": ["09:00"],
             "quoted_spread_bps": [12.5],
         }
     )
@@ -443,7 +558,7 @@ def test_reversion_runner_validates_output_schema_before_normalization() -> None
     client = FakeKdbClient(
         {
             "date": [date(2026, 5, 1)],
-            "time_bucket": ["09:00"],
+            "timeBucket": ["09:00"],
             "venue": ["SBIJ"],
             "horizon": ["100ms"],
             metric_name: [0.25],
@@ -564,7 +679,7 @@ def test_normalize_metric_result_accepts_list_of_row_dicts_and_preserves_metadat
         result=[
             {
                 "date": "2026.05.01",
-                "time_bucket": "AMO",
+                "timeBucket": "AMO",
                 "market_segment": "Prime",
                 "quoted_spread_bps": 10.5,
                 "reference_rows": 20,
@@ -580,11 +695,57 @@ def test_normalize_metric_result_accepts_list_of_row_dicts_and_preserves_metadat
     assert series.observations[0].metadata == {"reference_rows": 20}
 
 
+def test_normalize_metric_result_accepts_long_value_rows() -> None:
+    series = normalize_metric_result(
+        metric_name="quoted_spread_bps",
+        result=[
+            {
+                "metricName": "quoted_spread_bps",
+                "date": date(2026, 5, 1),
+                "timeBucket": "09:00",
+                "sym": "7203",
+                "metricValue": 12.5,
+                "level": "intraday",
+                "reportTotalMs": 42,
+            }
+        ],
+        group_by=["sym"],
+        metadata={"shape": "long"},
+    )
+
+    assert series.metric_name == "quoted_spread_bps"
+    assert series.values == (12.5,)
+    assert series.metadata == {"shape": "long"}
+    assert series.observations[0].metadata == {"level": "intraday", "reportTotalMs": 42}
+
+
+def test_normalize_metric_result_uses_group_type_and_group_value_for_unified_rows() -> None:
+    series = normalize_metric_result(
+        metric_name="turnover",
+        result=[
+            {
+                "metricName": "turnover",
+                "date": date(2026, 5, 1),
+                "timeBucket": "DAILY",
+                "metricValue": 1000.0,
+                "groupType": "topixCapGrp",
+                "groupValue": "Large70",
+                "level": "daily",
+            }
+        ],
+        group_by=["topixCapGrp"],
+    )
+
+    assert series.metric_name == "turnover"
+    assert series.values == (1000.0,)
+    assert series.observations[0].group == {"topixCapGrp": "Large70"}
+
+
 def test_normalize_metric_result_rejects_missing_metric_value_column() -> None:
     with pytest.raises(KdbMetricRunnerError, match="missing value column"):
         normalize_metric_result(
             metric_name="turnover",
-            result={"date": [date(2026, 5, 1)], "time_bucket": ["09:00"]},
+            result={"date": [date(2026, 5, 1)], "timeBucket": ["09:00"]},
             group_by=[],
         )
 
@@ -595,7 +756,7 @@ def test_normalize_metric_result_rejects_missing_group_column() -> None:
             metric_name="turnover",
             result={
                 "date": [date(2026, 5, 1)],
-                "time_bucket": ["09:00"],
+                "timeBucket": ["09:00"],
                 "turnover": [1000.0],
             },
             group_by=["market_segment"],
@@ -608,7 +769,7 @@ def test_normalize_metric_result_rejects_mismatched_column_lengths() -> None:
             metric_name="turnover",
             result={
                 "date": [date(2026, 5, 1), date(2026, 5, 2)],
-                "time_bucket": ["09:00"],
+                "timeBucket": ["09:00"],
                 "turnover": [1000.0, 2000.0, 3000.0],
             },
             group_by=[],
@@ -621,31 +782,28 @@ def test_kdb_metric_runner_installs_calculation_functions() -> None:
 
     runner.install_calculation_functions(".desk.mmsr")
 
-    assert len(client.queries) == 1
-    assert "sum tradePrice * tradeSize" in client.queries[0]
-    assert "med bidSize + askSize" in client.queries[0]
+    assert len(client.queries) > 1
+    assert any("sum tradePrice * tradeSize" in query for query in client.queries)
+    assert any("top_of_book_depth: med depth_lots" in query for query in client.queries)
 
 
 def test_day_runner_normalizes_keyed_table_mapping_metric_result() -> None:
     registry = build_default_registry()
     client = FakeKdbClient(
-        {
-            "quoted_spread_bps": {
-                "key": {
-                    "date": [date(2026, 5, 1)],
-                    "time_bucket": ["09:00"],
-                    "sym": ["7203"],
-                    "topixCapGrp": ["Large70"],
-                },
-                "value": {
-                    "quoted_spread_bps": [12.5],
-                    "top_of_book_depth": [5000],
-                    "aggregationLevel": ["symbol_bucket"],
-                    "groupType": ["sym"],
-                    "groupValue": ["7203"],
-                },
+        [
+            {
+                "metricName": "quoted_spread_bps",
+                "date": date(2026, 5, 1),
+                "timeBucket": "09:00",
+                "sym": "7203",
+                "metricValue": 12.5,
+                "top_of_book_depth": 5000,
+                "aggregationLevel": "symbol_bucket",
+                "groupType": "sym",
+                "groupValue": "7203",
+                "level": "intraday",
             }
-        }
+        ]
     )
     runner = KdbMetricRunner(client)  # type: ignore[arg-type]
 
@@ -659,7 +817,7 @@ def test_day_runner_normalizes_keyed_table_mapping_metric_result() -> None:
                     sessions=_period().sessions,
                     bucket=_period().bucket,
                 ),
-                group_by=["sym", "topixCapGrp"],
+                group_by=["sym"],
                 source_functions={
                     "reference_data": ".sb.mmsr.getRef",
                     "quotes": ".sb.mmsr.getQuote",
@@ -669,11 +827,51 @@ def test_day_runner_normalizes_keyed_table_mapping_metric_result() -> None:
     )
 
     assert series[0].values == (12.5,)
-    assert series[0].observations[0].group == {
-        "sym": "7203",
-        "topixCapGrp": "Large70",
-    }
+    assert series[0].observations[0].group == {"sym": "7203"}
     assert series[0].observations[0].metadata["top_of_book_depth"] == 5000
+
+
+def test_day_runner_keeps_present_but_empty_metric_results() -> None:
+    registry = build_default_registry()
+    metric_name = "primary_quote_reversion_10ms_bps"
+    client = FakeKdbClient(
+        {
+            "metricName": [],
+            "date": [],
+            "timeBucket": [],
+            "venue": [],
+            "horizon": [],
+            "sym": [],
+            "metricValue": [],
+            "level": [],
+        }
+    )
+    runner = KdbMetricRunner(client)  # type: ignore[arg-type]
+
+    series = runner.run_day(
+        [
+            MetricRunRequest(
+                metric=registry.get(metric_name),
+                period=ReportPeriod(
+                    start_date=date(2026, 5, 1),
+                    end_date=date(2026, 5, 1),
+                    sessions=_period().sessions,
+                    bucket=_period().bucket,
+                ),
+                group_by=["sym"],
+                source_functions=_default_source_functions(),
+                parameters=ReportConfig(
+                    title="Daily Monitor",
+                    metrics=[metric_name],
+                    toxicity=ToxicityConfig(primary_venue="TSE", venues=["TSE", "SBIJ"]),
+                ).metric_parameters_for(metric_name),
+            )
+        ]
+    )
+
+    assert len(series) == 1
+    assert series[0].metric_name == metric_name
+    assert series[0].observations == ()
 
 
 def _single_day_period() -> ReportPeriod:
@@ -747,15 +945,17 @@ def test_day_runner_uses_cached_metric_day_result_without_kdb_execution() -> Non
 def test_day_runner_persists_metric_day_cache_misses_after_execution() -> None:
     registry = build_default_registry()
     client = FakeKdbClient(
-        {
-            "quoted_spread_bps": {
-                "date": [date(2026, 5, 1)],
-                "time_bucket": ["09:00"],
-                "sym": ["7203"],
-                "quoted_spread_bps": [12.5],
-                "top_of_book_depth": [5000],
+        [
+            {
+                "metricName": "quoted_spread_bps",
+                "date": date(2026, 5, 1),
+                "timeBucket": "09:00",
+                "sym": "7203",
+                "metricValue": 12.5,
+                "top_of_book_depth": 5000,
+                "level": "intraday",
             }
-        }
+        ]
     )
     load_calls: list[MetricDayCacheKey] = []
     persisted: list[tuple[MetricDayCacheKey, MetricTimeSeries]] = []
@@ -793,7 +993,7 @@ def test_day_runner_persists_metric_day_cache_misses_after_execution() -> None:
         ]
     )
 
-    assert len(client.queries) == 1
+    assert any(".mmsr.runReportDay[" in query for query in client.queries)
     assert len(load_calls) == 1
     assert len(persisted) == 1
     persisted_key, persisted_series = persisted[0]
@@ -818,15 +1018,17 @@ def test_day_runner_runs_only_uncached_metrics_and_preserves_request_order() -> 
         ]
     )
     client = FakeKdbClient(
-        {
-            "quoted_spread_bps": {
-                "date": [date(2026, 5, 1)],
-                "time_bucket": ["09:00"],
-                "sym": ["7203"],
-                "quoted_spread_bps": [12.5],
-                "top_of_book_depth": [5000],
+        [
+            {
+                "metricName": "quoted_spread_bps",
+                "date": date(2026, 5, 1),
+                "timeBucket": "09:00",
+                "sym": "7203",
+                "metricValue": 12.5,
+                "top_of_book_depth": 5000,
+                "level": "intraday",
             }
-        }
+        ]
     )
     persisted: list[str] = []
 
@@ -873,9 +1075,9 @@ def test_day_runner_runs_only_uncached_metrics_and_preserves_request_order() -> 
     assert series[0].metadata["cache_status"] == "hit"
     assert series[1].metadata["cache_status"] == "miss"
     assert persisted == ["quoted_spread_bps"]
-    assert len(client.queries) == 1
-    assert '`$"turnover"' not in client.queries[0]
-    assert '`$"quoted_spread_bps"' in client.queries[0]
+    config_query = next(query for query in reversed(client.queries) if ".mmsr.reportConfig:" in query)
+    assert '`$"turnover"' not in config_query
+    assert '`$"quoted_spread_bps"' in config_query
 
 
 def test_day_runner_loads_stock_metrics_once_and_computes_only_missing_metrics() -> None:
@@ -884,15 +1086,17 @@ def test_day_runner_loads_stock_metrics_once_and_computes_only_missing_metrics()
     per_metric_load_calls: list[str] = []
     persisted: list[str] = []
     client = FakeKdbClient(
-        {
-            "quoted_spread_bps": {
-                "date": [date(2026, 5, 1)],
-                "time_bucket": ["09:00-09:05"],
-                "sym": ["7203"],
-                "quoted_spread_bps": [12.5],
-                "top_of_book_depth": [5000],
+        [
+            {
+                "metricName": "quoted_spread_bps",
+                "date": date(2026, 5, 1),
+                "timeBucket": "09:00-09:05",
+                "sym": "7203",
+                "metricValue": 12.5,
+                "top_of_book_depth": 5000,
+                "level": "intraday",
             }
-        }
+        ]
     )
 
     def load_stock_metrics(
@@ -965,31 +1169,35 @@ def test_day_runner_loads_stock_metrics_once_and_computes_only_missing_metrics()
     assert stock_load_calls == [(date(2026, 5, 1), ("turnover", "quoted_spread_bps"))]
     assert per_metric_load_calls == ["quoted_spread_bps"]
     assert persisted == ["quoted_spread_bps"]
-    assert len(client.queries) == 1
-    assert '`$"turnover"' not in client.queries[0]
-    assert '`$"quoted_spread_bps"' in client.queries[0]
+    config_query = next(query for query in reversed(client.queries) if ".mmsr.reportConfig:" in query)
+    assert '`$"turnover"' not in config_query
+    assert '`$"quoted_spread_bps"' in config_query
 
 
 def test_day_runner_persists_computed_misses_as_one_stock_metrics_batch() -> None:
     registry = build_default_registry()
     client = FakeKdbClient(
-        {
-            "turnover": {
-                "date": [date(2026, 5, 1)],
-                "time_bucket": ["09:00-09:05"],
-                "sym": ["7203"],
-                "turnover": [1000.0],
-                "volume": [100],
-                "trade_count": [3],
+        [
+            {
+                "metricName": "turnover",
+                "date": date(2026, 5, 1),
+                "timeBucket": "09:00-09:05",
+                "sym": "7203",
+                "metricValue": 1000.0,
+                "volume": 100,
+                "trade_count": 3,
+                "level": "intraday",
             },
-            "quoted_spread_bps": {
-                "date": [date(2026, 5, 1)],
-                "time_bucket": ["09:00-09:05"],
-                "sym": ["7203"],
-                "quoted_spread_bps": [12.5],
-                "top_of_book_depth": [5000],
+            {
+                "metricName": "quoted_spread_bps",
+                "date": date(2026, 5, 1),
+                "timeBucket": "09:00-09:05",
+                "sym": "7203",
+                "metricValue": 12.5,
+                "top_of_book_depth": 5000,
+                "level": "intraday",
             },
-        }
+        ]
     )
     persisted_batches: list[tuple[date, tuple[str, ...], tuple[dict[str, object], ...]]] = []
     per_metric_persist_calls: list[str] = []

@@ -1277,6 +1277,158 @@ def build_summary_activity_distribution_html_block(
     )
 
 
+def build_summary_liquidity_distribution_html_block(
+    title: str,
+    *,
+    payload: Mapping[str, object],
+    help_text: str | None = None,
+) -> HtmlBlock:
+    chart_title = title.strip()
+    if not chart_title:
+        raise ValueError("title must not be empty")
+    rows_payload = payload.get("rows", {})
+    default_row = str(payload.get("default_row", "TSE"))
+    default_metric = str(payload.get("default_metric", "quoted_spread_bps"))
+    metric_columns = payload.get("metric_columns", ())
+    metric_rows_by_universe = payload.get("metric_rows_by_universe", {})
+    universe_rows = payload.get("universe_rows", ())
+    initial = ((rows_payload.get(default_row) or {}).get(default_metric) or {})
+
+    metric_table_rows = metric_rows_by_universe.get(default_row, ())
+    metric_table_html_rows = "".join(
+        (
+            f'<tr class="turnover-distribution__heatmap-row{" is-selected" if str(row.get("metric_name", "")) == default_metric else ""}" '
+            f'data-liquidity-metric="{escape(str(row.get("metric_name", "")))}" '
+            f'aria-selected="{"true" if str(row.get("metric_name", "")) == default_metric else "false"}">'
+            f"<th>{escape(str(row.get('label', '')))}</th>"
+            f'<td class="turnover-distribution__heatmap-cell"><span class="turnover-distribution__heatmap-current">{escape(str(row.get("reference_text", "n/a")))}</span></td>'
+            f'<td class="turnover-distribution__heatmap-cell"><span class="turnover-distribution__heatmap-current">{escape(str(row.get("current_text", "n/a")))}</span></td>'
+            "</tr>"
+        )
+        for row in metric_table_rows
+    )
+    metric_table_html = (
+        '<div class="turnover-distribution__heatmap"><table class="turnover-distribution__heatmap-table">'
+        "<thead><tr><th>Metric</th><th>Reference</th><th>Current</th></tr></thead>"
+        f"<tbody>{metric_table_html_rows}</tbody></table></div>"
+    )
+
+    universe_header_cells = "".join(f"<th>{escape(str(col.get('label', '')))}</th>" for col in metric_columns)
+    universe_table_rows = "".join(
+        (
+            f'<tr class="turnover-distribution__heatmap-row{" is-selected" if bool(row.get("selected", False)) else ""}" '
+            f'data-liquidity-row="{escape(str(row.get("row", "")))}" '
+            f'aria-selected="{"true" if bool(row.get("selected", False)) else "false"}">'
+            f"<th>{escape(str(row.get('label', '')))}</th>"
+            + "".join(
+                (
+                    f'<td class="turnover-distribution__heatmap-cell turnover-distribution__heatmap-cell--{escape(str(cell.get("delta_bucket", "na")))}">'
+                    f'<span class="turnover-distribution__heatmap-current">{escape(str(cell.get("current_text", "n/a")))}</span>'
+                    f'<span class="turnover-distribution__heatmap-delta turnover-distribution__heatmap-delta--{escape(str(cell.get("delta_class", "neutral")))}">{escape(str(cell.get("delta_text", "n/a")))}</span>'
+                    "</td>"
+                )
+                for cell in row.get("cells", ())
+            )
+            + "</tr>"
+        )
+        for row in universe_rows
+    )
+    universe_table_html = (
+        '<div class="turnover-distribution__heatmap"><table class="turnover-distribution__heatmap-table">'
+        f"<thead><tr><th>Group</th>{universe_header_cells}</tr></thead>"
+        f"<tbody>{universe_table_rows}</tbody></table></div>"
+    )
+
+    spec = {
+        "default_row": default_row,
+        "default_metric": default_metric,
+        "rows": rows_payload,
+        "metric_rows_by_universe": metric_rows_by_universe,
+    }
+    initial_line_figure = initial.get("line_figure", {"data": [], "layout": {}, "config": {}})
+    line_json = json.dumps(initial_line_figure, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+    spec_json = json.dumps(spec, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+    help_html = ""
+    if help_text:
+        help_html = (
+            '<details class="metric-help turnover-distribution__help">'
+            f'<summary class="metric-help__summary metric-info" aria-label="Section help: {escape(chart_title)}">'
+            '<span class="metric-help__icon" aria-hidden="true">i</span>'
+            "</summary>"
+            '<div class="metric-help__body">'
+            f'<strong class="metric-help__title">Section help: {escape(chart_title)}</strong>'
+            f"<p>{escape(help_text)}</p>"
+            "</div></details>"
+        )
+
+    body_html = (
+        '<section class="liquidity-distribution turnover-distribution">'
+        '<div class="turnover-distribution__header">'
+        f'<h3 class="turnover-distribution__title">{escape(chart_title)}</h3>'
+        f"{help_html}"
+        "</div>"
+        '<div class="turnover-distribution__body"><div class="turnover-distribution__chart">'
+        f'<h4 class="turnover-distribution__selected-title" data-liquidity-selected-title>{escape(str(initial["title"]))}</h4>'
+        '<div class="turnover-distribution__cards">'
+        '<div class="turnover-distribution__card turnover-distribution__card--bar">'
+        '<div class="turnover-distribution__card-title">Metric Selection</div>'
+        f'<div data-liquidity-metric-table>{metric_table_html}</div></div>'
+        '<div class="turnover-distribution__card turnover-distribution__card--line">'
+        '<div class="turnover-distribution__card-title">Cumulative Intraday Curve</div>'
+        '<div class="plotly-chart__figure" data-liquidity-line-plot></div>'
+        f'<script type="application/json" class="liquidity-line-chart__spec">{line_json}</script>'
+        "</div>"
+        '<div class="turnover-distribution__card turnover-distribution__card--table">'
+        '<div class="turnover-distribution__card-title">Universe Metric Table</div>'
+        f"{universe_table_html}</div></div>"
+        f'<script type="application/json" data-liquidity-plot-spec>{spec_json}</script>'
+        "</div></div>"
+        '<script>(function(){var bind=function(){if(!window.Plotly){return;}'
+        'document.querySelectorAll(".liquidity-distribution").forEach(function(container){'
+        'var specNode=container.querySelector("[data-liquidity-plot-spec]");'
+        'var lineTarget=container.querySelector("[data-liquidity-line-plot]");'
+        'var titleNode=container.querySelector("[data-liquidity-selected-title]");'
+        'if(!specNode||!lineTarget){return;}'
+        'var spec=JSON.parse(specNode.textContent||"{}");var rows=spec.rows||{};'
+        'var metricRowsByUniverse=spec.metric_rows_by_universe||{};'
+        'var rowNodes=Array.prototype.slice.call(container.querySelectorAll("[data-liquidity-row]"));'
+        'var metricNodes=[];'
+        'var metricTableTarget=container.querySelector("[data-liquidity-metric-table]");'
+        'var activeRow=spec.default_row||"TSE"; var activeMetric=spec.default_metric||"";'
+        'var bindMetricNodes=function(){'
+        'metricNodes=Array.prototype.slice.call(container.querySelectorAll("[data-liquidity-metric]"));'
+        'metricNodes.forEach(function(node){node.addEventListener("click",function(){activeMetric=node.getAttribute("data-liquidity-metric")||activeMetric;render();});});'
+        '};'
+        'var renderMetricTable=function(){'
+        'if(!metricTableTarget){return;}'
+        'var rowsForUniverse=metricRowsByUniverse[activeRow]||[];'
+        'var rowsHtml=rowsForUniverse.map(function(row){'
+        'var key=String(row.metric_name||"");'
+        'var on=(key===activeMetric);'
+        'var rowClass="turnover-distribution__heatmap-row"+(on?" is-selected":"");'
+        'var selected=on?"true":"false";'
+        'return "<tr class=\\""+rowClass+"\\" data-liquidity-metric=\\""+key+"\\" aria-selected=\\""+selected+"\\">"'
+        '+"<th>"+String(row.label||"")+"</th>"'
+        '+"<td class=\\"turnover-distribution__heatmap-cell\\"><span class=\\"turnover-distribution__heatmap-current\\">"+String(row.reference_text||"n/a")+"</span></td>"'
+        '+"<td class=\\"turnover-distribution__heatmap-cell\\"><span class=\\"turnover-distribution__heatmap-current\\">"+String(row.current_text||"n/a")+"</span></td>"'
+        '+"</tr>";'
+        '}).join("");'
+        'metricTableTarget.innerHTML='
+        '"<div class=\\"turnover-distribution__heatmap\\"><table class=\\"turnover-distribution__heatmap-table\\"><thead><tr><th>Metric</th><th>Reference</th><th>Current</th></tr></thead><tbody>"+rowsHtml+"</tbody></table></div>";'
+        'bindMetricNodes();'
+        '};'
+        'var render=function(){var rowSpec=rows[activeRow]||{}; var cell=rowSpec[activeMetric]||{};'
+        'if(titleNode&&cell.title){titleNode.textContent=cell.title;}'
+        'Plotly.react(lineTarget,(cell.line_figure||{}).data||[],(cell.line_figure||{}).layout||{},(cell.line_figure||{}).config||{responsive:true,displaylogo:false});'
+        'rowNodes.forEach(function(node){var key=node.getAttribute("data-liquidity-row")||"";var on=(key===activeRow);node.classList.toggle("is-selected",on);node.setAttribute("aria-selected",on?"true":"false");});'
+        'renderMetricTable();};'
+        'rowNodes.forEach(function(node){node.addEventListener("click",function(){activeRow=node.getAttribute("data-liquidity-row")||activeRow;render();});});'
+        'render();});};if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",bind);}else{bind();}})();</script>'
+        "</section>"
+    )
+    return HtmlBlock(title=chart_title, body_html=body_html, help_text=None if help_text is None else help_text.strip())
+
+
 def build_reference_target_intraday_profile_chart(
     title: str,
     *,

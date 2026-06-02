@@ -74,7 +74,7 @@ LIQUIDITY_OUTPUT_AGGREGATE_COLUMNS: tuple[str, ...] = (
 )
 
 
-STARTER_OUTPUT_BASE_COLUMNS: tuple[str, ...] = ("date", "time_bucket")
+STARTER_OUTPUT_BASE_COLUMNS: tuple[str, ...] = ("date", "timeBucket")
 
 REVERSION_OUTPUT_METADATA_COLUMNS: tuple[str, ...] = (
     "horizon_sort_order",
@@ -87,7 +87,7 @@ REVERSION_OPTIONAL_OUTPUT_METADATA_COLUMNS: tuple[str, ...] = ("context_sort_ord
 REVERSION_REQUIRED_GROUP_COLUMNS: tuple[str, ...] = ("venue", "horizon")
 REVERSION_OUTPUT_BASE_COLUMNS: tuple[str, ...] = (
     "date",
-    "time_bucket",
+    "timeBucket",
     *REVERSION_REQUIRED_GROUP_COLUMNS,
 )
 REVERSION_PTS_TRADES_REQUIRED_COLUMNS: tuple[str, ...] = (

@@ -202,6 +202,7 @@ class KdbMetricQueryPlanner:
             "calculation_namespace",
         )
         aggregation_levels = _aggregation_level_values(clean_requests[0].parameters)
+        metric_aggregation_level = _metric_aggregation_level_value(clean_requests[0].parameters)
         chunk_size = _configured_chunk_size(clean_requests[0].parameters)
         source_roles = _batch_source_roles(representative_requests)
         source_functions = _source_function_dictionary(
@@ -221,6 +222,7 @@ class KdbMetricQueryPlanner:
                 "metricParams",
                 "universeFilters",
                 "aggregationLevels",
+                "metricAggregationLevel",
                 "chunkSize",
             ],
             [
@@ -229,6 +231,7 @@ class KdbMetricQueryPlanner:
                 metric_params,
                 universe_filters,
                 _q_symbol_vector(aggregation_levels, "aggregation_levels"),
+                _q_symbol(metric_aggregation_level, "metric_aggregation_level"),
                 str(chunk_size),
             ],
             "report_config",
@@ -514,6 +517,14 @@ def _metric_params_expression(
     bucket = _bucket_duration(request.period.bucket)
     keys = ["bucket"]
     values = [bucket]
+    metric_aggregation_level = request.parameters.get("metric_aggregation_level")
+    if metric_aggregation_level is not None:
+        if not isinstance(metric_aggregation_level, str) or metric_aggregation_level not in {"intraday", "daily"}:
+            raise KdbMetricQueryPlanError(
+                "parameter 'metric_aggregation_level' must be one of: intraday, daily"
+            )
+        keys.append("metric_aggregation_level")
+        values.append(_q_symbol(metric_aggregation_level, "metric_aggregation_level"))
     if include_date_bounds:
         keys.extend(["start_date", "end_date"])
         values.extend(
@@ -785,6 +796,15 @@ def _aggregation_level_values(parameters: Mapping[str, Any]) -> tuple[str, ...]:
     if len(levels) != len(raw) or not levels:
         raise KdbMetricQueryPlanError("parameter 'aggregation_levels' must contain only non-empty strings")
     return levels
+
+
+def _metric_aggregation_level_value(parameters: Mapping[str, Any]) -> str:
+    raw = parameters.get("metric_aggregation_level", "intraday")
+    if not isinstance(raw, str) or raw not in {"intraday", "daily"}:
+        raise KdbMetricQueryPlanError(
+            "parameter 'metric_aggregation_level' must be one of: intraday, daily"
+        )
+    return raw
 
 
 def _validate_day_request_compatibility(

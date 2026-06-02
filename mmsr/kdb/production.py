@@ -253,6 +253,9 @@ class KdbProductionExecutionPlanner:
                 metric = self.registry.get(metric_name)
                 parameters = dict(config.metric_parameters_for(metric_name))
                 parameters["aggregation_levels"] = tuple(config.kdb.aggregation_levels)
+                parameters["metric_aggregation_level"] = config.kdb.metric_aggregation_level
+                if metric_name == "parkinson_volatility_bps":
+                    parameters["metric_aggregation_level"] = "daily"
                 parameters["chunk_size"] = config.kdb.symbol_chunk_size or 500
                 if explicit_symbols:
                     parameters["symbols"] = explicit_symbols
@@ -543,6 +546,7 @@ class KdbProductionExecutor:
             if config.kdb.symbol_chunk_size is not None
             else (),
             "aggregation_levels": tuple(config.kdb.aggregation_levels),
+            "metric_aggregation_level": config.kdb.metric_aggregation_level,
         }
         if reference_window is not None:
             base_metadata.update(
@@ -555,14 +559,14 @@ class KdbProductionExecutor:
 
         return tuple(
             MetricTimeSeries.from_observations(
-                observations,
+                tuple(observations_by_metric.get(metric_name, ())),
                 metric_name=metric_name,
                 metadata={
                     **base_metadata,
-                    "steps": tuple(child_metadata_by_metric[metric_name]),
+                    "steps": tuple(child_metadata_by_metric.get(metric_name, ())),
                 },
             )
-            for metric_name, observations in observations_by_metric.items()
+            for metric_name in plan.metric_names
         )
 
     def _run_metric_step_day(

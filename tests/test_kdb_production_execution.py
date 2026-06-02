@@ -77,6 +77,54 @@ def test_production_execution_planner_builds_daily_kdb_owned_requests() -> None:
     assert "symbol_chunk_count" not in first.request.parameters
 
 
+def test_production_planner_overrides_volatility_to_daily_aggregation_level() -> None:
+    config = ReportConfig(
+        title="Daily Monitor",
+        metrics=["turnover", "parkinson_volatility_bps"],
+        kdb=KdbExecutionConfig(
+            raw_data_functions=KdbRawDataFunctionsConfig(namespace=".sb.mmsr"),
+            metric_aggregation_level="intraday",
+        ),
+    )
+
+    plan = KdbProductionExecutionPlanner().build_plan(
+        config=config,
+        period=_period(),
+        trading_days=[date(2026, 5, 1)],
+        symbols=["7203", "6758"],
+    )
+
+    params_by_metric = {
+        step.metric_name: step.request.parameters
+        for step in plan.steps
+    }
+
+    assert params_by_metric["turnover"]["metric_aggregation_level"] == "intraday"
+    assert params_by_metric["parkinson_volatility_bps"]["metric_aggregation_level"] == "daily"
+
+
+def test_render_day_includes_metric_aggregation_level_in_metric_params() -> None:
+    config = ReportConfig(
+        title="Daily Monitor",
+        metrics=["parkinson_volatility_bps"],
+        kdb=KdbExecutionConfig(
+            raw_data_functions=KdbRawDataFunctionsConfig(namespace=".sb.mmsr"),
+            metric_aggregation_level="intraday",
+        ),
+    )
+
+    plan = KdbProductionExecutionPlanner().build_plan(
+        config=config,
+        period=_period(),
+        trading_days=[date(2026, 5, 1)],
+        symbols=["7203"],
+    )
+
+    rendered = KdbMetricQueryPlanner().render_day(tuple(step.request for step in plan.steps))
+    assert "`metric_aggregation_level" in rendered.report_config_expression
+    assert "`daily" in rendered.report_config_expression
+
+
 def test_symbol_chunked_market_groups_add_per_symbol_aggregation_key() -> None:
     config = ReportConfig(
         title="Daily Monitor",
@@ -96,8 +144,7 @@ def test_symbol_chunked_market_groups_add_per_symbol_aggregation_key() -> None:
     assert request.group_by == ["topixCapGrp"]
 
     query_plan = KdbMetricQueryPlanner().render(request)
-    assert "calcActivity[rawTrades;refs;" in query_plan.query
-    assert "calcActivity[rawTrades;refs;" in query_plan.query
+    assert "calcActivity[2026.05.01;rawTrades;refs;" in query_plan.query
 
 
 def test_production_query_requests_are_daily_and_use_date_syms_source_args() -> None:
@@ -130,11 +177,10 @@ def test_production_query_requests_are_daily_and_use_date_syms_source_args() -> 
     assert "`date`symbolChunkId`symbolChunkCount" not in query_plan.query
     assert '(`$"7203";`$"6758")' in query_plan.query
     assert "2026.05.01;1;1]" not in query_plan.query
-    assert ".desk.mmsrCalc.calcActivity[rawTrades;refs;" in query_plan.query
+    assert ".desk.mmsrCalc.calcActivity[2026.05.01;rawTrades;refs;" in query_plan.query
     assert "rawRefs: select from (.sb.mmsr.getRef[2026.05.01]);" in query_plan.query
     assert 'refs: `sym xkey select from rawRefs where sym in (`$"7203";`$"6758");' in query_plan.query
     assert "rawTrades: (.sb.mmsr.getTrade[2026.05.01;0!refs]);" in query_plan.query
-    assert "calcActivity[rawTrades;refs;" in query_plan.query
 
 
 def test_production_planner_rejects_calendar_dates_outside_period() -> None:
@@ -252,7 +298,7 @@ def test_production_plan_summary_reports_scope_and_contracts() -> None:
     assert "Chunk aggregation groups: sym" in lines
     assert "Reference-data universe function: none" in lines
     assert ".sb.mmsr.getTrade" in lines
-    assert "outputs: date, time_bucket, sym, volume, turnover, trade_count" in lines
+    assert "outputs: date, timeBucket, sym, volume, turnover, trade_count" in lines
     assert len(runner.requests) == 0
     assert len(runner.planned_requests) == 2
 

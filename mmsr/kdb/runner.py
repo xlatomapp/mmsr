@@ -18,7 +18,10 @@ from mmsr.kdb.cache import (
     stock_metrics_rows_from_series,
 )
 from mmsr.kdb.client import KdbClient
-from mmsr.kdb.query_loader import render_calculation_function_bootstrap
+from mmsr.kdb.query_loader import (
+    render_calculation_function_bootstrap,
+    render_calculation_function_bootstrap_steps,
+)
 from mmsr.kdb.query_plan import (
     KdbMetricQueryPlanError,
     KdbMetricQueryPlanner,
@@ -32,7 +35,6 @@ from mmsr.metrics.results import MetricObservation, MetricTimeSeries
 KdbMetricRunnerError = KdbMetricQueryPlanError
 
 LOGGER = logging.getLogger(__name__)
-
 
 class KdbMetricRunner:
     """Runs planned metric queries through kdb+ and normalizes their output."""
@@ -66,7 +68,17 @@ class KdbMetricRunner:
         """
 
         LOGGER.info("Installing MMSR q calculations into %s", calculation_namespace)
-        self.client.execute(render_calculation_function_bootstrap(calculation_namespace))
+        try:
+            bootstrap_steps = render_calculation_function_bootstrap_steps(calculation_namespace)
+        except Exception:
+            LOGGER.exception(
+                "Failed to split rendered q bootstrap into per-function steps; falling back to one-shot install"
+            )
+            self.client.execute(render_calculation_function_bootstrap(calculation_namespace))
+        else:
+            for function_name, source_block in bootstrap_steps:
+                LOGGER.info("Installing q function %s.%s", calculation_namespace, function_name)
+                self.client.execute(source_block)
         self._installed_calculation_namespaces.add(calculation_namespace)
         LOGGER.info("Installed MMSR q calculations into %s", calculation_namespace)
 
@@ -144,9 +156,9 @@ class KdbMetricRunner:
         finally:
             self._cleanup_ephemeral_namespace(run_namespace)
         LOGGER.info("Received kdb day result for metrics=%s", ", ".join(plan.metric_names))
-        result_by_metric = _coerce_batch_result(
+        result_by_metric, unified_rows = _coerce_day_result(
             raw_result,
-            fallback_metric_name=plan.metric_names[0] if len(plan.metric_names) == 1 else None,
+            metric_names=plan.metric_names,
         )
         computed_by_metric: dict[str, MetricTimeSeries] = {}
         request_by_metric = {request.metric.name: request for request in missing_requests}
@@ -156,12 +168,15 @@ class KdbMetricRunner:
                 raise KdbMetricRunnerError(
                     f"day result is missing metric {metric_query.metric_name!r}; available metrics: {available}"
                 )
-            metric_result = result_by_metric[metric_query.metric_name]
-            metric_query.validate_result_schema(metric_result)
-            LOGGER.debug("Validated day result schema for metric=%s", metric_query.metric_name)
+            normalized_result: Any = [
+                row
+                for row in unified_rows
+                if row["metricName"] == metric_query.metric_name
+                and _row_matches_group_by(row, metric_query.result_group_by)
+            ]
             series = normalize_metric_result(
                 metric_name=metric_query.metric_name,
-                result=metric_result,
+                result=normalized_result,
                 group_by=metric_query.result_group_by,
                 metadata={
                     "metric_family": metric_family_for_metric(metric_query.metric_name),
@@ -367,30 +382,48 @@ def _with_cache_status(series: MetricTimeSeries, status: str) -> MetricTimeSerie
     )
 
 
-def _coerce_batch_result(
-    result: Any,
-    *,
-    fallback_metric_name: str | None = None,
-) -> dict[str, Any]:
-    """Coerce a q dictionary/Python mapping of metric name to result table."""
-
-    converted = _maybe_to_python(result)
-    if not isinstance(converted, Mapping):
-        if fallback_metric_name is not None:
-            return {fallback_metric_name: converted}
-        raise KdbMetricRunnerError("batch metric result must be a mapping")
-    out: dict[str, Any] = {}
-    for raw_key, value in converted.items():
-        key = _coerce_batch_metric_key(raw_key)
-        out[key] = value
-    return out
-
-
 def _coerce_batch_metric_key(value: Any) -> str:
     if isinstance(value, bytes):
         return value.decode()
     key = str(value)
     return key[1:] if key.startswith("`") else key
+
+
+def _coerce_day_result(
+    result: Any,
+    *,
+    metric_names: Sequence[str],
+) -> tuple[dict[str, list[dict[str, Any]]], list[dict[str, Any]]]:
+    """Coerce a q day result into the canonical unified long-row day shape."""
+
+    converted = _maybe_to_python(result)
+    unified_rows = _coerce_unified_day_rows(converted)
+    if unified_rows is None:
+        raise KdbMetricRunnerError("day result must be a unified metric fact table with metricName rows")
+    metric_row_groups: dict[str, list[dict[str, Any]]] = {}
+    for row in unified_rows:
+        metric_name = _coerce_batch_metric_key(row["metricName"])
+        row["metricName"] = metric_name
+        metric_row_groups.setdefault(metric_name, []).append(row)
+    result_by_metric = {
+        metric_name: metric_row_groups.get(metric_name, [])
+        for metric_name in metric_names
+    }
+    return result_by_metric, unified_rows
+
+
+def _coerce_unified_day_rows(result: Any) -> list[dict[str, Any]] | None:
+    if isinstance(result, Mapping):
+        keyed_mapping = _unkey_mapping(result)
+        column_mapping = keyed_mapping if keyed_mapping is not None else result
+        if "metricName" in column_mapping:
+            return _rows_from_column_mapping(column_mapping)
+    rows = _coerce_rows(result)
+    if not rows:
+        return None
+    if "metricName" not in rows[0]:
+        return None
+    return rows
 
 
 def normalize_metric_result(
@@ -417,22 +450,23 @@ def normalize_metric_result(
     observations: list[MetricObservation] = []
 
     for row_index, row in enumerate(rows):
-        if metric_name not in row:
+        value_column = "metricValue" if "metricValue" in row else metric_name
+        if value_column not in row:
             raise KdbMetricRunnerError(f"metric result row {row_index} is missing value column {metric_name!r}")
         if "date" not in row:
             raise KdbMetricRunnerError(f"metric result row {row_index} is missing 'date'")
 
         group = _extract_group(row, group_by, row_index)
-        used_columns = {"date", "time_bucket", metric_name, *group_by}
+        used_columns = {"date", "timeBucket", "metricName", value_column, *group_by}
         row_metadata = {key: value for key, value in row.items() if key not in used_columns}
 
         observations.append(
             MetricObservation(
                 metric_name=metric_name,
                 date=_coerce_date(row["date"], row_index),
-                time_bucket=_coerce_time_bucket(row.get("time_bucket")),
+                time_bucket=_coerce_time_bucket(row.get("timeBucket")),
                 group=group,
-                value=_coerce_numeric_value(row[metric_name], row_index, metric_name),
+                value=_coerce_numeric_value(row[value_column], row_index, metric_name),
                 metadata=row_metadata,
             )
         )
@@ -562,14 +596,44 @@ def _extract_group(
     group_by: Sequence[str],
     row_index: int,
 ) -> dict[str, str]:
+    derived_group = _group_from_unified_row(row)
     group: dict[str, str] = {}
     for column in group_by:
-        if column not in row:
+        if column in derived_group:
+            value = derived_group[column]
+        elif column in row:
+            value = row[column]
+        else:
             raise KdbMetricRunnerError(f"metric result row {row_index} is missing group column {column!r}")
-        value = row[column]
         if value is not None:
             group[column] = str(value)
     return group
+
+
+def _row_matches_group_by(row: Mapping[str, Any], group_by: Sequence[str]) -> bool:
+    derived_group = _group_from_unified_row(row)
+    expected = set(group_by)
+    if any(column not in expected for column in derived_group):
+        return False
+    return all(column in derived_group or column in row for column in group_by)
+
+
+def _group_from_unified_row(row: Mapping[str, Any]) -> dict[str, str]:
+    if "groupType" not in row or "groupValue" not in row:
+        return {}
+    group_type = str(row["groupType"])
+    group_value = str(row["groupValue"])
+
+    if group_type == "market" and group_value in {"ALL", "TSE"}:
+        return {}
+    if group_type in {"symbol", "sym"}:
+        return {"sym": group_value}
+    if "|" in group_type:
+        keys = group_type.split("|")
+        values = group_value.split("|")
+        if len(keys) == len(values):
+            return {key: value for key, value in zip(keys, values, strict=True)}
+    return {group_type: group_value}
 
 
 def _coerce_date(value: Any, row_index: int) -> date:

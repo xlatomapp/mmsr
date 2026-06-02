@@ -107,7 +107,8 @@
     };
 
 {{ source_namespace }}.sessionProgress:{[tm]
-    ms:`int$tm;
+    tod:`time$tm;
+    ms:`int$tod;
     amStart:`int${{ source_namespace }}.amOpen;
     amEnd:`int${{ source_namespace }}.amClose;
     pmStart:`int${{ source_namespace }}.pmOpen;
@@ -115,7 +116,7 @@
     amDur:amEnd - amStart;
     pmDur:pmEnd - pmStart;
     totalDur:amDur + pmDur;
-    $[tm <= {{ source_namespace }}.amClose;
+    $[tod <= {{ source_namespace }}.amClose;
         (ms - amStart) % totalDur;
         (amDur + (ms - pmStart)) % totalDur]
     };
@@ -125,6 +126,10 @@
     startMs:`int$start;
     spanMs:1 + (`int$end) - startMs;
     `time$ startMs + n?spanMs
+    };
+
+{{ source_namespace }}.toTimestamp:{[runDate;tm]
+    (`timestamp$`datetime$runDate) + `timespan$tm
     };
 
 {{ source_namespace }}.symIntradayRows:{[runDate;sym]
@@ -176,12 +181,12 @@
     pmAuction:@[pmAuction;where (pmAllTimes >= {{ source_namespace }}.pmOpen) & (pmAllTimes <= {{ source_namespace }}.pmOpenDelayEnd);:;1];
     pmAuction:@[pmAuction;where pmAllTimes={{ source_namespace }}.pmClose;:;2];
     amRows:([] date:(count amAllTimes)#runDate;
-        time:amAllTimes;
+        time:{{ source_namespace }}.toTimestamp[runDate] each amAllTimes;
         sym:(count amAllTimes)#sym;
         session:(count amAllTimes)#`am;
         auction:amAuction);
     pmRows:([] date:(count pmAllTimes)#runDate;
-        time:pmAllTimes;
+        time:{{ source_namespace }}.toTimestamp[runDate] each pmAllTimes;
         sym:(count pmAllTimes)#sym;
         session:(count pmAllTimes)#`pm;
         auction:pmAuction);

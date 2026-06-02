@@ -723,6 +723,25 @@
       width: 100% !important;
       max-width: 100% !important;
     }
+    .liquidity-distribution .turnover-distribution__cards {
+      align-items: stretch;
+    }
+    .liquidity-distribution .turnover-distribution__card--bar {
+      display: flex;
+      flex-direction: column;
+    }
+    .liquidity-distribution .turnover-distribution__card--bar [data-liquidity-metric-table] {
+      display: flex;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+    .liquidity-distribution .turnover-distribution__card--bar .turnover-distribution__heatmap {
+      display: flex;
+      flex: 1 1 auto;
+    }
+    .liquidity-distribution .turnover-distribution__card--bar .turnover-distribution__heatmap-table {
+      height: 100%;
+    }
     @media (max-width: 980px) {
       .turnover-distribution__cards {
         grid-template-columns: 1fr;
@@ -1552,6 +1571,10 @@
               <div data-block-title="{{ block.title }}">
                 <div class="html-block__body">{{ block.body_html | safe }}</div>
               </div>
+            {% elif block.title == "Intraday Liquidity Distribution" %}
+              <div data-block-title="{{ block.title }}">
+                <div class="html-block__body">{{ block.body_html | safe }}</div>
+              </div>
             {% endif %}
           {% endfor %}
         {% else %}
@@ -1791,7 +1814,11 @@
             });
             var description = (metricSpec && metricSpec.description) ? metricSpec.description : "No definition available.";
             var unitText = (metricSpec && metricSpec.unit_text) ? metricSpec.unit_text : "n/a";
+            var aggregationText = (metricSpec && metricSpec.aggregation_text) ? metricSpec.aggregation_text : "";
             var formulaLatex = (metricSpec && metricSpec.formula_latex) ? metricSpec.formula_latex : "";
+            var aggregationHtml = aggregationText
+              ? '<p class="metric-help__meta"><strong>Aggregation:</strong> ' + escapeHtml(aggregationText) + '</p>'
+              : "";
             var formulaHtml = formulaLatex
               ? '<div class="metric-help__formula-wrap"><p class="metric-help__formula-label">Formula</p><p class="metric-help__formula">\\(' + escapeHtml(formulaLatex) + '\\)</p></div>'
               : "";
@@ -1802,6 +1829,7 @@
               + '<div class="metric-help__body"><strong class="metric-help__title">Metric definition: ' + escapeHtml(label) + '</strong>'
               + '<p>' + escapeHtml(description) + '</p>'
               + '<p class="metric-help__meta"><strong>Unit:</strong> ' + escapeHtml(unitText) + '</p>'
+              + aggregationHtml
               + formulaHtml
               + "</div>";
             var summary = wrapper.querySelector("summary");

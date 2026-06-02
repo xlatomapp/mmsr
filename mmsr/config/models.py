@@ -307,6 +307,7 @@ class KdbExecutionConfig:
         "topix_cap_group",
         "topix_cap_group_bucket",
     )
+    metric_aggregation_level: str = "intraday"
 
     def __post_init__(self) -> None:
         _validate_q_namespace(
@@ -325,6 +326,8 @@ class KdbExecutionConfig:
             "kdb.aggregation_levels",
         )
         object.__setattr__(self, "aggregation_levels", aggregation_levels)
+        if self.metric_aggregation_level not in {"intraday", "daily"}:
+            raise ValueError("kdb.metric_aggregation_level must be one of: intraday, daily")
 
     def source_functions(self) -> dict[str, str]:
         """Return the configured raw data source-function mapping."""

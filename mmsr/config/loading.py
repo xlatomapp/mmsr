@@ -231,6 +231,7 @@ def _kdb_config(
             ),
             "data.kdb.aggregation_levels",
         ),
+        metric_aggregation_level=str(section.get("metric_aggregation_level", "intraday")),
     )
 
 

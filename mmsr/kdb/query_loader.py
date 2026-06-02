@@ -8,6 +8,9 @@ from pathlib import PurePath
 
 _PLACEHOLDER_RE = re.compile(r"{{\s*([A-Za-z_][A-Za-z0-9_]*)\s*}}")
 _PLACEHOLDER_BLOCK_RE = re.compile(r"{{(?P<body>.*?)}}", re.DOTALL)
+_Q_FUNCTION_START_RE = re.compile(
+    r"^(?P<qualified>\.[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s*:\{\["
+)
 
 
 class QueryTemplateError(ValueError):
@@ -159,6 +162,43 @@ def render_calculation_function_bootstrap(calculation_namespace: str) -> str:
         _shared_q_library_template(),
         {"calculation_namespace": calculation_namespace},
     )
+
+
+def render_calculation_function_bootstrap_steps(
+    calculation_namespace: str,
+) -> tuple[tuple[str, str], ...]:
+    """Render q bootstrap as ordered function-definition steps.
+
+    Returns tuples of ``(function_name, q_source_block)`` where each source block
+    defines exactly one top-level q function in the rendered namespace.
+    """
+
+    rendered = render_calculation_function_bootstrap(calculation_namespace)
+    return _split_rendered_q_into_function_blocks(rendered)
+
+
+def _split_rendered_q_into_function_blocks(rendered_q: str) -> tuple[tuple[str, str], ...]:
+    lines = rendered_q.splitlines()
+    start_rows: list[tuple[int, str]] = []
+    for index, raw_line in enumerate(lines):
+        match = _Q_FUNCTION_START_RE.match(raw_line.strip())
+        if match is None:
+            continue
+        qualified = match.group("qualified")
+        function_name = qualified.rsplit(".", 1)[-1]
+        start_rows.append((index, function_name))
+    if not start_rows:
+        raise QueryTemplateError("rendered q bootstrap did not contain any top-level function definitions")
+
+    blocks: list[tuple[str, str]] = []
+    for position, (start_index, function_name) in enumerate(start_rows):
+        end_index = start_rows[position + 1][0] if position + 1 < len(start_rows) else len(lines)
+        block_lines = lines[start_index:end_index]
+        block = "\n".join(block_lines).strip()
+        if not block:
+            raise QueryTemplateError(f"empty function block while parsing rendered q bootstrap: {function_name}")
+        blocks.append((function_name, block))
+    return tuple(blocks)
 
 
 def _simulated_source_q_library_template() -> str:

@@ -25,6 +25,7 @@ data:
       - market_bucket
       - topix_cap_group
       - topix_cap_group_bucket
+    metric_aggregation_level: intraday
     raw_data_functions:
       namespace: ".sb.mmsr"
       trade: "getTrade"
