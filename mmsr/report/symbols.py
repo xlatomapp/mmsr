@@ -667,14 +667,14 @@ def _format_metric_value(value: float | int | None, unit: str) -> str:
         return "not available"
 
     if unit == "ratio":
-        return f"{numeric:.4f}"
+        return f"{numeric:.2f}"
     if unit == "count":
         return f"{numeric:,.0f}"
     if unit == "JPY":
         return f"{numeric:,.0f} JPY"
     if unit:
-        return f"{numeric:,.4f} {unit}"
-    return f"{numeric:,.4f}"
+        return f"{numeric:,.2f} {unit}"
+    return f"{numeric:,.2f}"
 
 
 def _format_change(comparison: MetricComparison, unit: str) -> str | None:
@@ -683,7 +683,7 @@ def _format_change(comparison: MetricComparison, unit: str) -> str | None:
         formatted_change = _format_signed_metric_value(comparison.change_abs, unit)
         parts.append(f"change {formatted_change}")
     if comparison.change_pct is not None:
-        parts.append(f"{comparison.change_pct:+.1%}")
+        parts.append(f"{comparison.change_pct:+.2%}")
     return " ".join(parts) if parts else None
 
 
@@ -691,14 +691,14 @@ def _format_signed_metric_value(value: float, unit: str) -> str:
     if not isfinite(float(value)):
         return "not available"
     if unit == "ratio":
-        return f"{value:+.4f}"
+        return f"{value:+.2f}"
     if unit == "count":
         return f"{value:+,.0f}"
     if unit == "JPY":
         return f"{value:+,.0f} JPY"
     if unit:
-        return f"{value:+,.4f} {unit}"
-    return f"{value:+,.4f}"
+        return f"{value:+,.2f} {unit}"
+    return f"{value:+,.2f}"
 
 
 def _json_script_payload(payload: object) -> str:

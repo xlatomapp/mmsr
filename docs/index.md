@@ -65,36 +65,6 @@ poetry run mmsr offline-demo \
   --include-intraday-heatmaps
 ```
 
-### Mock-kdb integration report
-
-Render the deterministic mock-kdb integration report through rendered q
-templates, `KdbMetricRunner`, and the same canonical report builder:
-
-```bash
-poetry run mmsr mock-kdb-demo --output reports/mock_kdb_demo.html
-```
-
-This path validates the q-template and normalized-result boundary without a live
-kdb+ connection or PyKX import. It remains synthetic and should be used for
-integration plumbing and report-shape checks, not production schema validation.
-
-The mock-kdb demo exposes the same drilldown controls and explicit intraday
-heatmap opt-in as the offline demo:
-
-```bash
-poetry run mmsr mock-kdb-demo \
-  --output reports/mock_kdb_demo_compact_drilldown.html \
-  --max-drilldown-rows 10
-
-poetry run mmsr mock-kdb-demo \
-  --output reports/mock_kdb_demo_no_drilldown.html \
-  --no-drilldown-page
-
-poetry run mmsr mock-kdb-demo \
-  --output reports/mock_kdb_demo_with_heatmaps.html \
-  --include-intraday-heatmaps
-```
-
 ## Live kdb integration testing
 
 Live kdb+ validation is opt-in because it requires PyKX, credentials, confirmed

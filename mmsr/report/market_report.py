@@ -125,6 +125,12 @@ class MarketReportOptions:
         "Cumulative intraday distribution for liquidity-state metrics. "
         "Select metric from the left table and universe from the bottom table."
     )
+    include_pts_stats_section: bool = True
+    pts_stats_title: str = "PTS Stats"
+    pts_stats_help_text: str = (
+        "Venue-level PTS turnover relative to TSE turnover. "
+        "Each point is computed as ratio-of-sums at the selected granularity."
+    )
     include_activity_distribution_page: bool = True
     activity_distribution_metric_names: tuple[str, ...] = (
         "turnover",
@@ -273,6 +279,8 @@ class MarketReportOptions:
             self.displayed_liquidity_help_text,
             "displayed_liquidity_help_text",
         )
+        _require_non_empty(self.pts_stats_title, "pts_stats_title")
+        _require_non_empty(self.pts_stats_help_text, "pts_stats_help_text")
         _require_metric_name_sequence(
             self.displayed_liquidity_metric_names,
             "displayed_liquidity_metric_names",
@@ -485,6 +493,7 @@ def _build_summary_page(
     )
     turnover_block = _build_turnover_distribution_summary_block(report_input, definitions, options=options)
     liquidity_block = _build_liquidity_distribution_summary_block(report_input, definitions, options=options)
+    pts_stats_block = _build_pts_stats_block(report_input, definitions, options=options)
     return ReportPage(
         title=base_page.title,
         html_blocks=(
@@ -493,6 +502,7 @@ def _build_summary_page(
             + ([detailed_trends_block] if detailed_trends_block is not None else [])
             + ([turnover_block] if turnover_block is not None else [])
             + ([liquidity_block] if liquidity_block is not None else [])
+            + ([pts_stats_block] if pts_stats_block is not None else [])
         ),
         metric_cards=base_page.metric_cards,
         plotly_charts=[],
@@ -602,6 +612,340 @@ def _liquidity_metric_label(metric_name: str, metric_definition: MetricDefinitio
     if metric_name == "parkinson_volatility_bps":
         return "Volatility"
     return metric_definition.label
+
+
+def _metric_help_icon_html(*, title: str, help_text: str) -> str:
+    return (
+        '<details class="metric-help">'
+        f'<summary class="metric-help__summary metric-info" aria-label="Metric definition: {escape(title)}">'
+        '<span class="metric-help__icon" aria-hidden="true">i</span>'
+        "</summary>"
+        '<div class="metric-help__body">'
+        f'<strong class="metric-help__title">{escape(title)}</strong>'
+        f"<p>{escape(help_text)}</p>"
+        "</div></details>"
+    )
+
+
+def _build_pts_stats_block(
+    report_input: MarketReportInput,
+    definitions: Mapping[str, MetricDefinition],
+    *,
+    options: MarketReportOptions,
+) -> HtmlBlock | None:
+    if not options.include_pts_stats_section:
+        return None
+
+    current_by_metric = {series.metric_name: series for series in report_input.current_series}
+    reference_by_metric = {series.metric_name: series for series in report_input.reference_series}
+    pts_series = current_by_metric.get("pts_turnover")
+    turnover_series = current_by_metric.get("turnover")
+    reference_pts_series = reference_by_metric.get("pts_turnover")
+    reference_turnover_series = reference_by_metric.get("turnover")
+    if pts_series is None or turnover_series is None:
+        return None
+
+    pts_series = _series_for_level(pts_series, "daily")
+    turnover_series = _series_for_level(turnover_series, "daily")
+    reference_pts_series = None if reference_pts_series is None else _series_for_level(reference_pts_series, "daily")
+    reference_turnover_series = (
+        None if reference_turnover_series is None else _series_for_level(reference_turnover_series, "daily")
+    )
+    denominator_daily = _metric_daily_rollups("turnover", turnover_series)
+    if not denominator_daily:
+        return None
+
+    granularity = options.detailed_metric_trends_granularity
+    denominator_by_bucket: dict[tuple[int, ...], float] = {}
+    for obs_date, value in denominator_daily:
+        bucket_key = _time_bucket_key(obs_date, granularity)
+        denominator_by_bucket[bucket_key] = denominator_by_bucket.get(bucket_key, 0.0) + float(value)
+
+    numerator_by_bucket_venue: dict[tuple[tuple[int, ...], str], float] = {}
+    for observation in pts_series.observations:
+        if observation.value is None:
+            continue
+        value = float(observation.value)
+        if not isfinite(value):
+            continue
+        venue = observation.group.get("venue")
+        if venue is None:
+            continue
+        bucket_key = _time_bucket_key(observation.date, granularity)
+        row_key = (bucket_key, str(venue))
+        numerator_by_bucket_venue[row_key] = numerator_by_bucket_venue.get(row_key, 0.0) + value
+
+    if not numerator_by_bucket_venue:
+        return None
+
+    ordered_bucket_keys = sorted(
+        bucket_key for bucket_key, denominator in denominator_by_bucket.items() if denominator > 0.0
+    )
+    if not ordered_bucket_keys:
+        return None
+    labels = [_time_bucket_label(bucket_key, granularity) for bucket_key in ordered_bucket_keys]
+
+    venue_totals: dict[str, float] = {}
+    for (_, venue), value in numerator_by_bucket_venue.items():
+        venue_text = str(venue).strip()
+        if not venue_text:
+            continue
+        venue_totals[venue_text] = venue_totals.get(venue_text, 0.0) + value
+    current_denominator_total = sum(float(value) for value in denominator_by_bucket.values() if value > 0.0)
+    current_share_by_venue = {
+        venue: ((total / current_denominator_total) * 100.0) if current_denominator_total > 0.0 else None
+        for venue, total in venue_totals.items()
+    }
+
+    reference_share_by_venue: dict[str, float | None] = {}
+    if reference_pts_series is not None and reference_turnover_series is not None:
+        reference_denominator_daily = _metric_daily_rollups("turnover", reference_turnover_series)
+        reference_denominator_total = sum(float(value) for _, value in reference_denominator_daily if value is not None and isfinite(float(value)))
+        reference_venue_totals: dict[str, float] = {}
+        for observation in reference_pts_series.observations:
+            if observation.value is None:
+                continue
+            numeric_value = float(observation.value)
+            if not isfinite(numeric_value):
+                continue
+            venue = str(observation.group.get("venue", "")).strip()
+            if not venue:
+                continue
+            reference_venue_totals[venue] = reference_venue_totals.get(venue, 0.0) + numeric_value
+        reference_share_by_venue = {
+            venue: ((total / reference_denominator_total) * 100.0) if reference_denominator_total > 0.0 else None
+            for venue, total in reference_venue_totals.items()
+        }
+
+    ordered_venues = [
+        venue
+        for venue, _ in sorted(
+            {**venue_totals, **{venue: 0.0 for venue in reference_share_by_venue}}.items(),
+            key=lambda item: (
+                -float(current_share_by_venue.get(item[0]) or reference_share_by_venue.get(item[0]) or 0.0),
+                item[0],
+            ),
+        )
+    ]
+    ordered_venues = [venue for venue in ordered_venues if venue.strip()]
+    if not ordered_venues:
+        return None
+
+    traces: list[dict[str, object]] = []
+    for venue in ordered_venues:
+        y_values: list[float | None] = []
+        for bucket_key in ordered_bucket_keys:
+            denominator = denominator_by_bucket.get(bucket_key, 0.0)
+            if denominator <= 0:
+                y_values.append(None)
+                continue
+            numerator = numerator_by_bucket_venue.get((bucket_key, venue), 0.0)
+            y_values.append((numerator / denominator) * 100.0)
+        traces.append(
+            {
+                "type": "scatter",
+                "mode": "lines+markers",
+                "name": venue,
+                "x": labels,
+                "y": y_values,
+                "line": {"width": 2},
+                "marker": {"size": 6},
+                "hovertemplate": "%{x}<br>%{fullData.name}: %{y:.2f}%<extra></extra>",
+            }
+        )
+
+    pts_definition = MetricDefinition(
+        name="pts_turnover_share_pct",
+        label="PTS Turnover % of TSE",
+        category="PTS",
+        description="PTS venue turnover expressed as a percentage of aggregate TSE turnover.",
+        formula="100 * sum(pts_turnover_venue) / sum(tse_turnover)",
+        formula_latex=r"100 \cdot \frac{\sum \mathrm{PTS\ turnover}_{venue}}{\sum \mathrm{TSE\ turnover}}",
+        interpretation="Higher values indicate more turnover is executing on the selected PTS venue relative to TSE.",
+        unit="%",
+        higher_is_better=None,
+        default_aggregation="ratio_of_sums",
+        supports_intraday=False,
+        supports_symbol_level=False,
+        required_tables=["pts_trades", "trades"],
+        required_columns=["venue", "tradePrice", "tradeSize"],
+        caveats=[
+            "Numerator is summed PTS turnover for the selected venue.",
+            "Denominator is summed TSE turnover across the full universe.",
+        ],
+    )
+    figure = {
+        "data": traces,
+        "layout": {
+            "template": "plotly_white",
+            "autosize": True,
+            "height": 360,
+            "margin": {"l": 56, "r": 24, "t": 24, "b": 72},
+            "xaxis": {"title": granularity.title(), "type": "category"},
+            "yaxis": {"title": "PTS turnover as % of TSE turnover", "ticksuffix": "%"},
+            "legend": {"orientation": "h", "y": -0.28},
+            "hovermode": "x unified",
+        },
+        "config": {
+            "displaylogo": False,
+            "responsive": True,
+            "modeBarButtonsToRemove": ["select2d", "lasso2d"],
+        },
+    }
+    figure_json = json.dumps(figure, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+
+    supplemental_symbol_observations = turnover_series.metadata.get("supplemental_symbol_observations", ())
+    turnover_symbol_observations = (
+        supplemental_symbol_observations
+        if supplemental_symbol_observations
+        else turnover_series.observations
+    )
+    tse_turnover_by_symbol: dict[str, float] = {}
+    for observation in turnover_symbol_observations:
+        symbol = str(observation.group.get("sym", "")).strip()
+        if not symbol or observation.value is None:
+            continue
+        numeric_value = float(observation.value)
+        if not isfinite(numeric_value):
+            continue
+        tse_turnover_by_symbol[symbol] = tse_turnover_by_symbol.get(symbol, 0.0) + numeric_value
+
+    stock_rows_by_venue: dict[str, list[tuple[str, float, float | None]]] = {}
+    for venue in ordered_venues:
+        by_symbol: dict[str, float] = {}
+        for observation in pts_series.observations:
+            venue_name = str(observation.group.get("venue", "")).strip()
+            symbol = str(observation.group.get("sym", "")).strip()
+            if venue_name != venue or not symbol or observation.value is None:
+                continue
+            numeric_value = float(observation.value)
+            if not isfinite(numeric_value):
+                continue
+            by_symbol[symbol] = by_symbol.get(symbol, 0.0) + numeric_value
+        stock_rows_by_venue[venue] = [
+            (
+                symbol,
+                turnover_value,
+                None
+                if tse_turnover_by_symbol.get(symbol, 0.0) <= 0.0
+                else (turnover_value / tse_turnover_by_symbol[symbol]) * 100.0,
+            )
+            for symbol, turnover_value in sorted(by_symbol.items(), key=lambda item: (-item[1], item[0]))[:5]
+        ]
+
+    venue_sections = []
+    for venue in ordered_venues:
+        rows = stock_rows_by_venue.get(venue, [])
+        row_html = "".join(
+            (
+                "<tr>"
+                f"<td>{escape(symbol)}</td>"
+                f"<td>{escape(_format_metric_value(turnover_value, 'JPY'))}</td>"
+                f"<td>{'n/a' if share_pct is None else escape(f'{share_pct:.2f}%')}</td>"
+                "</tr>"
+            )
+            for symbol, turnover_value, share_pct in rows
+        )
+        if not row_html:
+            row_html = '<tr><td colspan="3">n/a</td></tr>'
+        venue_sections.append(
+            '<section class="turnover-distribution__card pts-stats__venue-card">'
+            '<div class="plotly-chart__card-header">'
+            f'<div class="turnover-distribution__card-title">{escape(venue)}</div>'
+            "</div>"
+            '<div class="pts-stats__venue-table-wrap">'
+            '<table class="pts-stats__venue-table">'
+            '<thead><tr><th>Stock</th><th>Turnover</th><th>% of TSE</th></tr></thead>'
+            f"<tbody>{row_html}</tbody>"
+            "</table></div></section>"
+        )
+    venue_grid_help_html = _metric_help_icon_html(
+        title="PTS Top Stocks by Venue",
+        help_text=(
+            "Top 5 stocks by summed PTS turnover within each venue over the current report period. "
+            "Percentages are each stock's PTS turnover divided by that same stock's aggregate TSE turnover over the same period."
+        ),
+    )
+    plot_help_html = _metric_help_icon_html(title=pts_definition.label, help_text=pts_definition.help_text())
+    summary_table_help_html = _metric_help_icon_html(
+        title="PTS Venue Share Summary",
+        help_text=(
+            "Reference and current are total venue PTS turnover over the selected period divided by total TSE turnover "
+            "over the same period. Delta is the change in percentage points from reference to current."
+        ),
+    )
+
+    summary_rows_html = []
+    for venue in ordered_venues:
+        current_share = current_share_by_venue.get(venue)
+        reference_share = reference_share_by_venue.get(venue)
+        delta_value = None
+        if current_share is not None and reference_share is not None:
+            delta_value = current_share - reference_share
+        delta_class = (
+            "turnover-distribution__heatmap-delta--neutral"
+            if delta_value is None or delta_value == 0
+            else "turnover-distribution__heatmap-delta--up"
+            if delta_value > 0
+            else "turnover-distribution__heatmap-delta--down"
+        )
+        summary_rows_html.append(
+            "<tr>"
+            f"<th>{escape(venue)}</th>"
+            f"<td>{escape('n/a' if reference_share is None else f'{reference_share:.2f}%')}</td>"
+            f"<td>{escape('n/a' if current_share is None else f'{current_share:.2f}%')}</td>"
+            f'<td class="{delta_class}">{escape("n/a" if delta_value is None else f"{delta_value:+.2f}pp")}</td>'
+            "</tr>"
+        )
+
+    section_help_html = (
+        '<details class="metric-help turnover-distribution__help">'
+        f'<summary class="metric-help__summary metric-info" aria-label="Section help: {escape(options.pts_stats_title)}">'
+        '<span class="metric-help__icon" aria-hidden="true">i</span>'
+        "</summary>"
+        '<div class="metric-help__body">'
+        f'<strong class="metric-help__title">Section help: {escape(options.pts_stats_title)}</strong>'
+        f"<p>{escape(options.pts_stats_help_text)} Methodology: each line is one PTS venue numerator; denominator is aggregate TSE turnover; weekly/monthly/quarterly values are computed as sum(numerator) / sum(denominator) within each bucket.</p>"
+        "</div></details>"
+    )
+    body_html = (
+        '<section class="pts-stats turnover-distribution">'
+        '<div class="turnover-distribution__header">'
+        f'<h3 class="turnover-distribution__title">PTS Stats</h3>'
+        f"{section_help_html}"
+        "</div>"
+        '<div class="pts-stats__stack">'
+        '<div class="pts-stats__summary-row">'
+        '<section class="turnover-distribution__card pts-stats__summary-card">'
+        '<div class="plotly-chart__card-header">'
+        '<div class="turnover-distribution__card-title">Venue Summary</div>'
+        f"{summary_table_help_html}"
+        "</div>"
+        '<div class="pts-stats__summary-table-wrap">'
+        '<table class="pts-stats__summary-table">'
+        '<thead><tr><th>Venue</th><th>Reference</th><th>Current</th><th>Delta</th></tr></thead>'
+        f"<tbody>{''.join(summary_rows_html)}</tbody>"
+        '</table></div></section>'
+        '<section class="pts-stats__plot-surface">'
+        '<div class="plotly-chart__card-header">'
+        '<div class="pts-stats__plot-header">'
+        f'<div class="turnover-distribution__card-title pts-stats__plot-title">{escape(pts_definition.label)}</div>'
+        f"{plot_help_html}"
+        '</div>'
+        "</div>"
+        '<div class="plotly-chart__visual" role="img" aria-label="PTS Turnover % of TSE Plotly chart">'
+        '<div class="plotly-chart__figure" data-mmsr-plotly></div>'
+        f'<script type="application/json" class="plotly-chart__spec">{figure_json}</script>'
+        '</div></section></div>'
+        '<div class="pts-stats__venues">'
+        '<div class="plotly-chart__card-header">'
+        '<div class="turnover-distribution__card-title">Top 5 Stocks by Venue</div>'
+        f"{venue_grid_help_html}"
+        "</div>"
+        f"<div class=\"pts-stats__venue-grid\">{''.join(venue_sections)}</div>"
+        "</div></div></section>"
+    )
+    return HtmlBlock(title=options.pts_stats_title, body_html=body_html, help_text=None)
 
 
 def _metric_aggregation_methodology(metric_name: str) -> str:
@@ -896,7 +1240,8 @@ def _build_liquidity_distribution_payload(
                 figure_height=figure_height,
             )
             row_metrics[metric_name] = {
-                "title": f"Universe: {row} | Metric: {_liquidity_metric_label(metric_name, definition)}",
+                "title": f"Universe: {row} | Intraday {_liquidity_metric_label(metric_name, definition)} Curve",
+                "line_title": f"Intraday {_liquidity_metric_label(metric_name, definition)} Curve",
                 "line_figure": line_figure,
             }
 
@@ -909,13 +1254,17 @@ def _build_liquidity_distribution_payload(
                     "label": _liquidity_metric_label(metric_name, definition),
                     "reference_text": _format_metric_value(reference_value, definition.unit),
                     "current_text": _format_metric_value(current_value, definition.unit),
+                    "help_html": _metric_help_icon_html(
+                        title=_liquidity_metric_label(metric_name, definition),
+                        help_text=definition.help_text(),
+                    ),
                 }
             )
             universe_cells.append(
                 {
                     "metric_name": metric_name,
                     "current_text": _format_metric_value(current_value, definition.unit),
-                    "delta_text": "n/a" if delta_pct is None else f"{delta_pct:+.1%}",
+                    "delta_text": "n/a" if delta_pct is None else f"{delta_pct:+.2%}",
                     "delta_bucket": _delta_bucket(delta_pct),
                     "delta_class": _delta_class(delta_pct),
                 }
@@ -1699,23 +2048,23 @@ def _format_overview_card_value(value: float | int | None, unit: str) -> str:
     if unit == "JPY":
         abs_value = abs(numeric)
         if abs_value >= 1_000_000_000_000:
-            return f"{numeric / 1_000_000_000_000:.1f}T JPY"
+            return f"{numeric / 1_000_000_000_000:.2f}T JPY"
         if abs_value >= 1_000_000_000:
-            return f"{numeric / 1_000_000_000:.1f}B JPY"
+            return f"{numeric / 1_000_000_000:.2f}B JPY"
         if abs_value >= 1_000_000:
-            return f"{numeric / 1_000_000:.1f}M JPY"
+            return f"{numeric / 1_000_000:.2f}M JPY"
         return f"{numeric:,.0f} JPY"
     if unit == "shares":
         abs_value = abs(numeric)
         if abs_value >= 1_000_000_000:
-            return f"{numeric / 1_000_000_000:.1f}B"
+            return f"{numeric / 1_000_000_000:.2f}B"
         if abs_value >= 1_000_000:
-            return f"{numeric / 1_000_000:.1f}M"
+            return f"{numeric / 1_000_000:.2f}M"
         if abs_value >= 1_000:
-            return f"{numeric / 1_000:.1f}K"
+            return f"{numeric / 1_000:.2f}K"
         return f"{numeric:,.0f}"
     if unit == "bps":
-        return f"{numeric:.1f} bps"
+        return f"{numeric:.2f} bps"
     return _format_metric_value(value, unit)
 
 
@@ -1886,7 +2235,7 @@ def _format_metric_value(value: float | int | None, unit: str) -> str:
         return f"{value:,.0f}"
     if unit == "shares":
         return f"{value:,.0f} shares"
-    return f"{value:,.4f} {unit}".strip()
+    return f"{value:,.2f} {unit}".strip()
 
 
 def _format_change_text(change_abs: float | None, change_pct: float | None, unit: str) -> str:
@@ -1899,9 +2248,9 @@ def _format_change_text(change_abs: float | None, change_pct: float | None, unit
         elif unit == "shares" or unit == "count":
             parts.append(f"{change_abs:+,.0f}")
         else:
-            parts.append(f"{change_abs:+,.4f} {unit}".strip())
+            parts.append(f"{change_abs:+,.2f} {unit}".strip())
     if change_pct is not None:
-        parts.append(f"{change_pct:+.1%}")
+        parts.append(f"{change_pct:+.2%}")
     return "change " + " ".join(parts)
 
 

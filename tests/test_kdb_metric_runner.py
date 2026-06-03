@@ -736,6 +736,28 @@ def test_normalize_metric_result_uses_group_type_and_group_value_for_unified_row
     assert series.observations[0].group == {"topixCapGrp": "Large70"}
 
 
+def test_normalize_metric_result_accepts_composite_group_descriptors() -> None:
+    series = normalize_metric_result(
+        metric_name="pts_turnover",
+        result=[
+            {
+                "metricName": "pts_turnover",
+                "date": date(2026, 5, 1),
+                "timeBucket": "DAILY",
+                "metricValue": 250.0,
+                "groupType": ["venue", "topixCapGrp"],
+                "groupValue": ["Cboe", "Large"],
+                "level": "daily",
+            }
+        ],
+        group_by=["venue", "topixCapGrp"],
+    )
+
+    assert series.metric_name == "pts_turnover"
+    assert series.values == (250.0,)
+    assert series.observations[0].group == {"venue": "Cboe", "topixCapGrp": "Large"}
+
+
 def test_normalize_metric_result_rejects_missing_metric_value_column() -> None:
     with pytest.raises(KdbMetricRunnerError, match="missing value column"):
         normalize_metric_result(
@@ -824,6 +846,51 @@ def test_day_runner_normalizes_keyed_table_mapping_metric_result() -> None:
     assert series[0].values == (12.5,)
     assert series[0].observations[0].group == {"sym": "7203"}
     assert series[0].observations[0].metadata["top_of_book_depth"] == 5000
+
+
+def test_day_runner_keeps_symbol_scope_rows_as_supplemental_metadata() -> None:
+    registry = build_default_registry()
+    client = FakeKdbClient(
+        [
+            {
+                "metricName": "turnover",
+                "date": date(2026, 5, 1),
+                "timeBucket": "DAILY",
+                "metricValue": 1000.0,
+                "groupType": "topixCapGrp",
+                "groupValue": "Large",
+                "level": "daily",
+            },
+            {
+                "metricName": "turnover",
+                "date": date(2026, 5, 1),
+                "timeBucket": "DAILY",
+                "metricValue": 400.0,
+                "groupType": "sym",
+                "groupValue": "7203",
+                "level": "daily",
+            },
+        ]
+    )
+    runner = KdbMetricRunner(client)  # type: ignore[arg-type]
+
+    series = runner.run_day(
+        [
+            MetricRunRequest(
+                metric=registry.get("turnover"),
+                period=_single_day_period(),
+                group_by=["topixCapGrp"],
+                source_functions=_default_source_functions(),
+            )
+        ]
+    )
+
+    supplemental = series[0].metadata["supplemental_symbol_observations"]
+    assert len(series[0].observations) == 1
+    assert series[0].observations[0].group == {"topixCapGrp": "Large"}
+    assert len(supplemental) == 1
+    assert supplemental[0].group == {"sym": "7203"}
+    assert supplemental[0].value == 400.0
 
 
 def test_day_runner_keeps_present_but_empty_metric_results() -> None:

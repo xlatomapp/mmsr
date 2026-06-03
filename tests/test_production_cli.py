@@ -44,7 +44,8 @@ groups:
 
 reference:
   method: same_intraday_bucket
-  lookback_days: 2
+  start_date: "2026-04-29"
+  end_date: "2026-04-30"
   statistic: median
   observation_unit: trading_day
   comparable_keys:
@@ -497,4 +498,3 @@ def test_main_help_lists_production_render_command(capsys) -> None:
     assert "preflight" in help_text
     assert "plan" in help_text
     assert "offline-demo" in help_text
-    assert "mock-kdb-demo" in help_text

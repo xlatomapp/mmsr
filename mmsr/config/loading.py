@@ -115,7 +115,16 @@ def report_config_from_mapping(raw: Mapping[str, Any]) -> ReportConfig:
         intraday=_intraday_config(intraday_section),
         reference=ReferenceComparisonConfig(
             method=str(reference_section.get("method", "same_intraday_bucket")),
-            lookback_days=int(reference_section.get("lookback_days", 20)),
+            start_date=(
+                None
+                if reference_section.get("start_date") is None
+                else _parse_date(reference_section.get("start_date"), "reference.start_date")
+            ),
+            end_date=(
+                None
+                if reference_section.get("end_date") is None
+                else _parse_date(reference_section.get("end_date"), "reference.end_date")
+            ),
             statistic=str(reference_section.get("statistic", "median")),
             observation_unit=str(reference_section.get("observation_unit", "trading_day")),
             comparable_keys=tuple(

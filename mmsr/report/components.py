@@ -690,6 +690,7 @@ class PlotlyChart:
     y_axis_label: str | None = None
     help_text: str | None = None
     data_summary: str | None = None
+    css_class: str = ""
 
     def __post_init__(self) -> None:
         if not self.title.strip():
@@ -702,6 +703,8 @@ class PlotlyChart:
             raise ValueError("help_text must not be empty when supplied")
         if self.data_summary is not None and not self.data_summary.strip():
             raise ValueError("data_summary must not be empty when supplied")
+        if self.css_class and not self.css_class.strip():
+            raise ValueError("css_class must not be blank when supplied")
         if "data" not in self.figure:
             raise ValueError("figure must contain Plotly 'data'")
 

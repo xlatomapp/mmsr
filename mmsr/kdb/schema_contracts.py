@@ -50,6 +50,7 @@ ACTIVITY_OUTPUT_AGGREGATE_COLUMNS: tuple[str, ...] = (
     "volume",
     "trade_count",
 )
+PTS_ACTIVITY_OUTPUT_AGGREGATE_COLUMNS: tuple[str, ...] = ("pts_turnover",)
 VOLATILITY_OUTPUT_AGGREGATE_COLUMNS: tuple[str, ...] = ("parkinson_volatility_bps",)
 
 LIQUIDITY_QUOTES_REQUIRED_COLUMNS: tuple[str, ...] = (
@@ -91,6 +92,15 @@ REVERSION_OUTPUT_BASE_COLUMNS: tuple[str, ...] = (
     *REVERSION_REQUIRED_GROUP_COLUMNS,
 )
 REVERSION_PTS_TRADES_REQUIRED_COLUMNS: tuple[str, ...] = (
+    "date",
+    "time",
+    "sym",
+    *TICK_STATE_REQUIRED_COLUMNS,
+    "venue",
+    "tradePrice",
+    "tradeSize",
+)
+PTS_ACTIVITY_TRADES_REQUIRED_COLUMNS: tuple[str, ...] = (
     "date",
     "time",
     "sym",
@@ -293,6 +303,26 @@ def volatility_input_schema_contract(
     )
 
 
+def pts_activity_input_schema_contract(
+    *,
+    pts_trades_table: str = "pts_trades",
+    extra_required_columns: Sequence[str] = (),
+) -> QTemplateInputTableSchemaContract:
+    """Return the raw source contract for PTS turnover activity."""
+
+    return QTemplateInputTableSchemaContract(
+        template_name="pts_activity",
+        table_role="pts_trades",
+        table_name=pts_trades_table,
+        required_columns=_dedupe((*PTS_ACTIVITY_TRADES_REQUIRED_COLUMNS, *extra_required_columns)),
+        assumptions=(
+            "tradePrice and tradeSize are positive for included PTS trades",
+            "venue identifies the PTS execution venue used for venue-level rollups",
+            "requested group_by columns may be supplied by the reference-data source",
+        ),
+    )
+
+
 def liquidity_input_schema_contract(
     *,
     quotes_table: str = "quotes",
@@ -372,6 +402,27 @@ def validate_activity_output_schema(
     """Validate an ``activity`` result object against its schema contract."""
 
     activity_output_schema_contract(metric_name, group_by=group_by).validate_result(result)
+
+
+def pts_activity_output_schema_contract(
+    metric_name: str,
+    *,
+    group_by: Sequence[str] = (),
+) -> QTemplateOutputSchemaContract:
+    """Return the output-schema contract for PTS venue activity."""
+
+    if metric_name not in PTS_ACTIVITY_OUTPUT_AGGREGATE_COLUMNS:
+        raise OutputSchemaContractError(
+            "pts_activity schema contracts only apply to PTS activity metrics: "
+            + ", ".join(PTS_ACTIVITY_OUTPUT_AGGREGATE_COLUMNS)
+        )
+
+    return QTemplateOutputSchemaContract(
+        template_name="pts_activity",
+        metric_value_column=metric_name,
+        base_columns=STARTER_OUTPUT_BASE_COLUMNS,
+        group_columns=tuple(group_by),
+    )
 
 
 def validate_liquidity_output_schema(
@@ -534,6 +585,8 @@ def output_schema_contract_for_template(
 
     if template_name == "activity":
         return activity_output_schema_contract(metric_name, group_by=group_by)
+    if template_name == "pts_activity":
+        return pts_activity_output_schema_contract(metric_name, group_by=group_by)
     if template_name == "liquidity":
         return liquidity_output_schema_contract(metric_name, group_by=group_by)
     if template_name == "volatility":

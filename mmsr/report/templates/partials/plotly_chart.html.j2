@@ -1,23 +1,35 @@
 {% from "partials/help_control.html.j2" import help_control %}
-<section class="plotly-chart">
+<section class="plotly-chart{% if chart.css_class %} {{ chart.css_class }}{% endif %}">
+  {% if chart.css_class == "plotly-chart--sectioned" %}
+  <div class="turnover-distribution__header">
+    <h3 class="turnover-distribution__title">{{ chart.title }}</h3>
+    <div class="turnover-distribution__help">
+      {{ help_control(chart.title, chart.help_text, "Chart help", True) }}
+    </div>
+  </div>
+  <div class="plotly-chart__card">
+    <div class="plotly-chart__card-header">
+      <div class="turnover-distribution__card-title">{{ chart.metric.label }}</div>
+      <div class="component-heading__help">
+        {{ help_control(chart.metric.label, chart.metric_help_text(), "Metric definition", True) }}
+      </div>
+    </div>
+    <div class="plotly-chart__visual" role="img" aria-label="{{ chart.title }} Plotly chart">
+      <div class="plotly-chart__figure" data-mmsr-plotly></div>
+      <script type="application/json" class="plotly-chart__spec">{{ chart.plotly_figure_json() | safe }}</script>
+    </div>
+  </div>
+  {% else %}
   <div class="component-heading">
     <h3>{{ chart.title }}</h3>
     <div class="component-heading__help">
-      {{ help_control(chart.metric.label, chart.metric_help_text(), "Metric definition") }}
-      {{ help_control(chart.title, chart.help_text, "Chart help") }}
+      {{ help_control(chart.metric.label, chart.metric_help_text(), "Metric definition", True) }}
+      {{ help_control(chart.title, chart.help_text, "Chart help", True) }}
     </div>
-  </div>
-  <div class="time-series-chart__meta">
-    <span>X-axis: {{ chart.x_axis_label }}</span>
-    <span>Y-axis: {{ chart.resolved_y_axis_label() }}</span>
-    <span>Metric: {{ chart.metric.label }}</span>
   </div>
   <div class="plotly-chart__visual" role="img" aria-label="{{ chart.title }} Plotly chart">
     <div class="plotly-chart__figure" data-mmsr-plotly></div>
     <script type="application/json" class="plotly-chart__spec">{{ chart.plotly_figure_json() | safe }}</script>
   </div>
-  <details class="plotly-chart__data-summary">
-    <summary>Compact plot data</summary>
-    <p>{{ chart.compact_data_summary() }}</p>
-  </details>
+  {% endif %}
 </section>

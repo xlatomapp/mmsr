@@ -118,6 +118,29 @@ STARTER_METRICS: list[MetricDefinition] = [
             "Trade-based range can differ from executable quote-based range in thin names.",
         ],
     ),
+    MetricDefinition(
+        name="pts_turnover",
+        label="PTS Turnover",
+        category="PTS",
+        description=(
+            "Summed traded notional on a PTS venue for the selected aggregation grain."
+        ),
+        formula="sum(tradePrice * tradeSize) on PTS venue trades",
+        formula_latex=r"\sum_i \mathrm{price}_i \cdot \mathrm{qty}_i",
+        interpretation=(
+            "Higher values indicate more traded notional routed through the selected PTS venue."
+        ),
+        unit="JPY",
+        higher_is_better=None,
+        default_aggregation="sum",
+        supports_intraday=True,
+        supports_symbol_level=True,
+        required_tables=["pts_trades"],
+        required_columns=["venue", "tradePrice", "tradeSize"],
+        caveats=[
+            "This metric is intended for venue-level monitoring and should be interpreted against TSE turnover as the denominator.",
+        ],
+    ),
 ]
 
 PRIMARY_QUOTE_REVERSION_HORIZONS: tuple[tuple[str, str], ...] = (

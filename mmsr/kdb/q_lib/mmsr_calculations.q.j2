@@ -52,6 +52,19 @@
             (`trade_count;`period;`trade_count_daily;`trade_count;`topixCapGrp;`mean;`;"";`trade_count;1b;`v1);
 
         `metric`level`sourceTable`dependsOn`groupBy`aggExpr`weightCol`filterExpr`outputCol`enabled`version!
+            (`pts_turnover;`intraday;`pts_trades_raw;`tradePrice`tradeSize`venue;`date`timeBucket`sym`topixCapGrp`venue;`sum;`;"";`pts_turnover;1b;`v1);
+        `metric`level`sourceTable`dependsOn`groupBy`aggExpr`weightCol`filterExpr`outputCol`enabled`version!
+            (`pts_turnover;`daily;`pts_trades_raw;`tradePrice`tradeSize`venue;`date`sym`topixCapGrp`venue;`sum;`;"";`pts_turnover;1b;`v1);
+        `metric`level`sourceTable`dependsOn`groupBy`aggExpr`weightCol`filterExpr`outputCol`enabled`version!
+            (`pts_turnover;`weekly;`pts_turnover_daily;`pts_turnover;`year`week`venue;`mean;`;"";`pts_turnover;1b;`v1);
+        `metric`level`sourceTable`dependsOn`groupBy`aggExpr`weightCol`filterExpr`outputCol`enabled`version!
+            (`pts_turnover;`monthly;`pts_turnover_daily;`pts_turnover;`year`month`venue;`mean;`;"";`pts_turnover;1b;`v1);
+        `metric`level`sourceTable`dependsOn`groupBy`aggExpr`weightCol`filterExpr`outputCol`enabled`version!
+            (`pts_turnover;`quarterly;`pts_turnover_daily;`pts_turnover;`year`quarter`venue;`mean;`;"";`pts_turnover;1b;`v1);
+        `metric`level`sourceTable`dependsOn`groupBy`aggExpr`weightCol`filterExpr`outputCol`enabled`version!
+            (`pts_turnover;`period;`pts_turnover_daily;`pts_turnover;`venue;`mean;`;"";`pts_turnover;1b;`v1);
+
+        `metric`level`sourceTable`dependsOn`groupBy`aggExpr`weightCol`filterExpr`outputCol`enabled`version!
             (`quoted_spread_bps;`intraday;`quotes_raw;`askPrice`bidPrice`time;`date`timeBucket`sym`topixCapGrp;`twap_quote_ms;`quoteWeightMs;"";`quoted_spread_bps;1b;`v1);
         `metric`level`sourceTable`dependsOn`groupBy`aggExpr`weightCol`filterExpr`outputCol`enabled`version!
             (`quoted_spread_bps;`daily;`quotes_raw;`askPrice`bidPrice`time;`date`sym`topixCapGrp;`twap_quote_ms;`quoteWeightMs;"";`quoted_spread_bps;1b;`v1);
@@ -144,6 +157,7 @@
 
 {{ calculation_namespace }}.metricAggIsAdditiveMetric:{[metricName]
     if[{{ calculation_namespace }}.isToxicityReversionMetric[metricName]; :0b];
+    if[metricName = `pts_turnover; :0b];
     intradaySpec: {{ calculation_namespace }}.metricAggSpecGet[metricName;`intraday];
     (intradaySpec`aggExpr) in `sum
     };
@@ -161,6 +175,9 @@
         ];
     if[not sourceKey in key rawSources;
         '": "sv string (`missingRawSource;metricName;sourceKey)
+        ];
+    if[metricName = `pts_turnover;
+        :{{ calculation_namespace }}.calcPtsTurnover[runDate;rawSources[sourceKey];rawSources`refs;metricParams]
         ];
     if[calcFamily = `activity;
         :{{ calculation_namespace }}.calcActivity[runDate;rawSources[sourceKey];rawSources`refs;metricParams]
@@ -186,6 +203,22 @@
         ];
     if[not sourceKey in key rawSources;
         '": "sv string (`missingRawSource;metricName;sourceKey)
+        ];
+    if[metricName = `pts_turnover;
+        rawPtsTrades: rawSources[sourceKey] lj `date`sym xkey rawSources`refs;
+        :0!select
+            pts_turnover: sum tradePrice * tradeSize
+        by date,
+           timeBucket: `DAILY,
+           sym,
+           topixCapGrp,
+           venue
+        from rawPtsTrades
+        where date = runDate,
+              tradePrice > 0,
+              tradeSize > 0,
+              not null venue,
+              not null sym
         ];
     if[calcFamily = `activity;
         rawTrades: rawSources[sourceKey] lj `date`sym xkey rawSources`refs;
@@ -268,6 +301,7 @@
     levelSpec: {{ calculation_namespace }}.metricAggSpecGet[metricName;level];
     sourceKey: {{ calculation_namespace }}.metricAggSpecSourceKey[levelSpec`sourceTable];
     calcFamily: {{ calculation_namespace }}.metricAggSpecCalcFamily[levelSpec`aggExpr];
+    if[metricName = `pts_turnover; calcFamily: `pts_activity];
     paramsText: $[99h = type metricParams; .j.j metricParams; string metricParams];
     `$": "sv (string sourceKey; string calcFamily; string level; paramsText)
     };
@@ -322,6 +356,7 @@
 
 {{ calculation_namespace }}.metricRollupFamily:{[metricName]
     if[metricName in `turnover`volume`trade_count; :`activity];
+    if[metricName = `pts_turnover; :`pts_activity];
     if[metricName in `quoted_spread_bps`top_of_book_depth; :`liquidity];
     if[metricName = `parkinson_volatility_bps; :`volatility];
     if[{{ calculation_namespace }}.isToxicityReversionMetric metricName; :`reversion];
@@ -358,69 +393,85 @@
     '": "sv string (`unsupportedRollupScope;scope)
     };
 
+{{ calculation_namespace }}.rollupPtsActivityFacts:{[facts;scope]
+    if[scope = `venue; :0!select sum pts_turnover by date, venue from facts];
+    if[scope = `venue_bucket; :0!select sum pts_turnover by date, timeBucket, venue from facts];
+    if[scope = `venue_symbol; :0!select sum pts_turnover by date, venue, sym, topixCapGrp from facts];
+    if[scope = `venue_symbol_bucket; :0!select sum pts_turnover by date, timeBucket, venue, sym, topixCapGrp from facts];
+    if[scope = `venue_topix_cap_group; :0!select sum pts_turnover by date, venue, topixCapGrp from facts];
+    if[scope = `venue_topix_cap_group_bucket; :0!select sum pts_turnover by date, timeBucket, venue, topixCapGrp from facts];
+    '": "sv string (`unsupportedRollupScope;scope)
+    };
+
 {{ calculation_namespace }}.rollupReversionFacts:{[facts;scope;metricName]
     factsWithMetric: update metricValue: facts metricName from facts;
-    rolled:
-        $[scope = `market;
-            0!select
-                metricValue: avg metricValue,
-                horizon_sort_order: first horizon_sort_order,
-                positive_reversion_ratio: avg positive_reversion_ratio,
-                trade_count: sum trade_count,
-                notional: sum notional,
-                valid_primary_quote_ratio: avg valid_primary_quote_ratio
-            by date, venue, horizon from factsWithMetric;
-        scope = `market_bucket;
-            0!select
-                metricValue: avg metricValue,
-                horizon_sort_order: first horizon_sort_order,
-                positive_reversion_ratio: avg positive_reversion_ratio,
-                trade_count: sum trade_count,
-                notional: sum notional,
-                valid_primary_quote_ratio: avg valid_primary_quote_ratio
-            by date, timeBucket, venue, horizon from factsWithMetric;
-        scope = `topix_cap_group;
-            0!select
-                metricValue: avg metricValue,
-                horizon_sort_order: first horizon_sort_order,
-                positive_reversion_ratio: avg positive_reversion_ratio,
-                trade_count: sum trade_count,
-                notional: sum notional,
-                valid_primary_quote_ratio: avg valid_primary_quote_ratio
-            by date, venue, horizon, topixCapGrp from factsWithMetric;
-        scope = `topix_cap_group_bucket;
-            0!select
-                metricValue: avg metricValue,
-                horizon_sort_order: first horizon_sort_order,
-                positive_reversion_ratio: avg positive_reversion_ratio,
-                trade_count: sum trade_count,
-                notional: sum notional,
-                valid_primary_quote_ratio: avg valid_primary_quote_ratio
-            by date, timeBucket, venue, horizon, topixCapGrp from factsWithMetric;
-        scope = `symbol;
-            0!select
-                metricValue: avg metricValue,
-                horizon_sort_order: first horizon_sort_order,
-                positive_reversion_ratio: avg positive_reversion_ratio,
-                trade_count: sum trade_count,
-                notional: sum notional,
-                valid_primary_quote_ratio: avg valid_primary_quote_ratio
-            by date, venue, horizon, sym, topixCapGrp from factsWithMetric;
-            0!select
-                metricValue: avg metricValue,
-                horizon_sort_order: first horizon_sort_order,
-                positive_reversion_ratio: avg positive_reversion_ratio,
-                trade_count: sum trade_count,
-                notional: sum notional,
-                valid_primary_quote_ratio: avg valid_primary_quote_ratio
-            by date, timeBucket, venue, horizon, sym, topixCapGrp from factsWithMetric
-            ];
-    @[cols rolled; where cols rolled = `metricValue; :; metricName] xcol rolled
+    if[scope = `market;
+        :0!select
+            metricValue: avg metricValue,
+            horizon_sort_order: first horizon_sort_order,
+            positive_reversion_ratio: avg positive_reversion_ratio,
+            trade_count: sum trade_count,
+            notional: sum notional,
+            valid_primary_quote_ratio: avg valid_primary_quote_ratio
+        by date, venue, horizon from factsWithMetric
+        ];
+    if[scope = `market_bucket;
+        :0!select
+            metricValue: avg metricValue,
+            horizon_sort_order: first horizon_sort_order,
+            positive_reversion_ratio: avg positive_reversion_ratio,
+            trade_count: sum trade_count,
+            notional: sum notional,
+            valid_primary_quote_ratio: avg valid_primary_quote_ratio
+        by date, timeBucket, venue, horizon from factsWithMetric
+        ];
+    if[scope = `topix_cap_group;
+        :0!select
+            metricValue: avg metricValue,
+            horizon_sort_order: first horizon_sort_order,
+            positive_reversion_ratio: avg positive_reversion_ratio,
+            trade_count: sum trade_count,
+            notional: sum notional,
+            valid_primary_quote_ratio: avg valid_primary_quote_ratio
+        by date, venue, horizon, topixCapGrp from factsWithMetric
+        ];
+    if[scope = `topix_cap_group_bucket;
+        :0!select
+            metricValue: avg metricValue,
+            horizon_sort_order: first horizon_sort_order,
+            positive_reversion_ratio: avg positive_reversion_ratio,
+            trade_count: sum trade_count,
+            notional: sum notional,
+            valid_primary_quote_ratio: avg valid_primary_quote_ratio
+        by date, timeBucket, venue, horizon, topixCapGrp from factsWithMetric
+        ];
+    if[scope = `symbol;
+        :0!select
+            metricValue: avg metricValue,
+            horizon_sort_order: first horizon_sort_order,
+            positive_reversion_ratio: avg positive_reversion_ratio,
+            trade_count: sum trade_count,
+            notional: sum notional,
+            valid_primary_quote_ratio: avg valid_primary_quote_ratio
+        by date, venue, horizon, sym, topixCapGrp from factsWithMetric
+        ];
+    if[scope = `symbol_bucket;
+        :0!select
+            metricValue: avg metricValue,
+            horizon_sort_order: first horizon_sort_order,
+            positive_reversion_ratio: avg positive_reversion_ratio,
+            trade_count: sum trade_count,
+            notional: sum notional,
+            valid_primary_quote_ratio: avg valid_primary_quote_ratio
+        by date, timeBucket, venue, horizon, sym, topixCapGrp from factsWithMetric
+        ];
+    '": "sv string (`unsupportedRollupScope;scope)
     };
 
 {{ calculation_namespace }}.rollupFactsForScope:{[facts;metricName;scope]
     family: {{ calculation_namespace }}.metricRollupFamily metricName;
     if[family = `activity; :{{ calculation_namespace }}.rollupActivityFacts[facts;scope]];
+    if[family = `pts_activity; :{{ calculation_namespace }}.rollupPtsActivityFacts[facts;scope]];
     if[family = `liquidity; :{{ calculation_namespace }}.rollupLiquidityFacts[facts;scope]];
     if[family = `volatility; :{{ calculation_namespace }}.rollupVolatilityFacts[facts;scope]];
     if[family = `reversion; :{{ calculation_namespace }}.rollupReversionFacts[facts;scope;metricName]];
@@ -450,6 +501,40 @@
     if[scope = `symbol_bucket;
         :update aggregationLevel:`symbol_bucket, groupType:`sym, groupValue:sym from facts
         ];
+    if[scope = `venue;
+        :update aggregationLevel:`venue, groupType:`venue, groupValue:venue from facts
+        ];
+    if[scope = `venue_bucket;
+        :update aggregationLevel:`venue_bucket, groupType:`venue, groupValue:venue from facts
+        ];
+    if[scope = `venue_symbol;
+        :update
+            aggregationLevel:`venue_symbol,
+            groupType: (count i) # enlist `venue`sym,
+            groupValue: {x,y}'[venue;sym]
+        from facts
+        ];
+    if[scope = `venue_symbol_bucket;
+        :update
+            aggregationLevel:`venue_symbol_bucket,
+            groupType: (count i) # enlist `venue`sym,
+            groupValue: {x,y}'[venue;sym]
+        from facts
+        ];
+    if[scope = `venue_topix_cap_group;
+        :update
+            aggregationLevel:`venue_topix_cap_group,
+            groupType: (count i) # enlist `venue`topixCapGrp,
+            groupValue: {x,y}'[venue;topixCapGrp]
+        from facts
+        ];
+    if[scope = `venue_topix_cap_group_bucket;
+        :update
+            aggregationLevel:`venue_topix_cap_group_bucket,
+            groupType: (count i) # enlist `venue`topixCapGrp,
+            groupValue: {x,y}'[venue;topixCapGrp]
+        from facts
+        ];
     '": "sv string (`unsupportedRollupScope;scope)
     };
 
@@ -465,53 +550,97 @@
 
 {{ calculation_namespace }}.rollupMetricResult:{[facts;metricName;aggregationLevels]
     if[0=count facts; :0!facts];
+    mmsrFamily: {{ calculation_namespace }}.metricRollupFamily metricName;
     mmsrColumnNames: cols facts;
     mmsrHasBucket:`timeBucket in mmsrColumnNames;
     mmsrHasSym:`sym in mmsrColumnNames;
     mmsrHasCap:`topixCapGrp in mmsrColumnNames;
+    mmsrHasVenue:`venue in mmsrColumnNames;
     dailyFacts: $[mmsrHasBucket; select from facts where timeBucket = `DAILY; facts];
     intradayFacts: $[mmsrHasBucket; select from facts where timeBucket <> `DAILY; 0#facts];
     mmsrRollups: ();
-    if[(`market in aggregationLevels) & (0<count dailyFacts);
+    if[(mmsrFamily <> `pts_activity) & (`market in aggregationLevels) & (0<count dailyFacts);
         mmsrRollups,:enlist {{ calculation_namespace }}.canonicalizeMetricFacts[
             {{ calculation_namespace }}.labelRolledScope[
                 {{ calculation_namespace }}.rollupFactsForScope[dailyFacts;metricName;`market];
                 `market];
             metricName]
         ];
-    if[(`market_bucket in aggregationLevels) & (0<count intradayFacts);
+    if[(mmsrFamily <> `pts_activity) & (`market_bucket in aggregationLevels) & (0<count intradayFacts);
         mmsrRollups,:enlist {{ calculation_namespace }}.canonicalizeMetricFacts[
             {{ calculation_namespace }}.labelRolledScope[
                 {{ calculation_namespace }}.rollupFactsForScope[intradayFacts;metricName;`market_bucket];
                 `market_bucket];
             metricName]
         ];
-    if[(`topix_cap_group in aggregationLevels) & mmsrHasCap & (0<count dailyFacts);
+    if[(mmsrFamily <> `pts_activity) & (`topix_cap_group in aggregationLevels) & mmsrHasCap & (0<count dailyFacts);
         mmsrRollups,:enlist {{ calculation_namespace }}.canonicalizeMetricFacts[
             {{ calculation_namespace }}.labelRolledScope[
                 {{ calculation_namespace }}.rollupFactsForScope[dailyFacts;metricName;`topix_cap_group];
                 `topix_cap_group];
             metricName]
         ];
-    if[(`topix_cap_group_bucket in aggregationLevels) & mmsrHasCap & (0<count intradayFacts);
+    if[(mmsrFamily <> `pts_activity) & (`topix_cap_group_bucket in aggregationLevels) & mmsrHasCap & (0<count intradayFacts);
         mmsrRollups,:enlist {{ calculation_namespace }}.canonicalizeMetricFacts[
             {{ calculation_namespace }}.labelRolledScope[
                 {{ calculation_namespace }}.rollupFactsForScope[intradayFacts;metricName;`topix_cap_group_bucket];
                 `topix_cap_group_bucket];
             metricName]
         ];
-    if[(`symbol in aggregationLevels) & mmsrHasSym & (0<count dailyFacts);
+    if[(mmsrFamily <> `pts_activity) & (`symbol in aggregationLevels) & mmsrHasSym & (0<count dailyFacts);
         mmsrRollups,:enlist {{ calculation_namespace }}.canonicalizeMetricFacts[
             {{ calculation_namespace }}.labelRolledScope[
                 {{ calculation_namespace }}.rollupFactsForScope[dailyFacts;metricName;`symbol];
                 `symbol];
             metricName]
         ];
-    if[(`symbol_bucket in aggregationLevels) & mmsrHasSym & (0<count intradayFacts);
+    if[(mmsrFamily <> `pts_activity) & (`symbol_bucket in aggregationLevels) & mmsrHasSym & (0<count intradayFacts);
         mmsrRollups,:enlist {{ calculation_namespace }}.canonicalizeMetricFacts[
             {{ calculation_namespace }}.labelRolledScope[
                 {{ calculation_namespace }}.rollupFactsForScope[intradayFacts;metricName;`symbol_bucket];
                 `symbol_bucket];
+            metricName]
+        ];
+    if[(`venue in aggregationLevels) & mmsrHasVenue & (0<count dailyFacts);
+        mmsrRollups,:enlist {{ calculation_namespace }}.canonicalizeMetricFacts[
+            {{ calculation_namespace }}.labelRolledScope[
+                {{ calculation_namespace }}.rollupFactsForScope[dailyFacts;metricName;`venue];
+                `venue];
+            metricName]
+        ];
+    if[(`venue_bucket in aggregationLevels) & mmsrHasVenue & (0<count intradayFacts);
+        mmsrRollups,:enlist {{ calculation_namespace }}.canonicalizeMetricFacts[
+            {{ calculation_namespace }}.labelRolledScope[
+                {{ calculation_namespace }}.rollupFactsForScope[intradayFacts;metricName;`venue_bucket];
+                `venue_bucket];
+            metricName]
+        ];
+    if[(`venue_symbol in aggregationLevels) & mmsrHasVenue & mmsrHasSym & (0<count dailyFacts);
+        mmsrRollups,:enlist {{ calculation_namespace }}.canonicalizeMetricFacts[
+            {{ calculation_namespace }}.labelRolledScope[
+                {{ calculation_namespace }}.rollupFactsForScope[dailyFacts;metricName;`venue_symbol];
+                `venue_symbol];
+            metricName]
+        ];
+    if[(`venue_symbol_bucket in aggregationLevels) & mmsrHasVenue & mmsrHasSym & (0<count intradayFacts);
+        mmsrRollups,:enlist {{ calculation_namespace }}.canonicalizeMetricFacts[
+            {{ calculation_namespace }}.labelRolledScope[
+                {{ calculation_namespace }}.rollupFactsForScope[intradayFacts;metricName;`venue_symbol_bucket];
+                `venue_symbol_bucket];
+            metricName]
+        ];
+    if[(`venue_topix_cap_group in aggregationLevels) & mmsrHasVenue & mmsrHasCap & (0<count dailyFacts);
+        mmsrRollups,:enlist {{ calculation_namespace }}.canonicalizeMetricFacts[
+            {{ calculation_namespace }}.labelRolledScope[
+                {{ calculation_namespace }}.rollupFactsForScope[dailyFacts;metricName;`venue_topix_cap_group];
+                `venue_topix_cap_group];
+            metricName]
+        ];
+    if[(`venue_topix_cap_group_bucket in aggregationLevels) & mmsrHasVenue & mmsrHasCap & (0<count intradayFacts);
+        mmsrRollups,:enlist {{ calculation_namespace }}.canonicalizeMetricFacts[
+            {{ calculation_namespace }}.labelRolledScope[
+                {{ calculation_namespace }}.rollupFactsForScope[intradayFacts;metricName;`venue_topix_cap_group_bucket];
+                `venue_topix_cap_group_bucket];
             metricName]
         ];
     if[0=count mmsrRollups; :0#(0!facts)];
@@ -520,11 +649,30 @@
 
 {{ calculation_namespace }}.preAggregateFacts:{[facts]
     / Reduce per-chunk row count before cross-chunk raze by aggregating
-    / additive activity columns to date/timeBucket/cap-group grain.
+    / additive activity columns while preserving sym so later symbol rollups
+    / remain available in the final unified day result.
+    / Daily rows should not aggregate by timeBucket; intraday rows must.
     if[0=count facts; :0!facts];
-    0!select sum turnover, sum volume, sum trade_count
-        by date, timeBucket, topixCapGrp
-        from facts
+    if[not `timeBucket in cols facts;
+        :0!select sum turnover, sum volume, sum trade_count
+            by date, sym, topixCapGrp
+            from facts
+        ];
+    dailyFacts: select from facts where timeBucket = `DAILY;
+    intradayFacts: select from facts where timeBucket <> `DAILY;
+    slimmed: ();
+    if[0<count intradayFacts;
+        slimmed,: enlist 0!select sum turnover, sum volume, sum trade_count
+            by date, timeBucket, sym, topixCapGrp
+            from intradayFacts
+        ];
+    if[0<count dailyFacts;
+        slimmed,: enlist update timeBucket:`DAILY from 0!select sum turnover, sum volume, sum trade_count
+            by date, sym, topixCapGrp
+            from dailyFacts
+        ];
+    if[0=count slimmed; :0#(0!facts)];
+    0!(uj/) slimmed
     };
 
 {{ calculation_namespace }}.calcActivity:{[runDate;rawTrades;refs;params]
@@ -541,6 +689,24 @@
     where date = runDate,
           tradePrice > 0,
           tradeSize > 0,
+          not null sym;
+    0!result
+    };
+
+{{ calculation_namespace }}.calcPtsTurnover:{[runDate;rawPtsTrades;refs;params]
+    ptsTrades: rawPtsTrades lj `date`sym xkey refs;
+    result: select
+        pts_turnover: sum tradePrice * tradeSize
+    by date,
+       timeBucket: {{ calculation_namespace }}.timeBucket[time; session; auction; params`bucket],
+       sym,
+       topixCapGrp,
+       venue
+    from ptsTrades
+    where date = runDate,
+          tradePrice > 0,
+          tradeSize > 0,
+          not null venue,
           not null sym;
     0!result
     };

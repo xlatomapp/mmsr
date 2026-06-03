@@ -14,7 +14,7 @@ import logging
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date
 from typing import Any
 
 from mmsr.config.models import ReportConfig
@@ -31,6 +31,15 @@ from mmsr.periods.models import ReportPeriod
 from mmsr.periods.symbols import SymbolUniverseSource
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _effective_aggregation_levels(config: ReportConfig) -> tuple[str, ...]:
+    """Return batch-level aggregation levels required by the configured metrics."""
+
+    levels = list(config.kdb.aggregation_levels)
+    if "pts_turnover" in config.metrics and "symbol" not in levels:
+        levels.append("symbol")
+    return tuple(levels)
 
 
 class KdbProductionExecutionError(ValueError):
@@ -212,9 +221,8 @@ class KdbProductionReferenceWindow:
 
     period: ReportPeriod
     trading_days: tuple[date, ...]
-    lookback_days: int
-    calendar_start: date
-    calendar_end: date
+    requested_start: date
+    requested_end: date
 
 
 @dataclass(frozen=True)
@@ -246,13 +254,14 @@ class KdbProductionExecutionPlanner:
 
         bounded_days = _validate_trading_days(period, trading_days)
         explicit_symbols = _clean_string_tuple(symbols or (), "symbols")
+        aggregation_levels = _effective_aggregation_levels(config)
         steps: list[ProductionMetricRunStep] = []
         for trading_day in bounded_days:
             daily_period = _daily_period(period, trading_day)
             for metric_name in config.metrics:
                 metric = self.registry.get(metric_name)
                 parameters = dict(config.metric_parameters_for(metric_name))
-                parameters["aggregation_levels"] = tuple(config.kdb.aggregation_levels)
+                parameters["aggregation_levels"] = aggregation_levels
                 parameters["metric_aggregation_level"] = config.kdb.metric_aggregation_level
                 if metric_name == "parkinson_volatility_bps":
                     parameters["metric_aggregation_level"] = "daily"
@@ -269,7 +278,7 @@ class KdbProductionExecutionPlanner:
                         request=MetricRunRequest(
                             metric=metric,
                             period=daily_period,
-                            group_by=list(config.group_by),
+                            group_by=(["venue", "sym"] if metric_name == "pts_turnover" else list(config.group_by)),
                             parameters=parameters,
                             source_functions=config.kdb.source_functions(),
                             calculation_namespace=config.kdb.calculation_namespace,
@@ -335,12 +344,13 @@ class KdbProductionExecutor:
         config: ReportConfig,
         period: ReportPeriod,
     ) -> KdbProductionReferenceWindow:
-        """Return the previous trading-day reference window from config lookback."""
+        """Return the configured reference window filtered to trading days."""
 
         return _reference_window_from_calendar(
             calendar_source=self.calendar_source,
-            target_period=period,
-            lookback_days=config.reference.lookback_days,
+            template_period=period,
+            reference_start=config.reference.start_date,
+            reference_end=config.reference.end_date,
         )
 
     def build_reference_plan(
@@ -350,7 +360,7 @@ class KdbProductionExecutor:
         period: ReportPeriod,
         symbols: Sequence[str] | None = None,
     ) -> KdbProductionRunPlan:
-        """Build a bounded reference-period plan from ``reference.lookback_days``."""
+        """Build a bounded reference-period plan from configured benchmark dates."""
 
         window = self.build_reference_window(config=config, period=period)
         return self.planner.build_plan(
@@ -489,6 +499,7 @@ class KdbProductionExecutor:
     ) -> tuple[MetricTimeSeries, ...]:
         observations_by_metric: dict[str, list[MetricObservation]] = defaultdict(list)
         child_metadata_by_metric: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        runner_metadata_by_metric: dict[str, dict[str, Any]] = {}
         day_batches = _metric_step_day_batches(plan.steps)
         LOGGER.info(
             "Executing %s production day batch(es) for role=%s",
@@ -522,6 +533,10 @@ class KdbProductionExecutor:
             representative_steps = _representative_steps_by_metric(day_steps)
             for step, series in zip(representative_steps, day_series, strict=True):
                 observations_by_metric[step.metric_name].extend(series.observations)
+                runner_metadata_by_metric[step.metric_name] = {
+                    **runner_metadata_by_metric.get(step.metric_name, {}),
+                    **series.metadata,
+                }
                 child_metadata_by_metric[step.metric_name].append(
                     {
                         "trading_day": step.trading_day,
@@ -551,9 +566,8 @@ class KdbProductionExecutor:
         if reference_window is not None:
             base_metadata.update(
                 {
-                    "reference_lookback_days": reference_window.lookback_days,
-                    "reference_calendar_start": reference_window.calendar_start,
-                    "reference_calendar_end": reference_window.calendar_end,
+                    "reference_start_date": reference_window.requested_start,
+                    "reference_end_date": reference_window.requested_end,
                 }
             )
 
@@ -562,6 +576,7 @@ class KdbProductionExecutor:
                 tuple(observations_by_metric.get(metric_name, ())),
                 metric_name=metric_name,
                 metadata={
+                    **runner_metadata_by_metric.get(metric_name, {}),
                     **base_metadata,
                     "steps": tuple(child_metadata_by_metric.get(metric_name, ())),
                 },
@@ -1005,39 +1020,33 @@ def _format_input_contracts(
 def _reference_window_from_calendar(
     *,
     calendar_source: TradingCalendarSource,
-    target_period: ReportPeriod,
-    lookback_days: int,
+    template_period: ReportPeriod,
+    reference_start: date | None,
+    reference_end: date | None,
 ) -> KdbProductionReferenceWindow:
-    if lookback_days <= 0:
-        raise KdbProductionExecutionError("reference.lookback_days must be positive")
-
-    calendar_end = target_period.start_date - timedelta(days=1)
-    # Trading calendars contain non-trading dates and exchange holidays. Query a
-    # deterministic buffer before the target period, then keep the last requested
-    # trading days so reference execution remains daily/chunk bounded.
-    calendar_start = target_period.start_date - timedelta(days=max((lookback_days * 3) + 14, lookback_days + 14))
-    if calendar_start > calendar_end:
-        raise KdbProductionExecutionError("could not derive a reference calendar range before the target period")
+    if reference_start is None or reference_end is None:
+        raise KdbProductionExecutionError("reference.start_date and reference.end_date must both be configured")
+    if reference_start > reference_end:
+        raise KdbProductionExecutionError("reference.start_date must be on or before reference.end_date")
 
     candidate_days = tuple(
         sorted(
             day
-            for day in calendar_source.trading_days(calendar_start, calendar_end)
-            if calendar_start <= day <= calendar_end
+            for day in calendar_source.trading_days(reference_start, reference_end)
+            if reference_start <= day <= reference_end
         )
     )
-    selected_days = candidate_days[-lookback_days:]
-    if not selected_days:
+    if not candidate_days:
         raise KdbProductionExecutionError(
-            f"trading calendar returned no reference trading days before {target_period.start_date.isoformat()}"
+            "trading calendar returned no reference trading days inside "
+            f"{reference_start.isoformat()}..{reference_end.isoformat()}"
         )
 
     return KdbProductionReferenceWindow(
-        period=_period_for_trading_days(target_period, selected_days),
-        trading_days=selected_days,
-        lookback_days=lookback_days,
-        calendar_start=calendar_start,
-        calendar_end=calendar_end,
+        period=_period_for_trading_days(template_period, candidate_days),
+        trading_days=candidate_days,
+        requested_start=reference_start,
+        requested_end=reference_end,
     )
 
 

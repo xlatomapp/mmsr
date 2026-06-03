@@ -669,7 +669,7 @@ def _format_change(
     if change_abs is not None:
         parts.append(f"change {_format_signed_metric_value(change_abs, unit)}")
     if change_pct is not None:
-        parts.append(f"{change_pct:+.1%}")
+        parts.append(f"{change_pct:+.2%}")
     if not parts:
         return ""
     return " (" + " ".join(parts) + ")"
@@ -684,28 +684,28 @@ def _format_metric_value(value: float | int | None, unit: str) -> str:
         return "not available"
 
     if unit == "ratio":
-        return f"{numeric:.4f}"
+        return f"{numeric:.2f}"
     if unit == "count":
         return f"{numeric:,.0f}"
     if unit == "JPY":
         return f"{numeric:,.0f} JPY"
     if unit:
-        return f"{numeric:,.4f} {unit}"
-    return f"{numeric:,.4f}"
+        return f"{numeric:,.2f} {unit}"
+    return f"{numeric:,.2f}"
 
 
 def _format_signed_metric_value(value: float, unit: str) -> str:
     if not isfinite(float(value)):
         return "not available"
     if unit == "ratio":
-        return f"{value:+.4f}"
+        return f"{value:+.2f}"
     if unit == "count":
         return f"{value:+,.0f}"
     if unit == "JPY":
         return f"{value:+,.0f} JPY"
     if unit:
-        return f"{value:+,.4f} {unit}"
-    return f"{value:+,.4f}"
+        return f"{value:+,.2f} {unit}"
+    return f"{value:+,.2f}"
 
 
 def _average_numeric(values: Iterable[float | int | None]) -> float | None:

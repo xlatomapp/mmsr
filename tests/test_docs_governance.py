@@ -32,28 +32,17 @@ def test_readme_documents_offline_demo_quickstart() -> None:
     assert "does not query kdb+" in text
 
 
-def test_readme_documents_mock_kdb_demo_quickstart() -> None:
-    text = (ROOT / "README.md").read_text(encoding="utf-8")
-
-    assert "poetry run mmsr mock-kdb-demo --output reports/mock_kdb_demo.html" in text
-    assert "executes rendered q templates" in text
-    assert "KdbMetricRunner" in text
-    assert "without a live\nkdb+ connection or PyKX import" in text
-
-
 def test_mkdocs_quickstart_documents_drilldown_demo_options() -> None:
     doc = (ROOT / "docs" / "index.md").read_text(encoding="utf-8")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
     required_terms = [
         "poetry run mmsr offline-demo --output reports/offline_demo.html",
-        "poetry run mmsr mock-kdb-demo --output reports/mock_kdb_demo.html",
         "--max-drilldown-rows",
         "--no-drilldown-page",
         "--include-intraday-heatmaps",
         "sector, segment, and market-cap",
         "does not query kdb+",
-        "without a live\nkdb+ connection or PyKX import",
     ]
 
     for term in required_terms:

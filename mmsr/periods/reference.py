@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 
 
 @dataclass(frozen=True)
@@ -16,7 +17,8 @@ class ReferenceSpec:
     """
 
     method: str = "same_intraday_bucket"
-    lookback_days: int = 20
+    start_date: date | None = None
+    end_date: date | None = None
     statistic: str = "median"
     observation_unit: str = "trading_day"
     comparable_keys: tuple[str, ...] = ("metric_name", "time_bucket", "group")
@@ -24,8 +26,10 @@ class ReferenceSpec:
     min_samples_for_empirical_percentile: int = 10
 
     def __post_init__(self) -> None:
-        if self.lookback_days <= 0:
-            raise ValueError("lookback_days must be positive")
+        if (self.start_date is None) != (self.end_date is None):
+            raise ValueError("reference start_date and end_date must be provided together")
+        if self.start_date is not None and self.end_date is not None and self.start_date > self.end_date:
+            raise ValueError("reference.start_date must be on or before reference.end_date")
         if not self.observation_unit:
             raise ValueError("observation_unit must be non-empty")
         if not self.comparable_keys:

@@ -807,12 +807,11 @@ layer or requiring live kdb access.
 - `build_market_monitor_report()` inserts the drilldown page only when matching
   group-level comparison rows are present, and the page remains opt-out through
   report options.
-- `OfflineDemoReportOptions` and `MockKdbIntegrationDemoOptions` pass
-  drilldown-page inclusion and row-limit controls into the canonical market
-  report options.
-- The bundled `offline-demo` and `mock-kdb-demo` CLI commands expose
-  `--no-drilldown-page` and `--max-drilldown-rows` so sample reports can
-  demonstrate default, opt-out, and compact drilldown-table behavior.
+- `OfflineDemoReportOptions` passes drilldown-page inclusion and row-limit
+  controls into the canonical market report options.
+- The bundled `offline-demo` CLI command exposes `--no-drilldown-page` and
+  `--max-drilldown-rows` so sample reports can demonstrate default, opt-out,
+  and compact drilldown-table behavior.
 - The bundled offline demo now visibly renders the drilldown page from synthetic
   market-cap and segment comparison facts without live kdb+, PyKX, real market
   data, or LLM access.
@@ -972,14 +971,14 @@ installs.
   `mkdocs.yml`: `mkdocs`, `mkdocs-material`, and `mkdocstrings[python]`.
 - README documents the runtime, kdb extra, `dev`, and `doc` setup paths.
 - `docs/index.md` provides a MkDocs quickstart that mirrors the README demo
-  commands, including offline/mock-kdb drilldown examples with
-  `--max-drilldown-rows` and `--no-drilldown-page`.
+  command, including offline drilldown examples with `--max-drilldown-rows`
+  and `--no-drilldown-page`.
 - Tox and CI include a documentation build path using `poetry install --with doc`
   and `mkdocs build --strict`.
 - CLI behavior snapshots preserve the Typer command surface for
-  `offline-demo` and `mock-kdb-demo`: top-level help, command defaults,
-  override parsing, option presence, and offline/mock-kdb safety language.
-- Both demo commands expose `--include-intraday-heatmaps` as an explicit opt-in
+  `offline-demo`: top-level help, command defaults, override parsing, option
+  presence, and offline safety language.
+- The demo command exposes `--include-intraday-heatmaps` as an explicit opt-in
   while keeping dense time-bucket line charts as the default intraday view.
 - The CLI now uses Typer as an explicit runtime dependency because the project
   owner requested Typer ergonomics for the installed `mmsr` command.
@@ -997,8 +996,8 @@ installs.
 - `dev` and `doc` setup paths are documented and validated in CI or local tests.
 - Runtime install remains lean and does not pull documentation or development
   tooling unless explicitly requested.
-- CLI tests cover the existing `offline-demo` and `mock-kdb-demo` command
-  behavior before and after any Typer migration.
+- CLI tests cover the existing `offline-demo` command behavior before and after
+  any Typer migration.
 - The roadmap and journal explain any new dependency added.
 
 

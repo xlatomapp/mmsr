@@ -103,6 +103,63 @@ def test_production_planner_overrides_volatility_to_daily_aggregation_level() ->
     assert params_by_metric["parkinson_volatility_bps"]["metric_aggregation_level"] == "daily"
 
 
+def test_production_planner_requests_pts_turnover_with_venue_symbol_group() -> None:
+    config = ReportConfig(
+        title="Daily Monitor",
+        metrics=["turnover", "pts_turnover"],
+        group_by=["topixCapGrp"],
+        kdb=KdbExecutionConfig(
+            raw_data_functions=KdbRawDataFunctionsConfig(namespace=".sb.mmsr"),
+            aggregation_levels=["market", "topix_cap_group", "venue", "venue_symbol"],
+        ),
+    )
+
+    plan = KdbProductionExecutionPlanner().build_plan(
+        config=config,
+        period=_period(),
+        trading_days=[date(2026, 5, 1)],
+        symbols=["7203", "6758"],
+    )
+
+    request_by_metric = {step.metric_name: step.request for step in plan.steps}
+    assert request_by_metric["turnover"].group_by == ["topixCapGrp"]
+    assert request_by_metric["pts_turnover"].group_by == ["venue", "sym"]
+    assert request_by_metric["pts_turnover"].parameters["aggregation_levels"] == (
+        "market",
+        "topix_cap_group",
+        "venue",
+        "venue_symbol",
+        "symbol",
+    )
+
+
+def test_production_planner_adds_symbol_aggregation_when_pts_turnover_enabled() -> None:
+    config = ReportConfig(
+        title="Daily Monitor",
+        metrics=["turnover", "pts_turnover"],
+        group_by=["topixCapGrp"],
+        kdb=KdbExecutionConfig(
+            raw_data_functions=KdbRawDataFunctionsConfig(namespace=".sb.mmsr"),
+            aggregation_levels=["market", "venue", "venue_symbol"],
+        ),
+    )
+
+    plan = KdbProductionExecutionPlanner().build_plan(
+        config=config,
+        period=_period(),
+        trading_days=[date(2026, 5, 1)],
+        symbols=["7203", "6758"],
+    )
+
+    for step in plan.steps:
+        assert step.request.parameters["aggregation_levels"] == (
+            "market",
+            "venue",
+            "venue_symbol",
+            "symbol",
+        )
+
+
 def test_render_day_includes_metric_aggregation_level_in_metric_params() -> None:
     config = ReportConfig(
         title="Daily Monitor",
@@ -215,7 +272,10 @@ def test_production_reference_plan_uses_previous_trading_days_and_chunks() -> No
         title="Daily Monitor",
         metrics=["volume"],
         group_by=["sym"],
-        reference=ReferenceComparisonConfig(lookback_days=3),
+        reference=ReferenceComparisonConfig(
+            start_date=date(2026, 4, 27),
+            end_date=date(2026, 4, 30),
+        ),
         kdb=KdbExecutionConfig(
             raw_data_functions=KdbRawDataFunctionsConfig(namespace=".sb.mmsr"),
             symbol_chunk_size=2,
@@ -252,7 +312,10 @@ def test_production_plan_summary_reports_scope_and_contracts() -> None:
         title="Daily Monitor",
         metrics=["volume", "quoted_spread_bps"],
         group_by=["sym"],
-        reference=ReferenceComparisonConfig(lookback_days=2),
+        reference=ReferenceComparisonConfig(
+            start_date=date(2026, 4, 28),
+            end_date=date(2026, 4, 30),
+        ),
         kdb=KdbExecutionConfig(
             calculation_namespace=".desk.mmsrCalc",
             raw_data_functions=KdbRawDataFunctionsConfig(namespace=".sb.mmsr"),
@@ -528,12 +591,68 @@ def test_production_executor_batches_metrics_by_day_and_symbol_chunk() -> None:
     assert all(step["batch_metric_count"] == 2 for metric_series in series for step in metric_series.metadata["steps"])
 
 
+def test_production_executor_preserves_runner_metadata_on_final_series() -> None:
+    config = ReportConfig(
+        title="Daily Monitor",
+        metrics=["turnover"],
+        group_by=["topixCapGrp"],
+        kdb=KdbExecutionConfig(symbol_chunk_size=1),
+    )
+
+    class MetadataRunner(FakeRunner):
+        def _series_for_request(self, request):  # type: ignore[no-untyped-def]
+            day = request.period.start_date
+            return MetricTimeSeries.from_observations(
+                [
+                    MetricObservation(
+                        metric_name=request.metric.name,
+                        date=day,
+                        time_bucket="DAILY",
+                        group={"topixCapGrp": "Large"},
+                        value=100,
+                    )
+                ],
+                metric_name=request.metric.name,
+                metadata={
+                    "supplemental_symbol_observations": (
+                        MetricObservation(
+                            metric_name=request.metric.name,
+                            date=day,
+                            time_bucket="DAILY",
+                            group={"sym": "7203"},
+                            value=40,
+                        ),
+                    )
+                },
+            )
+
+    runner = MetadataRunner()
+    executor = KdbProductionExecutor(
+        runner=runner,  # type: ignore[arg-type]
+        calendar_source=FakeCalendar(),
+    )
+
+    series = executor.run(
+        config=config,
+        period=_period(),
+        symbols=["7203"],
+    )
+
+    supplemental = series[0].metadata["supplemental_symbol_observations"]
+    assert len(supplemental) == 1
+    assert supplemental[0].group == {"sym": "7203"}
+    assert supplemental[0].value == 40
+
+
 def test_production_executor_run_reference_marks_reference_metadata() -> None:
     config = ReportConfig(
         title="Daily Monitor",
         metrics=["turnover"],
         group_by=["sym"],
-        reference=ReferenceComparisonConfig(lookback_days=2),
+        reference=ReferenceComparisonConfig(
+            start_date=date(2026, 4, 28),
+            end_date=date(2026, 4, 30),
+        ),
         kdb=KdbExecutionConfig(symbol_chunk_size=1),
     )
     runner = FakeRunner()
@@ -548,10 +667,11 @@ def test_production_executor_run_reference_marks_reference_metadata() -> None:
         symbols=["7203"],
     )
 
-    assert len(runner.requests) == 2  # last 2 reference days * 1 chunk * 1 metric
+    assert len(runner.requests) == 2  # configured reference trading days * 1 chunk * 1 metric
     assert len(series) == 1
     assert series[0].metadata["execution_role"] == "reference"
-    assert series[0].metadata["reference_lookback_days"] == 2
+    assert series[0].metadata["reference_start_date"] == date(2026, 4, 28)
+    assert series[0].metadata["reference_end_date"] == date(2026, 4, 30)
     assert series[0].metadata["trading_days"] == (
         date(2026, 4, 28),
         date(2026, 4, 30),

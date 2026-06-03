@@ -130,6 +130,122 @@ mmsr render \
   --include-automated-insights
 ```
 
+### PDF export
+
+The preferred generic PDF path is the Python-native renderer:
+
+```bash
+mmsr render-pdf \
+  --config config/report.production_minimal.yaml \
+  --output _output/test.pdf \
+  --kdb-host 192.168.3.99 \
+  --kdb-port 5001 \
+  --inject-simulated-sources \
+  --simulated-source-namespace .sim.mmsr \
+  --simulated-symbol-count 50 \
+  --simulated-points-per-symbol-per-day 1200 \
+  --detailed-trends-granularity daily \
+  --include-automated-insights
+```
+
+This path builds PDF directly from the canonical `ReportDocument` using:
+
+- `matplotlib`
+- `seaborn`
+- `fpdf2`
+
+Install the optional PDF stack first:
+
+```bash
+poetry install -E pdf
+```
+
+`mmsr export-pdf` remains available if you specifically want browser-based
+HTML-to-PDF capture.
+
+The command takes an already-rendered HTML report and asks a Chromium-family
+browser to render it headlessly to PDF.
+
+```bash
+mmsr export-pdf \
+  --input _output/test.html \
+  --output _output/test.pdf
+```
+
+If Chrome/Chromium/Edge is not on `PATH`, pass it explicitly:
+
+```bash
+mmsr export-pdf \
+  --input _output/test.html \
+  --output _output/test.pdf \
+  --browser-path /usr/bin/google-chrome
+```
+
+Supported browser discovery names are:
+
+- `google-chrome`
+- `google-chrome-stable`
+- `chromium`
+- `chromium-browser`
+- `microsoft-edge`
+- `microsoft-edge-stable`
+- `msedge`
+
+The export command uses headless browser PDF capture rather than `window.print()`,
+which gives more predictable pagination for Plotly-heavy reports.
+
+### Quarto / QMD export
+
+The HTML report remains the primary interactive output. In addition, MMSR can
+now render the same production report data to a Quarto-compatible `.qmd`
+document so you can drive PDF, HTML, RevealJS, or PPTX output through Quarto.
+
+The command below runs the normal production kdb-backed pipeline, builds the
+canonical `ReportDocument`, then writes:
+
+- a `.qmd` file
+- a sibling asset directory containing static chart PNGs
+
+```bash
+mmsr render-qmd \
+  --config config/report.production_minimal.yaml \
+  --output _output/test.qmd \
+  --kdb-host 192.168.3.99 \
+  --kdb-port 5001 \
+  --inject-simulated-sources \
+  --simulated-source-namespace .sim.mmsr \
+  --simulated-symbol-count 50 \
+  --simulated-points-per-symbol-per-day 1200 \
+  --detailed-trends-granularity daily \
+  --include-automated-insights
+```
+
+Notes:
+
+- The generated QMD is intended for Quarto, not for the interactive browser UI.
+- Static chart export for the QMD path uses Python-native rendering with
+  `matplotlib` and a light `seaborn` theme. Install the `visuals` extra so the
+  needed plotting stack is available:
+
+  ```bash
+  poetry install -E visuals
+  ```
+- Quarto itself is not bundled by MMSR. Install it separately if you want to
+  render the generated `.qmd` into other formats.
+
+Example Quarto renders:
+
+```bash
+quarto render _output/test.qmd --to pdf
+quarto render _output/test.qmd --to html
+quarto render _output/test.qmd --to revealjs
+quarto render _output/test.qmd --to pptx
+```
+
+The `.qmd` front matter already declares these common formats, so the file can
+be used as a document-first output path without replacing the existing HTML
+renderer.
+
 ### Optional q day-cache load/persist hooks
 
 If you want MMSR to load a precomputed unified day-result table from kdb before
@@ -327,36 +443,6 @@ matrix-style bucket × group diagnostic views.
 Use the mock-data demo as a smoke test for the production report format and
 documentation layout only. It does not query kdb+, validate production table
 schemas, or use real market data.
-
-### Mock-kdb integration report
-
-Render the deterministic integration demo that executes rendered q templates
-through `KdbMetricRunner` and a deterministic mock kdb client before using the
-same canonical report builder:
-
-```bash
-poetry run mmsr mock-kdb-demo --output reports/mock_kdb_demo.html
-```
-
-This path validates the q-template and normalization boundary without a live
-kdb+ connection or PyKX import. It is still synthetic: use it to check integration
-plumbing and report shape, not production table schemas or market data quality.
-It exposes the same drilldown and explicit heatmap opt-in controls as the
-offline demo:
-
-```bash
-poetry run mmsr mock-kdb-demo \
-  --output reports/mock_kdb_demo_compact_drilldown.html \
-  --max-drilldown-rows 10
-
-poetry run mmsr mock-kdb-demo \
-  --output reports/mock_kdb_demo_no_drilldown.html \
-  --no-drilldown-page
-
-poetry run mmsr mock-kdb-demo \
-  --output reports/mock_kdb_demo_with_heatmaps.html \
-  --include-intraday-heatmaps
-```
 
 ### Simulated kdb source functions for dev/debug
 
@@ -627,7 +713,7 @@ automatically when matching group-level comparison rows are present. Configure i
 through `MarketReportOptions.include_drilldown_page`,
 `drilldown_page_title`, `drilldown_table_title`, `drilldown_help_text`,
 `drilldown_group_keys`, and `max_drilldown_rows`. The bundled `offline-demo`
-and `mock-kdb-demo` commands expose the same inclusion and row-limit controls
+command exposes the same inclusion and row-limit controls
 through `--no-drilldown-page` and `--max-drilldown-rows`, so sample reports can
 demonstrate the default page, opt-out behavior, and compact drilldown tables
 from the command line. The bundled `offline-demo` renders the page from

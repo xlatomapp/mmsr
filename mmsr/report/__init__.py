@@ -28,6 +28,11 @@ from mmsr.report.market_report import (
     MarketReportOptions,
     build_market_monitor_report,
 )
+from mmsr.report.render_quarto import (
+    render_report_qmd,
+    render_report_qmd_file,
+)
+from mmsr.report.render_pdf import render_report_pdf_file
 from mmsr.report.metric_docs import (
     MetricDefinitionsAppendixOptions,
     append_metric_definitions_appendix,
@@ -112,6 +117,9 @@ __all__ = [
     "build_reference_target_intraday_profile_chart",
     "build_market_monitor_report",
     "build_metric_definitions_appendix_page",
+    "render_report_qmd",
+    "render_report_qmd_file",
+    "render_report_pdf_file",
     "build_symbol_anomaly_page",
     "build_symbol_detail_index_block",
     "build_symbol_detail_pages",

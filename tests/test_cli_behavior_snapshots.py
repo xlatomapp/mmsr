@@ -86,7 +86,6 @@ def test_top_level_help_snapshot_lists_current_commands() -> None:
     assert "Usage:" in help_text
     assert "mmsr" in help_text
     assert "offline-demo" in help_text
-    assert "mock-kdb-demo" in help_text
     assert CLI_HELP in help_text
 
 
@@ -94,7 +93,6 @@ def test_top_level_help_snapshot_lists_current_commands() -> None:
     ("command", "expected_output"),
     (
         ("offline-demo", "mmsr_offline_demo.html"),
-        ("mock-kdb-demo", "mmsr_mock_kdb_demo.html"),
     ),
 )
 def test_demo_command_default_argument_snapshots(
@@ -139,7 +137,7 @@ def test_demo_command_default_argument_snapshots(
     )
 
 
-@pytest.mark.parametrize("command", ("offline-demo", "mock-kdb-demo"))
+@pytest.mark.parametrize("command", ("offline-demo",))
 def test_demo_command_override_argument_snapshot(command: str) -> None:
     args = _command_params(
         command,
@@ -188,7 +186,7 @@ def test_demo_command_override_argument_snapshot(command: str) -> None:
     assert args["max_drilldown_rows"] == 6
 
 
-@pytest.mark.parametrize("command", ("offline-demo", "mock-kdb-demo"))
+@pytest.mark.parametrize("command", ("offline-demo",))
 def test_demo_command_option_surface_snapshot(command: str) -> None:
     option_names = _command_options(command)
 
@@ -202,19 +200,6 @@ def test_offline_demo_help_preserves_offline_safety_language() -> None:
     assert result.exit_code == 0
     help_text = " ".join(_strip_ansi(result.output).split())
     assert "importing PyKX, connecting to kdb+, or calling an LLM" in help_text
-
-
-def test_mock_kdb_demo_help_preserves_integration_boundary_language() -> None:
-    result = CliRunner().invoke(
-        build_cli_app(),
-        ["mock-kdb-demo", "--help"],
-        prog_name="mmsr",
-    )
-
-    assert result.exit_code == 0
-    help_text = " ".join(_strip_ansi(result.output).split())
-    assert "real q-template and KdbMetricRunner path" in help_text
-
 
 def test_cli_application_uses_typer() -> None:
     app = build_cli_app()

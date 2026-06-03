@@ -312,12 +312,34 @@ class KdbMetricRunner:
                 if row["metricName"] == metric_query.metric_name
                 and _row_matches_group_by(row, metric_query.result_group_by)
             ]
+            supplemental_symbol_rows: list[dict[str, Any]] = []
+            if "sym" not in metric_query.result_group_by:
+                supplemental_symbol_rows = [
+                    row
+                    for row in unified_rows
+                    if row["metricName"] == metric_query.metric_name
+                    and _row_matches_group_by(row, ("sym",))
+                ]
             series = normalize_metric_result(
                 metric_name=metric_query.metric_name,
                 result=normalized_result,
                 group_by=metric_query.result_group_by,
                 metadata=series_metadata,
             )
+            if supplemental_symbol_rows:
+                supplemental_symbol_series = normalize_metric_result(
+                    metric_name=metric_query.metric_name,
+                    result=supplemental_symbol_rows,
+                    group_by=("sym",),
+                    metadata={},
+                )
+                series = replace(
+                    series,
+                    metadata={
+                        **series.metadata,
+                        "supplemental_symbol_observations": supplemental_symbol_series.observations,
+                    },
+                )
             normalized[metric_query.metric_name] = series
         return normalized
 
@@ -600,19 +622,37 @@ def _row_matches_group_by(row: Mapping[str, Any], group_by: Sequence[str]) -> bo
 def _group_from_unified_row(row: Mapping[str, Any]) -> dict[str, str]:
     if "groupType" not in row or "groupValue" not in row:
         return {}
-    group_type = str(row["groupType"])
-    group_value = str(row["groupValue"])
+    raw_group_type = row["groupType"]
+    raw_group_value = row["groupValue"]
+
+    if _is_sequence_group_descriptor(raw_group_type) or _is_sequence_group_descriptor(raw_group_value):
+        group_types = _group_descriptor_sequence(raw_group_type)
+        group_values = _group_descriptor_sequence(raw_group_value)
+        if len(group_types) == len(group_values):
+            return {
+                str(group_key): str(group_value)
+                for group_key, group_value in zip(group_types, group_values, strict=True)
+            }
+        return {}
+
+    group_type = str(raw_group_type)
+    group_value = str(raw_group_value)
 
     if group_type == "market" and group_value in {"ALL", "TSE"}:
         return {}
     if group_type in {"symbol", "sym"}:
         return {"sym": group_value}
-    if "|" in group_type:
-        keys = group_type.split("|")
-        values = group_value.split("|")
-        if len(keys) == len(values):
-            return {key: value for key, value in zip(keys, values, strict=True)}
     return {group_type: group_value}
+
+
+def _is_sequence_group_descriptor(value: Any) -> bool:
+    return isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray))
+
+
+def _group_descriptor_sequence(value: Any) -> list[Any]:
+    if _is_sequence_group_descriptor(value):
+        return list(value)
+    return [value]
 
 
 def _coerce_date(value: Any, row_index: int) -> date:

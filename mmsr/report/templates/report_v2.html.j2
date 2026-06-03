@@ -153,12 +153,22 @@
     }
     .report-header-v2__action {
       align-self: flex-start;
+      border: 0;
       border-radius: 8px;
       background: #00355f;
       color: #fff;
+      cursor: pointer;
+      display: inline-flex;
       font-size: 12px;
       font-weight: 600;
       padding: 8px 12px;
+    }
+    .report-header-v2__action:hover {
+      background: #0c4a7c;
+    }
+    .report-header-v2__action:focus-visible {
+      outline: 2px solid #7fb5ff;
+      outline-offset: 2px;
     }
     .report-page {
       background: transparent;
@@ -519,6 +529,10 @@
       grid-column: 1 / -1;
       width: 100%;
     }
+    .report-page--summary > div[data-block-title="PTS Stats"] {
+      grid-column: 1 / -1;
+      width: 100%;
+    }
     .detailed-trends__detail {
       overflow-x: hidden;
     }
@@ -613,7 +627,7 @@
       display: grid;
       grid-template-columns: minmax(200px, 20%) minmax(0, 1fr);
       gap: 12px;
-      align-items: start;
+      align-items: stretch;
     }
     .turnover-distribution__card {
       border: 1px solid var(--mmsr-border);
@@ -624,7 +638,18 @@
       box-sizing: border-box;
     }
     .turnover-distribution__card--bar {
+      display: flex;
+      flex-direction: column;
       padding: 5px;
+    }
+    .turnover-distribution__card--line {
+      display: flex;
+      flex-direction: column;
+    }
+    .turnover-distribution__card--bar .plotly-chart__figure,
+    .turnover-distribution__card--line .plotly-chart__figure {
+      flex: 1 1 auto;
+      min-height: 0;
     }
     .turnover-distribution__card--table {
       grid-column: 1 / -1;
@@ -742,12 +767,318 @@
     .liquidity-distribution .turnover-distribution__card--bar .turnover-distribution__heatmap-table {
       height: 100%;
     }
+    .pts-stats__stack {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .pts-stats__summary-row {
+      display: grid;
+      grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+      gap: 12px;
+      align-items: stretch;
+    }
+    .pts-stats__summary-card {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-width: 0;
+    }
+    .pts-stats__summary-table-wrap {
+      flex: 1 1 auto;
+      overflow-x: auto;
+    }
+    .pts-stats__summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+    .pts-stats__summary-table th,
+    .pts-stats__summary-table td {
+      border-bottom: 1px solid #dbe4f0;
+      padding: 5px 6px;
+      text-align: left;
+      white-space: nowrap;
+    }
+    .pts-stats__summary-table thead th {
+      color: var(--mmsr-muted);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .pts-stats__summary-table tbody th {
+      color: #1f2d3d;
+      font-weight: 700;
+    }
+    .pts-stats__plot-surface {
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      padding: 0;
+      width: 100%;
+    }
+    .pts-stats__plot-surface .plotly-chart__card-header {
+      margin-bottom: 6px;
+      padding: 0;
+    }
+    .pts-stats__plot-header {
+      align-items: center;
+      display: inline-flex;
+      gap: 6px;
+    }
+    .pts-stats__plot-title {
+      margin: 0;
+    }
+    .pts-stats__plot-header .metric-help {
+      margin-top: 0;
+    }
+    .pts-stats__plot-surface .plotly-chart__visual {
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+    .pts-stats__venues {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .pts-stats__venue-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      align-items: start;
+    }
+    .pts-stats__venue-card {
+      min-width: 0;
+      background: #f9fbff;
+    }
+    .pts-stats__venue-table-wrap {
+      overflow-x: auto;
+    }
+    .pts-stats__venue-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+    .pts-stats__venue-table th,
+    .pts-stats__venue-table td {
+      border-bottom: 1px solid #dbe4f0;
+      padding: 4px 6px;
+      text-align: left;
+      white-space: nowrap;
+    }
+    .pts-stats__venue-table thead th {
+      color: var(--mmsr-muted);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
     @media (max-width: 980px) {
       .turnover-distribution__cards {
         grid-template-columns: 1fr;
       }
       .turnover-distribution__card--table {
         grid-column: auto;
+      }
+      .pts-stats__summary-row {
+        grid-template-columns: 1fr;
+      }
+      .pts-stats__venue-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 10mm;
+      }
+      html,
+      body {
+        background: #fff;
+        font-size: 10pt;
+      }
+      .report-shell {
+        max-width: none;
+        padding: 0;
+      }
+      .report-header-v2 {
+        grid-template-columns: 1fr;
+        gap: 10px;
+        margin-bottom: 8px;
+        padding-bottom: 10px;
+      }
+      .report-header-v2__meta {
+        width: auto;
+      }
+      .report-header-v2__action {
+        display: none;
+      }
+      .brand-header,
+      .brand-footer,
+      .plotly-chart__card,
+      .turnover-distribution__card {
+        box-shadow: none;
+      }
+      .brand-header,
+      .brand-footer,
+      .commentary-block,
+      .html-block,
+      .time-series-chart,
+      .plotly-chart,
+      .heatmap,
+      .metric-card,
+      .plotly-chart__card,
+      .turnover-distribution__card {
+        background: #fff;
+      }
+      .report-page {
+        break-inside: auto;
+        page-break-inside: auto;
+        margin: 0;
+        padding: 0;
+      }
+      .report-page + .report-page {
+        break-before: page;
+        page-break-before: always;
+        margin-top: 0;
+      }
+      .report-page__header {
+        margin-bottom: 8px;
+      }
+      .report-page__index,
+      .report-page__title,
+      .turnover-distribution__title {
+        font-size: 20pt;
+      }
+      .report-title {
+        font-size: 24pt;
+      }
+      .report-page--summary {
+        display: block;
+      }
+      .report-page--summary > .html-block[data-block-title="Report Meta"],
+      .report-page--summary > .html-block[data-block-title="Market KPI Snapshot"],
+      .report-page--summary > .html-block[data-block-title="Market Overview"],
+      .report-page--summary > .html-block[data-block-title="Automated Insight Summary"],
+      .report-page--summary > .html-block[data-block-title="Executive Market Overview"],
+      .report-page--summary > .metric-grid,
+      .report-page--summary > .time-series-chart,
+      .report-page--summary > .heatmap,
+      .report-page--summary > .metric-table,
+      .report-page--summary > .commentary-block,
+      .report-page--summary > .html-block {
+        grid-column: auto;
+        grid-row: auto;
+      }
+      .metric-grid,
+      .pts-stats__summary-row,
+      .turnover-distribution__cards,
+      .pts-stats__venue-grid,
+      .brand-header__content {
+        grid-template-columns: 1fr !important;
+      }
+      .kpi-snapshot {
+        display: flex !important;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .kpi-snapshot__card {
+        break-inside: avoid;
+        box-shadow: none;
+        display: inline-flex;
+        flex: 0 0 calc(50% - 4px);
+        flex-direction: column;
+        page-break-inside: avoid;
+        padding: 8px 10px;
+        vertical-align: top;
+        width: calc(50% - 4px) !important;
+      }
+      .kpi-snapshot__value {
+        font-size: 18pt;
+      }
+      .kpi-snapshot__mini {
+        margin-top: 6px;
+      }
+      .time-series-chart__visual,
+      .time-series-chart__data,
+      .plotly-chart__visual,
+      .heatmap__visual,
+      .heatmap__data {
+        border: 1px solid var(--mmsr-border);
+        border-radius: 8px;
+        overflow: visible;
+        padding: 8px;
+        background: #fff;
+      }
+      .plotly-chart__figure,
+      .time-series-chart__svg {
+        min-width: 0 !important;
+        width: 100% !important;
+      }
+      .plotly-chart__figure,
+      .js-plotly-plot,
+      .plot-container,
+      .svg-container,
+      .main-svg {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        max-width: 100% !important;
+        width: 100% !important;
+      }
+      .plotly-chart__visual > .plotly-chart__figure,
+      .turnover-distribution__card .plotly-chart__figure,
+      .detailed-trends__chart .plotly-chart__figure {
+        min-width: 0 !important;
+      }
+      .plotly-chart__figure {
+        min-height: 200px;
+      }
+      .detailed-trends .plotly-chart__figure {
+        min-height: 220px;
+      }
+      .turnover-distribution__card,
+      .plotly-chart__card,
+      .pts-stats__plot-surface,
+      .turnover-distribution__chart,
+      .detailed-trends__mini,
+      .kpi-snapshot__card {
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow: visible;
+      }
+      .metric-help__body,
+      .js-plotly-plot .modebar {
+        display: none !important;
+      }
+      .detailed-trends__grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .detailed-trends__mini {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+      .plotly-chart__visual,
+      .time-series-chart__visual,
+      .heatmap__visual {
+        margin-left: 0;
+        margin-right: 0;
+      }
+      table,
+      tr,
+      td,
+      th,
+      section,
+      article,
+      .html-block,
+      .metric-card,
+      .turnover-distribution__card,
+      .plotly-chart__card {
+        break-inside: avoid;
+        page-break-inside: avoid;
       }
     }
     .metric-card {
@@ -930,21 +1261,51 @@
       padding: 12px;
       background: linear-gradient(180deg, #f9fbff 0%, var(--mmsr-panel) 100%);
     }
-    .time-series-chart__data, .plotly-chart__data-summary, .heatmap__data {
+    .time-series-chart__data, .heatmap__data {
       margin-top: 10px;
-    }
-    .plotly-chart__data-summary {
-      color: var(--mmsr-muted);
-      font-size: 13px;
-    }
-    .plotly-chart__data-summary summary {
-      cursor: pointer;
-      font-weight: 700;
-      margin-bottom: 6px;
     }
     .plotly-chart__figure {
       min-height: 360px;
       min-width: 640px;
+    }
+    .plotly-chart .component-heading {
+      border-bottom: 1px solid var(--mmsr-border);
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+    }
+    .plotly-chart .component-heading h3 {
+      font-size: 20px;
+      line-height: 1.25;
+    }
+    .plotly-chart--sectioned {
+      background: transparent;
+      border: 0;
+      margin-top: 0;
+      padding: 0;
+    }
+    .plotly-chart__card {
+      border: 1px solid var(--mmsr-border);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 1px 6px rgba(16, 39, 66, 0.06);
+      padding: 8px;
+      box-sizing: border-box;
+    }
+    .plotly-chart__card-header {
+      align-items: center;
+      display: flex;
+      gap: 8px;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .plotly-chart__card-header .component-heading__help {
+      flex-wrap: nowrap;
+      gap: 0;
+    }
+    .plotly-chart--sectioned .plotly-chart__visual {
+      background: transparent;
+      border: 0;
+      padding: 0;
     }
     .time-series-chart__data summary, .heatmap__data summary {
       color: var(--mmsr-muted);
@@ -1519,7 +1880,7 @@
             <p class="report-header-v2__value">{{ header.get("benchmark_period_text", "n/a") }}</p>
           </article>
         </div>
-        <span class="report-header-v2__action">Export PDF</span>
+        <button class="report-header-v2__action" type="button" data-export-pdf>Export PDF</button>
       </section>
     </header>
 
@@ -1572,6 +1933,10 @@
                 <div class="html-block__body">{{ block.body_html | safe }}</div>
               </div>
             {% elif block.title == "Intraday Liquidity Distribution" %}
+              <div data-block-title="{{ block.title }}">
+                <div class="html-block__body">{{ block.body_html | safe }}</div>
+              </div>
+            {% elif block.title == "PTS Stats" %}
               <div data-block-title="{{ block.title }}">
                 <div class="html-block__body">{{ block.body_html | safe }}</div>
               </div>
@@ -1647,6 +2012,12 @@
   </main>
   <script>
     window.addEventListener("DOMContentLoaded", function () {
+      var exportPdfButton = document.querySelector("[data-export-pdf]");
+      if (exportPdfButton) {
+        exportPdfButton.addEventListener("click", function () {
+          window.print();
+        });
+      }
       var closeMetricHelp = function (exceptNode) {
         document.querySelectorAll(".metric-help[open]").forEach(function (node) {
           if (exceptNode && node === exceptNode) {
@@ -1700,6 +2071,31 @@
         };
         return Object.assign({}, base, config || {});
       };
+      var resizePlotlyForPrint = function () {
+        if (!window.Plotly) {
+          return;
+        }
+        document.querySelectorAll('.js-plotly-plot').forEach(function (node) {
+          var parent = node.parentElement;
+          var width = parent ? Math.max(280, Math.floor(parent.getBoundingClientRect().width)) : null;
+          var layout = {autosize: true};
+          if (width) {
+            layout.width = width;
+          }
+          try {
+            window.Plotly.relayout(node, layout);
+            window.Plotly.Plots.resize(node);
+          } catch (error) {
+            /* ignore print resize failures */
+          }
+        });
+      };
+      window.addEventListener('beforeprint', function () {
+        resizePlotlyForPrint();
+      });
+      window.addEventListener('afterprint', function () {
+        resizePlotlyForPrint();
+      });
       var renderCharts = function () {
         if (!window.Plotly) {
           return;

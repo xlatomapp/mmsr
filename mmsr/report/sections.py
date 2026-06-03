@@ -696,8 +696,8 @@ def _build_session_mix_bar_figure(
         ref_value = float(reference_session.get(session_key, 0.0))
         cur_value = float(current_session.get(session_key, 0.0))
         text = [
-            f"<b>{session_label}</b><br>{ref_value:.1f}%" if ref_value >= 20.0 else "",
-            f"<b>{session_label}</b><br>{cur_value:.1f}%" if cur_value >= 20.0 else "",
+            f"<b>{session_label}</b><br>{ref_value:.2f}%" if ref_value >= 20.0 else "",
+            f"<b>{session_label}</b><br>{cur_value:.2f}%" if cur_value >= 20.0 else "",
         ]
         traces.append(
             {
@@ -741,7 +741,7 @@ def _build_session_mix_bar_figure(
                     "yref": "y",
                     "x": x_label,
                     "y": top,
-                    "text": f"<b>{session_label}</b><br>{value:.1f}%",
+                    "text": f"<b>{session_label}</b><br>{value:.2f}%",
                     "showarrow": True,
                     "arrowhead": 0,
                     "arrowcolor": "#6f7d90",
@@ -1059,8 +1059,8 @@ def _build_turnover_group_session_heatmap_table_html(
             current_value = current_share.get(row, {}).get(session)
             reference_value = reference_share.get(row, {}).get(session)
             delta_pct = _turnover_cell_delta_pct(current_value, reference_value)
-            current_text = "n/a" if current_value is None else f"{current_value:.1f}%"
-            delta_text = "n/a" if delta_pct is None else f"{delta_pct:+.1%}"
+            current_text = "n/a" if current_value is None else f"{current_value:.2f}%"
+            delta_text = "n/a" if delta_pct is None else f"{delta_pct:+.2%}"
             delta_class = _turnover_delta_cell_class(delta_pct)
             delta_bucket = _turnover_heatmap_delta_bucket(delta_pct)
             cells.append(
@@ -1300,7 +1300,10 @@ def build_summary_liquidity_distribution_html_block(
             f'<tr class="turnover-distribution__heatmap-row{" is-selected" if str(row.get("metric_name", "")) == default_metric else ""}" '
             f'data-liquidity-metric="{escape(str(row.get("metric_name", "")))}" '
             f'aria-selected="{"true" if str(row.get("metric_name", "")) == default_metric else "false"}">'
-            f"<th>{escape(str(row.get('label', '')))}</th>"
+            '<th><div class="metric-table__metric-cell">'
+            f'<span>{escape(str(row.get("label", "")))}</span>'
+            f'{str(row.get("help_html", ""))}'
+            "</div></th>"
             f'<td class="turnover-distribution__heatmap-cell"><span class="turnover-distribution__heatmap-current">{escape(str(row.get("reference_text", "n/a")))}</span></td>'
             f'<td class="turnover-distribution__heatmap-cell"><span class="turnover-distribution__heatmap-current">{escape(str(row.get("current_text", "n/a")))}</span></td>'
             "</tr>"
@@ -1374,7 +1377,7 @@ def build_summary_liquidity_distribution_html_block(
         '<div class="turnover-distribution__card-title">Metric Selection</div>'
         f'<div data-liquidity-metric-table>{metric_table_html}</div></div>'
         '<div class="turnover-distribution__card turnover-distribution__card--line">'
-        '<div class="turnover-distribution__card-title">Cumulative Intraday Curve</div>'
+        f'<div class="turnover-distribution__card-title" data-liquidity-line-title>{escape(str(initial.get("line_title", initial["title"])))}</div>'
         '<div class="plotly-chart__figure" data-liquidity-line-plot></div>'
         f'<script type="application/json" class="liquidity-line-chart__spec">{line_json}</script>'
         "</div>"
@@ -1387,6 +1390,7 @@ def build_summary_liquidity_distribution_html_block(
         'document.querySelectorAll(".liquidity-distribution").forEach(function(container){'
         'var specNode=container.querySelector("[data-liquidity-plot-spec]");'
         'var lineTarget=container.querySelector("[data-liquidity-line-plot]");'
+        'var lineTitleNode=container.querySelector("[data-liquidity-line-title]");'
         'var titleNode=container.querySelector("[data-liquidity-selected-title]");'
         'if(!specNode||!lineTarget){return;}'
         'var spec=JSON.parse(specNode.textContent||"{}");var rows=spec.rows||{};'
@@ -1408,7 +1412,7 @@ def build_summary_liquidity_distribution_html_block(
         'var rowClass="turnover-distribution__heatmap-row"+(on?" is-selected":"");'
         'var selected=on?"true":"false";'
         'return "<tr class=\\""+rowClass+"\\" data-liquidity-metric=\\""+key+"\\" aria-selected=\\""+selected+"\\">"'
-        '+"<th>"+String(row.label||"")+"</th>"'
+        '+"<th><div class=\\"metric-table__metric-cell\\"><span>"+String(row.label||"")+"</span>"+String(row.help_html||"")+"</div></th>"'
         '+"<td class=\\"turnover-distribution__heatmap-cell\\"><span class=\\"turnover-distribution__heatmap-current\\">"+String(row.reference_text||"n/a")+"</span></td>"'
         '+"<td class=\\"turnover-distribution__heatmap-cell\\"><span class=\\"turnover-distribution__heatmap-current\\">"+String(row.current_text||"n/a")+"</span></td>"'
         '+"</tr>";'
@@ -1419,6 +1423,7 @@ def build_summary_liquidity_distribution_html_block(
         '};'
         'var render=function(){var rowSpec=rows[activeRow]||{}; var cell=rowSpec[activeMetric]||{};'
         'if(titleNode&&cell.title){titleNode.textContent=cell.title;}'
+        'if(lineTitleNode&&(cell.line_title||cell.title)){lineTitleNode.textContent=String(cell.line_title||cell.title);}'
         'Plotly.react(lineTarget,(cell.line_figure||{}).data||[],(cell.line_figure||{}).layout||{},(cell.line_figure||{}).config||{responsive:true,displaylogo:false});'
         'rowNodes.forEach(function(node){var key=node.getAttribute("data-liquidity-row")||"";var on=(key===activeRow);node.classList.toggle("is-selected",on);node.setAttribute("aria-selected",on?"true":"false");});'
         'renderMetricTable();};'
@@ -1573,7 +1578,7 @@ def _intraday_profile_figure(
             "boxpoints": False,
             "xaxis": "x",
             "yaxis": "y",
-            "hovertemplate": ("%{x}<br>Q1 %{q1:.4f}<br>Median %{median:.4f}<br>Q3 %{q3:.4f}<extra>Reference</extra>"),
+            "hovertemplate": ("%{x}<br>Q1 %{q1:.2f}<br>Median %{median:.2f}<br>Q3 %{q3:.2f}<extra>Reference</extra>"),
         },
         {
             "type": "scatter",
@@ -1585,7 +1590,7 @@ def _intraday_profile_figure(
             "line": {"width": 3},
             "xaxis": "x",
             "yaxis": "y",
-            "hovertemplate": "%{x}<br>%{y:.4f}<extra>Current mean</extra>",
+            "hovertemplate": "%{x}<br>%{y:.2f}<extra>Current mean</extra>",
         },
     ]
 
@@ -1616,8 +1621,8 @@ def _intraday_profile_figure(
                 "xaxis": "x2",
                 "yaxis": "y2",
                 "hovertemplate": (
-                    "%{y}<br>Δ %{x:.4f}<br>Current %{customdata[0]:.4f}"
-                    "<br>Reference %{customdata[1]:.4f}<extra></extra>"
+                    "%{y}<br>Δ %{x:.2f}<br>Current %{customdata[0]:.2f}"
+                    "<br>Reference %{customdata[1]:.2f}<extra></extra>"
                 ),
             }
         )
@@ -2327,14 +2332,14 @@ def _format_metric_value(value: float | int | None, unit: str) -> str:
         return "not available"
 
     if unit == "ratio":
-        return f"{numeric:.4f}"
+        return f"{numeric:.2f}"
     if unit == "count":
         return f"{numeric:,.0f}"
     if unit == "JPY":
         return f"{numeric:,.0f} JPY"
     if unit:
-        return f"{numeric:,.4f} {unit}"
-    return f"{numeric:,.4f}"
+        return f"{numeric:,.2f} {unit}"
+    return f"{numeric:,.2f}"
 
 
 def _format_change(comparison: MetricComparison, unit: str) -> str | None:
@@ -2343,7 +2348,7 @@ def _format_change(comparison: MetricComparison, unit: str) -> str | None:
         formatted_change = _format_signed_metric_value(comparison.change_abs, unit)
         parts.append(f"change {formatted_change}")
     if comparison.change_pct is not None:
-        parts.append(f"{comparison.change_pct:+.1%}")
+        parts.append(f"{comparison.change_pct:+.2%}")
     return " ".join(parts) if parts else None
 
 
@@ -2351,11 +2356,11 @@ def _format_signed_metric_value(value: float, unit: str) -> str:
     if not isfinite(float(value)):
         return "not available"
     if unit == "ratio":
-        return f"{value:+.4f}"
+        return f"{value:+.2f}"
     if unit == "count":
         return f"{value:+,.0f}"
     if unit == "JPY":
         return f"{value:+,.0f} JPY"
     if unit:
-        return f"{value:+,.4f} {unit}"
-    return f"{value:+,.4f}"
+        return f"{value:+,.2f} {unit}"
+    return f"{value:+,.2f}"

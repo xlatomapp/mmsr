@@ -1,9 +1,11 @@
-{% macro help_control(label, body, control_label="Help") -%}
+{% macro help_control(label, body, control_label="Help", icon_only=False) -%}
   {% if body %}
     <details class="metric-help">
       <summary class="metric-help__summary metric-info" aria-label="{{ control_label }}{% if label %}: {{ label }}{% endif %}">
         <span class="metric-help__icon" aria-hidden="true">i</span>
-        <span class="metric-help__label">{{ control_label }}</span>
+        {% if not icon_only %}
+          <span class="metric-help__label">{{ control_label }}</span>
+        {% endif %}
       </summary>
       <div class="metric-help__body">
         <strong class="metric-help__title">{{ control_label }}{% if label %}: {{ label }}{% endif %}</strong>

@@ -500,6 +500,77 @@ def test_detailed_trends_block_remains_present_when_metrics_have_no_bucket_point
     assert spec["metrics"]["turnover"]["values"] == []
 
 
+def test_pts_stats_chart_uses_ratio_of_sums_by_venue() -> None:
+    definitions = {
+        "turnover": MetricDefinition(
+            name="turnover",
+            label="Turnover",
+            category="Activity",
+            description="Summed traded value.",
+            formula="sum(price*qty)",
+            interpretation="Higher values indicate more turnover.",
+            unit="JPY",
+            higher_is_better=None,
+            default_aggregation="sum",
+            supports_intraday=True,
+            supports_symbol_level=True,
+            required_tables=["trades"],
+            required_columns=["tradePrice", "tradeSize"],
+        ),
+        "pts_turnover": MetricDefinition(
+            name="pts_turnover",
+            label="PTS Turnover",
+            category="PTS",
+            description="Summed PTS turnover by venue.",
+            formula="sum(price*qty)",
+            interpretation="Higher values indicate more PTS turnover.",
+            unit="JPY",
+            higher_is_better=None,
+            default_aggregation="sum",
+            supports_intraday=True,
+            supports_symbol_level=True,
+            required_tables=["pts_trades"],
+            required_columns=["venue", "tradePrice", "tradeSize"],
+        ),
+    }
+    report_input = MarketReportInput(
+        metric_definitions=definitions,
+        current_series=(
+            MetricTimeSeries(
+                metric_name="turnover",
+                observations=(
+                    MetricObservation("turnover", date(2026, 5, 1), "DAILY", {"topixCapGrp": "Large"}, 60.0),
+                    MetricObservation("turnover", date(2026, 5, 1), "DAILY", {"topixCapGrp": "Small"}, 40.0),
+                    MetricObservation("turnover", date(2026, 5, 2), "DAILY", {"topixCapGrp": "Large"}, 90.0),
+                    MetricObservation("turnover", date(2026, 5, 2), "DAILY", {"topixCapGrp": "Small"}, 60.0),
+                ),
+            ),
+            MetricTimeSeries(
+                metric_name="pts_turnover",
+                observations=(
+                    MetricObservation("pts_turnover", date(2026, 5, 1), "DAILY", {"venue": "Chi-X"}, 12.0),
+                    MetricObservation("pts_turnover", date(2026, 5, 1), "DAILY", {"venue": "ODX"}, 8.0),
+                    MetricObservation("pts_turnover", date(2026, 5, 2), "DAILY", {"venue": "Chi-X"}, 15.0),
+                    MetricObservation("pts_turnover", date(2026, 5, 2), "DAILY", {"venue": "ODX"}, 15.0),
+                ),
+            ),
+        ),
+        comparisons=(),
+    )
+
+    chart = market_report_module._build_pts_stats_chart(
+        report_input,
+        definitions,
+        options=MarketReportOptions(include_metric_definitions_appendix=False),
+    )
+
+    assert chart is not None
+    assert chart.title == "PTS Stats"
+    assert [trace["name"] for trace in chart.figure["data"]] == ["Chi-X", "ODX"]
+    chi_x_trace = chart.figure["data"][0]
+    assert chi_x_trace["y"] == pytest.approx([12.0, 10.0])
+
+
 def test_turnover_distribution_renders_group_session_heatmap_table() -> None:
     definition = MetricDefinition(
         name="turnover",

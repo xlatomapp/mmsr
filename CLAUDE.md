@@ -33,7 +33,6 @@ poetry run isort mmsr tests
 
 # Run offline demo report (no kdb+/PyKX/LLM needed)
 poetry run mmsr offline-demo --output reports/demo.html
-poetry run mmsr mock-kdb-demo --output reports/mock_demo.html
 
 # Build docs
 poetry install --with doc
@@ -90,7 +89,7 @@ config (YAML, Pydantic/dataclass models)
 
 | Module | Role |
 |---|---|
-| `mmsr/cli.py` | Typer CLI: `render`, `plan`, `preflight`, `offline-demo`, `mock-kdb-demo` |
+| `mmsr/cli.py` | Typer CLI: `render`, `plan`, `preflight`, `offline-demo` |
 | `mmsr/config/models.py` | `ReportConfig` and sub-models (branding, kdb, calendar, toxicity, reference) |
 | `mmsr/config/loading.py` | YAML config loading + `ReportPeriod` parsing |
 | `mmsr/periods/` | `ReportPeriod`, trading calendar, intraday bucket grid, symbol universe |
@@ -114,7 +113,7 @@ config (YAML, Pydantic/dataclass models)
 | `mmsr/report/toxicity.py` | Cross-Venue Toxicity/Reversion page |
 | `mmsr/report/overview.py` | Executive market overview |
 | `mmsr/report/templates/` | Jinja2 templates and partials |
-| `mmsr/examples/` | Offline and mock-kdb demo report builders |
+| `mmsr/examples/` | Offline demo report builders and packaged example config |
 | `mmsr/presentation/labels.py` | Human-readable display labels |
 | `mmsr/llm/` | Optional LLM commentary (disabled by default, extras-only) |
 | `mmsr/visuals/` | SVG/visual placeholders |
@@ -135,7 +134,7 @@ config (YAML, Pydantic/dataclass models)
 
 ### Offline / demo data flow
 
-`mmsr offline-demo` and `mmsr mock-kdb-demo` use synthetic fixture data but route through the **same** `build_market_monitor_report()` and the same Jinja2 template. They never import PyKX or call an LLM.
+`mmsr offline-demo` uses synthetic fixture data but routes through the **same** `build_market_monitor_report()` and the same Jinja2 template. It never imports PyKX or calls an LLM.
 
 ## Key design rules
 

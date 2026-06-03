@@ -419,7 +419,7 @@ def _reversion_curve_traces(
                 "y": [point.reversion_bps for point in venue_points],
                 "text": [_point_hover_text(point) for point in venue_points],
                 "marker": {"symbol": ["circle-open" if point.low_confidence else "circle" for point in venue_points]},
-                "hovertemplate": ("%{text}<br><b>%{y:+.4f} bps</b><extra>%{fullData.name}</extra>"),
+                "hovertemplate": ("%{text}<br><b>%{y:+.2f} bps</b><extra>%{fullData.name}</extra>"),
             }
         )
     return traces
@@ -428,7 +428,7 @@ def _reversion_curve_traces(
 def _point_hover_text(point: ReversionCurvePoint) -> str:
     parts = [
         f"<b>{point.venue} {point.horizon}</b>",
-        f"Reversion: {point.reversion_bps:+.4f} bps",
+        f"Reversion: {point.reversion_bps:+.2f} bps",
     ]
     if point.date is not None:
         parts.append(f"Date: {point.date.isoformat()}")
@@ -478,7 +478,7 @@ def _build_reversion_comparison_diagnostic_chart(
                     "x": [_comparison_delta_bps(comparison) for comparison in rows],
                     "y": [_comparison_diagnostic_label(comparison) for comparison in rows],
                     "text": [_comparison_hover_text(comparison) for comparison in rows],
-                    "hovertemplate": ("%{text}<br><b>%{x:+.4f} bps</b><extra>Current − reference</extra>"),
+                    "hovertemplate": ("%{text}<br><b>%{x:+.2f} bps</b><extra>Current − reference</extra>"),
                 }
             ],
             "layout": {
@@ -567,11 +567,11 @@ def _comparison_diagnostic_label(comparison: MetricComparison) -> str:
 def _comparison_hover_text(comparison: MetricComparison) -> str:
     parts = [
         f"<b>{_comparison_diagnostic_label(comparison)}</b>",
-        f"Current: {comparison.value:.4f} bps",
+        f"Current: {comparison.value:.2f} bps",
     ]
     if comparison.reference_value is not None:
-        parts.append(f"Reference: {comparison.reference_value:.4f} bps")
-    parts.append(f"Change: {_comparison_delta_bps(comparison):+.4f} bps")
+        parts.append(f"Reference: {comparison.reference_value:.2f} bps")
+    parts.append(f"Change: {_comparison_delta_bps(comparison):+.2f} bps")
     parts.append(f"Status: {comparison.status.replace('_', ' ')}")
     if comparison.percentile is not None:
         parts.append(f"Percentile: {comparison.percentile:.1%}")

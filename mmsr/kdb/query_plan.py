@@ -20,6 +20,7 @@ from mmsr.kdb.schema_contracts import (
     activity_input_schema_contract,
     liquidity_input_schema_contract,
     output_schema_contract_for_template,
+    pts_activity_input_schema_contract,
     reference_data_input_schema_contract,
     toxicity_reversion_input_schema_contracts,
     volatility_input_schema_contract,
@@ -28,6 +29,7 @@ from mmsr.metrics.base import MetricDefinition
 from mmsr.periods.models import IntradayBucketSpec, ReportPeriod
 
 _ACTIVITY_METRICS = frozenset({"turnover", "volume", "trade_count"})
+_PTS_ACTIVITY_METRICS = frozenset({"pts_turnover"})
 _LIQUIDITY_METRICS = frozenset({"quoted_spread_bps", "top_of_book_depth"})
 _VOLATILITY_METRICS = frozenset({"parkinson_volatility_bps"})
 _REVERSION_METRIC_PATTERN = re.compile(r"^primary_quote_reversion_(?P<horizon>10ms|100ms|500ms|1s|5s|10s)_bps$")
@@ -47,12 +49,14 @@ _REVERSION_METRICS = frozenset(
 
 _METRIC_TEMPLATE_MAP = {
     **{metric_name: "activity" for metric_name in _ACTIVITY_METRICS},
+    **{metric_name: "pts_activity" for metric_name in _PTS_ACTIVITY_METRICS},
     **{metric_name: "liquidity" for metric_name in _LIQUIDITY_METRICS},
     **{metric_name: "volatility" for metric_name in _VOLATILITY_METRICS},
     **{metric_name: _REVERSION_TEMPLATE for metric_name in _REVERSION_METRICS},
 }
 _METRIC_TABLE_PARAMETER_MAP = {
     "activity": (("trades", "trades_table"), ("reference_data", "ref_table")),
+    "pts_activity": (("pts_trades", "pts_trades_table"), ("reference_data", "ref_table")),
     "liquidity": (("quotes", "quotes_table"), ("reference_data", "ref_table")),
     "volatility": (("trades", "trades_table"), ("reference_data", "ref_table")),
     _REVERSION_TEMPLATE: (
@@ -343,6 +347,23 @@ def _input_contracts_for_template(
                 template_name=template_name,
             ),
         )
+    if template_name == "pts_activity":
+        raw_extra = _raw_source_extra_columns(parameters)
+        ref_extra = _reference_extra_columns(query_group_by)
+        return (
+            pts_activity_input_schema_contract(
+                pts_trades_table=_source_label("pts_trades", source_functions),
+                extra_required_columns=raw_extra,
+            ),
+            reference_data_input_schema_contract(
+                reference_table=_source_label(
+                    "reference_data",
+                    source_functions,
+                ),
+                extra_required_columns=ref_extra,
+                template_name=template_name,
+            ),
+        )
     if template_name == "liquidity":
         raw_extra = _raw_source_extra_columns(parameters)
         ref_extra = _reference_extra_columns(query_group_by)
@@ -493,6 +514,7 @@ def _metric_call_expression(
 
     calls = {
         "activity": f"{calculation_namespace}.calcActivity[{_q_date(run_date)};rawTrades;refs;{metric_params}]",
+        "pts_activity": f"{calculation_namespace}.calcPtsTurnover[{_q_date(run_date)};rawPtsTradeRows;refs;{metric_params}]",
         "liquidity": f"{calculation_namespace}.calcLiquidity[{_q_date(run_date)};rawQuotes;refs;{metric_params}]",
         "volatility": f"{calculation_namespace}.calcParkinsonVolatility[{_q_date(run_date)};rawTrades;refs;{metric_params}]",
         _REVERSION_TEMPLATE: (

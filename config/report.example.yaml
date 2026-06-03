@@ -35,6 +35,9 @@ data:
       - market_bucket
       - topix_cap_group
       - topix_cap_group_bucket
+      - venue
+      - venue_symbol
+      - venue_topix_cap_group
     raw_data_functions:
       namespace: ".sb.mmsr"
       trade: "getTrade"
@@ -92,7 +95,8 @@ groups:
 
 reference:
   method: same_intraday_bucket
-  lookback_days: 20
+  start_date: "2026-04-01"
+  end_date: "2026-04-30"
   statistic: median
   observation_unit: trading_day
   comparable_keys:
@@ -112,6 +116,7 @@ metrics:
   - quoted_spread_bps
   - top_of_book_depth
   - parkinson_volatility_bps
+  - pts_turnover
   - primary_quote_reversion_10ms_bps
   - primary_quote_reversion_100ms_bps
   - primary_quote_reversion_500ms_bps

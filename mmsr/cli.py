@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import shutil
+import subprocess
 from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
@@ -17,9 +19,7 @@ from mmsr.analysis.comparison import (
 from mmsr.config import load_report_config_file
 from mmsr.config.models import ReportConfig
 from mmsr.examples import (
-    MockKdbIntegrationDemoOptions,
     OfflineDemoReportOptions,
-    build_mock_kdb_integration_demo_report,
     build_offline_demo_report,
 )
 from mmsr.kdb.client import KdbClient, KdbConfig
@@ -42,6 +42,8 @@ from mmsr.report.market_report import (
     build_market_monitor_report,
 )
 from mmsr.report.render_html import render_report_v2
+from mmsr.report.render_pdf import render_report_pdf_file
+from mmsr.report.render_quarto import render_report_qmd_file
 
 CLI_HELP = "Generate Japanese market microstructure monitoring report artifacts."
 
@@ -52,6 +54,16 @@ app = typer.Typer(
 )
 
 LOGGER = logging.getLogger(__name__)
+
+_CHROMIUM_PDF_CANDIDATES: tuple[str, ...] = (
+    "google-chrome",
+    "google-chrome-stable",
+    "chromium",
+    "chromium-browser",
+    "microsoft-edge",
+    "microsoft-edge-stable",
+    "msedge",
+)
 
 
 def build_cli_app() -> typer.Typer:
@@ -174,124 +186,6 @@ def _offline_demo_command(
         template_dir=template_dir,
     )
     typer.echo(f"Rendered mock-data production-format report: {output_path}")
-    return 0
-
-
-@app.command(
-    "mock-kdb-demo",
-    help=(
-        "Execute deterministic mock kdb queries through the real q-template "
-        "and KdbMetricRunner path, then render the canonical production-format "
-        "HTML report without importing PyKX or connecting to production kdb+."
-    ),
-)
-def _mock_kdb_demo_command(
-    output: Path = typer.Option(
-        Path("mmsr_mock_kdb_demo.html"),
-        "--output",
-        "-o",
-        help="Output HTML path. Parent directories are created automatically.",
-    ),
-    template_dir: Path | None = typer.Option(
-        None,
-        "--template-dir",
-        help="Optional directory containing report_v2.html.j2 and partial templates.",
-    ),
-    title: str | None = typer.Option(
-        None,
-        "--title",
-        help="Override the mock-kdb report title.",
-    ),
-    brand_name: str | None = typer.Option(
-        None,
-        "--brand-name",
-        help="Override the rendered report brand name.",
-    ),
-    generated_at_text: str | None = typer.Option(
-        None,
-        "--generated-at-text",
-        help="Override the generated-at text shown in the rendered report.",
-    ),
-    no_appendix: bool = typer.Option(
-        False,
-        "--no-appendix",
-        help="Omit the metric definitions appendix from the mock-kdb report.",
-    ),
-    max_metric_cards: int | None = typer.Option(
-        None,
-        "--max-metric-cards",
-        help="Optional limit for summary metric cards.",
-    ),
-    max_comments: int | None = typer.Option(
-        None,
-        "--max-comments",
-        help="Optional limit for deterministic commentary lines.",
-    ),
-    max_table_rows: int | None = typer.Option(
-        None,
-        "--max-table-rows",
-        help="Optional limit for comparison table rows.",
-    ),
-    max_chart_points: int | None = typer.Option(
-        None,
-        "--max-chart-points",
-        help="Optional limit for points per time-series chart.",
-    ),
-    max_heatmap_cells: int | None = typer.Option(
-        None,
-        "--max-heatmap-cells",
-        help="Optional limit for cells per heatmap.",
-    ),
-    include_intraday_heatmaps: bool = typer.Option(
-        False,
-        "--include-intraday-heatmaps",
-        help=("Opt into intraday heatmaps in addition to the default time-bucket line charts."),
-    ),
-    no_drilldown_page: bool = typer.Option(
-        False,
-        "--no-drilldown-page",
-        help="Omit the sector, segment, and market-cap drilldown page.",
-    ),
-    max_drilldown_rows: int | None = typer.Option(
-        None,
-        "--max-drilldown-rows",
-        help="Optional limit for drilldown table rows.",
-    ),
-    detailed_trends_granularity: str = typer.Option(
-        "daily",
-        "--detailed-trends-granularity",
-        help="Detailed Metric Trends granularity: daily, weekly, monthly, quarterly, yearly.",
-    ),
-    include_automated_insights: bool = typer.Option(
-        False,
-        "--include-automated-insights",
-        help="Render automated insight summaries in Detailed Metric Trends.",
-    ),
-) -> int:
-    """Render the deterministic mock-kdb path through KdbMetricRunner."""
-
-    options = _mock_kdb_demo_options_from_values(
-        title=title,
-        brand_name=brand_name,
-        generated_at_text=generated_at_text,
-        no_appendix=no_appendix,
-        max_metric_cards=max_metric_cards,
-        max_comments=max_comments,
-        max_table_rows=max_table_rows,
-        max_chart_points=max_chart_points,
-        max_heatmap_cells=max_heatmap_cells,
-        include_intraday_heatmaps=include_intraday_heatmaps,
-        no_drilldown_page=no_drilldown_page,
-        max_drilldown_rows=max_drilldown_rows,
-        detailed_trends_granularity=detailed_trends_granularity,
-        include_automated_insights=include_automated_insights,
-    )
-    output_path = render_mock_kdb_demo_report_file(
-        output,
-        options=options,
-        template_dir=template_dir,
-    )
-    typer.echo(f"Rendered mock-kdb integration report: {output_path}")
     return 0
 
 
@@ -541,6 +435,330 @@ def _render_command(
         include_automated_insights=include_automated_insights,
     )
     typer.echo(f"Rendered production kdb-backed report: {output_path}")
+    return 0
+
+
+@app.command(
+    "render-qmd",
+    help=(
+        "Render a production kdb-backed report to a Quarto-compatible .qmd file. "
+        "The generated QMD keeps the current HTML pipeline intact while adding a "
+        "document-first export path for Quarto HTML/PDF/PPT outputs."
+    ),
+)
+def _render_qmd_command(
+    config: Path = typer.Option(
+        ...,
+        "--config",
+        "-c",
+        help="YAML report config path.",
+    ),
+    output: Path = typer.Option(
+        Path("mmsr_report.qmd"),
+        "--output",
+        "-o",
+        help="Output QMD path. Parent directories are created automatically.",
+    ),
+    kdb_host: str = typer.Option(
+        ...,
+        "--kdb-host",
+        help="kdb+ host for the production report run.",
+    ),
+    kdb_port: int = typer.Option(
+        ...,
+        "--kdb-port",
+        help="kdb+ port for the production report run.",
+    ),
+    kdb_username: str | None = typer.Option(
+        None,
+        "--kdb-username",
+        help="Optional kdb+ username.",
+    ),
+    kdb_password: str | None = typer.Option(
+        None,
+        "--kdb-password",
+        help="Optional kdb+ password.",
+    ),
+    symbol: list[str] | None = typer.Option(
+        None,
+        "--symbol",
+        help=(
+            "Optional symbol filter. Repeat the option for multiple symbols; "
+            "configured symbol_chunk_size is applied before kdb execution."
+        ),
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose DEBUG logging for production execution diagnostics.",
+    ),
+    log_level: str | None = typer.Option(
+        None,
+        "--log-level",
+        help="Explicit Python log level: DEBUG, INFO, WARNING, ERROR, or CRITICAL.",
+    ),
+    inject_simulated_sources: bool = typer.Option(
+        False,
+        "--inject-simulated-sources",
+        help=(
+            "Install deterministic simulated source getter functions into the "
+            "connected kdb process before planning and route calendar/reference/"
+            "trade/quote source calls to that namespace."
+        ),
+    ),
+    simulated_source_namespace: str | None = typer.Option(
+        None,
+        "--simulated-source-namespace",
+        help=(
+            "q namespace for injected simulated source getters. Defaults to the "
+            "configured raw_data_functions namespace."
+        ),
+    ),
+    simulated_symbol_count: int = typer.Option(
+        240,
+        "--simulated-symbol-count",
+        help="Number of synthetic symbols baked into the injected simulated q source functions.",
+    ),
+    simulated_points_per_symbol_per_day: int = typer.Option(
+        1200,
+        "--simulated-points-per-symbol-per-day",
+        help="Guidance points per symbol per day for simulated q sources (actual per-symbol count jitters by +/-20%).",
+    ),
+    isolate_calculation_namespace_per_run: bool = typer.Option(
+        True,
+        "--isolate-calculation-namespace-per-run/--no-isolate-calculation-namespace-per-run",
+        help=(
+            "Install and execute MMSR-owned q calculations in a per-run namespace "
+            "suffix (<calculation_namespace>.run_<guid>)."
+        ),
+    ),
+    keep_isolated_calculation_namespace: bool = typer.Option(
+        False,
+        "--keep-isolated-calculation-namespace",
+        help=(
+            "When namespace isolation is enabled, keep the per-run calculation "
+            "namespace after completion for kdb-side debugging."
+        ),
+    ),
+    detailed_trends_granularity: str = typer.Option(
+        "daily",
+        "--detailed-trends-granularity",
+        help="Detailed Metric Trends granularity: daily, weekly, monthly, quarterly, yearly.",
+    ),
+    include_automated_insights: bool = typer.Option(
+        False,
+        "--include-automated-insights",
+        help="Render automated insight summaries in Detailed Metric Trends.",
+    ),
+    asset_dir_name: str | None = typer.Option(
+        None,
+        "--asset-dir-name",
+        help="Optional sibling asset directory name for chart images. Defaults to <output_stem>_assets.",
+    ),
+) -> int:
+    """Render a production report to a Quarto-compatible QMD file."""
+
+    configure_logging(verbose=verbose, log_level=log_level)
+    LOGGER.info("Starting production QMD render command")
+    output_path = render_production_report_qmd_file(
+        output,
+        config_path=config,
+        kdb_host=kdb_host,
+        kdb_port=kdb_port,
+        kdb_username=kdb_username,
+        kdb_password=kdb_password,
+        symbols=symbol,
+        inject_simulated_sources=inject_simulated_sources,
+        simulated_source_namespace=simulated_source_namespace,
+        simulated_symbol_count=simulated_symbol_count,
+        simulated_points_per_symbol_per_day=simulated_points_per_symbol_per_day,
+        isolate_calculation_namespace_per_run=isolate_calculation_namespace_per_run,
+        keep_isolated_calculation_namespace=keep_isolated_calculation_namespace,
+        detailed_trends_granularity=detailed_trends_granularity,
+        include_automated_insights=include_automated_insights,
+        asset_dir_name=asset_dir_name,
+    )
+    typer.echo(f"Rendered production kdb-backed QMD report: {output_path}")
+    return 0
+
+
+@app.command(
+    "render-pdf",
+    help=(
+        "Render a production kdb-backed report directly to PDF using a "
+        "Python-native renderer built from the canonical report document."
+    ),
+)
+def _render_pdf_command(
+    config: Path = typer.Option(
+        ...,
+        "--config",
+        "-c",
+        help="YAML report config path.",
+    ),
+    output: Path = typer.Option(
+        Path("mmsr_report.pdf"),
+        "--output",
+        "-o",
+        help="Output PDF path. Parent directories are created automatically.",
+    ),
+    kdb_host: str = typer.Option(
+        ...,
+        "--kdb-host",
+        help="kdb+ host for the production report run.",
+    ),
+    kdb_port: int = typer.Option(
+        ...,
+        "--kdb-port",
+        help="kdb+ port for the production report run.",
+    ),
+    kdb_username: str | None = typer.Option(
+        None,
+        "--kdb-username",
+        help="Optional kdb+ username.",
+    ),
+    kdb_password: str | None = typer.Option(
+        None,
+        "--kdb-password",
+        help="Optional kdb+ password.",
+    ),
+    symbol: list[str] | None = typer.Option(
+        None,
+        "--symbol",
+        help="Optional symbol filter. Repeat the option for multiple symbols.",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose DEBUG logging for production execution diagnostics.",
+    ),
+    log_level: str | None = typer.Option(
+        None,
+        "--log-level",
+        help="Explicit Python log level: DEBUG, INFO, WARNING, ERROR, or CRITICAL.",
+    ),
+    inject_simulated_sources: bool = typer.Option(
+        False,
+        "--inject-simulated-sources",
+        help=(
+            "Install deterministic simulated source getter functions into the "
+            "connected kdb process before rendering and route calendar/reference/"
+            "trade/quote source calls to that namespace."
+        ),
+    ),
+    simulated_source_namespace: str | None = typer.Option(
+        None,
+        "--simulated-source-namespace",
+        help=(
+            "q namespace for injected simulated source getters. Defaults to the "
+            "configured raw_data_functions namespace."
+        ),
+    ),
+    simulated_symbol_count: int = typer.Option(
+        240,
+        "--simulated-symbol-count",
+        help="Number of synthetic symbols baked into the injected simulated q source functions.",
+    ),
+    simulated_points_per_symbol_per_day: int = typer.Option(
+        1200,
+        "--simulated-points-per-symbol-per-day",
+        help="Guidance points per symbol per day for simulated q sources (actual per-symbol count jitters by +/-20%).",
+    ),
+    isolate_calculation_namespace_per_run: bool = typer.Option(
+        True,
+        "--isolate-calculation-namespace-per-run/--no-isolate-calculation-namespace-per-run",
+        help="Install calculation helpers into an isolated q namespace for this render run.",
+    ),
+    keep_isolated_calculation_namespace: bool = typer.Option(
+        False,
+        "--keep-isolated-calculation-namespace",
+        help="Leave the isolated q calculation namespace in place after the run for inspection.",
+    ),
+    detailed_trends_granularity: str = typer.Option(
+        "daily",
+        "--detailed-trends-granularity",
+        help="Detailed Metric Trends granularity: daily, weekly, monthly, quarterly, yearly.",
+    ),
+    include_automated_insights: bool = typer.Option(
+        False,
+        "--include-automated-insights",
+        help="Render automated insight summaries in Detailed Metric Trends.",
+    ),
+) -> int:
+    """Render a production report directly to PDF without browser or Quarto dependencies."""
+
+    configure_logging(verbose=verbose, log_level=log_level)
+    LOGGER.info("Starting production PDF render command")
+    output_path = render_production_report_pdf_file(
+        output,
+        config_path=config,
+        kdb_host=kdb_host,
+        kdb_port=kdb_port,
+        kdb_username=kdb_username,
+        kdb_password=kdb_password,
+        symbols=symbol,
+        inject_simulated_sources=inject_simulated_sources,
+        simulated_source_namespace=simulated_source_namespace,
+        simulated_symbol_count=simulated_symbol_count,
+        simulated_points_per_symbol_per_day=simulated_points_per_symbol_per_day,
+        isolate_calculation_namespace_per_run=isolate_calculation_namespace_per_run,
+        keep_isolated_calculation_namespace=keep_isolated_calculation_namespace,
+        detailed_trends_granularity=detailed_trends_granularity,
+        include_automated_insights=include_automated_insights,
+    )
+    typer.echo(f"Rendered production kdb-backed PDF report: {output_path}")
+    return 0
+
+
+@app.command(
+    "export-pdf",
+    help=(
+        "Export an already-rendered HTML report to PDF using a Chromium-family "
+        "browser in headless mode. This bypasses browser print-preview quirks."
+    ),
+)
+def _export_pdf_command(
+    input: Path = typer.Option(
+        ...,
+        "--input",
+        "-i",
+        help="Input HTML report path.",
+    ),
+    output: Path = typer.Option(
+        ...,
+        "--output",
+        "-o",
+        help="Output PDF path.",
+    ),
+    browser_path: Path | None = typer.Option(
+        None,
+        "--browser-path",
+        help="Optional explicit Chromium/Chrome/Edge executable path.",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose DEBUG logging.",
+    ),
+    log_level: str | None = typer.Option(
+        None,
+        "--log-level",
+        help="Explicit Python log level: DEBUG, INFO, WARNING, ERROR, or CRITICAL.",
+    ),
+) -> int:
+    """Export a rendered HTML report to PDF via a headless Chromium-family browser."""
+
+    configure_logging(verbose=verbose, log_level=log_level)
+    LOGGER.info("Starting PDF export command")
+    output_path = export_report_html_to_pdf(
+        input,
+        output,
+        browser_path=browser_path,
+    )
+    typer.echo(f"Exported report PDF: {output_path}")
     return 0
 
 
@@ -930,15 +1148,155 @@ def render_production_report_file(
     """
 
     resolved_output_path = _validated_output_path(output_path)
+    document = build_production_report_document(
+        config_path=config_path,
+        kdb_host=kdb_host,
+        kdb_port=kdb_port,
+        kdb_username=kdb_username,
+        kdb_password=kdb_password,
+        symbols=symbols,
+        inject_simulated_sources=inject_simulated_sources,
+        simulated_source_namespace=simulated_source_namespace,
+        simulated_symbol_count=simulated_symbol_count,
+        simulated_points_per_symbol_per_day=simulated_points_per_symbol_per_day,
+        isolate_calculation_namespace_per_run=isolate_calculation_namespace_per_run,
+        keep_isolated_calculation_namespace=keep_isolated_calculation_namespace,
+        detailed_trends_granularity=detailed_trends_granularity,
+        include_automated_insights=include_automated_insights,
+        output_path=resolved_output_path,
+    )
+    LOGGER.info("Rendering HTML report")
+    html = render_report_v2(document, template_dir=template_dir)
+
+    resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
+    resolved_output_path.write_text(html, encoding="utf-8")
+    LOGGER.info("Wrote HTML report to %s", resolved_output_path)
+    return resolved_output_path
+
+
+def render_production_report_qmd_file(
+    output_path: str | Path,
+    *,
+    config_path: str | Path,
+    kdb_host: str,
+    kdb_port: int,
+    kdb_username: str | None = None,
+    kdb_password: str | None = None,
+    symbols: Sequence[str] | None = None,
+    inject_simulated_sources: bool = False,
+    simulated_source_namespace: str | None = None,
+    simulated_symbol_count: int = 240,
+    simulated_points_per_symbol_per_day: int = 1200,
+    isolate_calculation_namespace_per_run: bool = True,
+    keep_isolated_calculation_namespace: bool = False,
+    detailed_trends_granularity: str = "daily",
+    include_automated_insights: bool = False,
+    asset_dir_name: str | None = None,
+) -> Path:
+    """Render a production report to a Quarto-compatible QMD file."""
+
+    resolved_output_path = _validated_output_path(output_path)
+    document = build_production_report_document(
+        config_path=config_path,
+        kdb_host=kdb_host,
+        kdb_port=kdb_port,
+        kdb_username=kdb_username,
+        kdb_password=kdb_password,
+        symbols=symbols,
+        inject_simulated_sources=inject_simulated_sources,
+        simulated_source_namespace=simulated_source_namespace,
+        simulated_symbol_count=simulated_symbol_count,
+        simulated_points_per_symbol_per_day=simulated_points_per_symbol_per_day,
+        isolate_calculation_namespace_per_run=isolate_calculation_namespace_per_run,
+        keep_isolated_calculation_namespace=keep_isolated_calculation_namespace,
+        detailed_trends_granularity=detailed_trends_granularity,
+        include_automated_insights=include_automated_insights,
+        output_path=resolved_output_path,
+    )
+    LOGGER.info("Rendering QMD report")
+    output_file = render_report_qmd_file(
+        document,
+        resolved_output_path,
+        asset_dir_name=asset_dir_name,
+    )
+    LOGGER.info("Wrote QMD report to %s", output_file)
+    return output_file
+
+
+def render_production_report_pdf_file(
+    output_path: str | Path,
+    *,
+    config_path: str | Path,
+    kdb_host: str,
+    kdb_port: int,
+    kdb_username: str | None = None,
+    kdb_password: str | None = None,
+    symbols: Sequence[str] | None = None,
+    inject_simulated_sources: bool = False,
+    simulated_source_namespace: str | None = None,
+    simulated_symbol_count: int = 240,
+    simulated_points_per_symbol_per_day: int = 1200,
+    isolate_calculation_namespace_per_run: bool = True,
+    keep_isolated_calculation_namespace: bool = False,
+    detailed_trends_granularity: str = "daily",
+    include_automated_insights: bool = False,
+) -> Path:
+    """Render a production report directly to PDF from the canonical report document."""
+
+    resolved_output_path = _validated_output_path(output_path)
+    document = build_production_report_document(
+        config_path=config_path,
+        kdb_host=kdb_host,
+        kdb_port=kdb_port,
+        kdb_username=kdb_username,
+        kdb_password=kdb_password,
+        symbols=symbols,
+        inject_simulated_sources=inject_simulated_sources,
+        simulated_source_namespace=simulated_source_namespace,
+        simulated_symbol_count=simulated_symbol_count,
+        simulated_points_per_symbol_per_day=simulated_points_per_symbol_per_day,
+        isolate_calculation_namespace_per_run=isolate_calculation_namespace_per_run,
+        keep_isolated_calculation_namespace=keep_isolated_calculation_namespace,
+        detailed_trends_granularity=detailed_trends_granularity,
+        include_automated_insights=include_automated_insights,
+        output_path=resolved_output_path,
+    )
+    LOGGER.info("Rendering PDF report")
+    output_file = render_report_pdf_file(document, resolved_output_path)
+    LOGGER.info("Wrote PDF report to %s", output_file)
+    return output_file
+
+
+def build_production_report_document(
+    *,
+    config_path: str | Path,
+    kdb_host: str,
+    kdb_port: int,
+    kdb_username: str | None = None,
+    kdb_password: str | None = None,
+    symbols: Sequence[str] | None = None,
+    inject_simulated_sources: bool = False,
+    simulated_source_namespace: str | None = None,
+    simulated_symbol_count: int = 240,
+    simulated_points_per_symbol_per_day: int = 1200,
+    isolate_calculation_namespace_per_run: bool = True,
+    keep_isolated_calculation_namespace: bool = False,
+    detailed_trends_granularity: str = "daily",
+    include_automated_insights: bool = False,
+    output_path: str | Path | None = None,
+):
+    """Build the canonical production report document for downstream renderers."""
+
+    resolved_output_path = _validated_output_path(output_path) if output_path is not None else None
     LOGGER.info("Loading production config from %s", config_path)
     report_config, period = load_report_config_file(config_path)
     LOGGER.info(
-        "Loaded config title=%r period=%s..%s metrics=%s output=%s",
+        "Loaded config title=%r period=%s..%s metrics=%s%s",
         report_config.title,
         period.start_date,
         period.end_date,
         ", ".join(report_config.metrics),
-        resolved_output_path,
+        f" output={resolved_output_path}" if resolved_output_path is not None else "",
     )
 
     client = KdbClient(
@@ -992,7 +1350,7 @@ def render_production_report_file(
         current_series=current_series,
         reference_series=reference_series,
     )
-    document = build_market_monitor_report(
+    return build_market_monitor_report(
         MarketReportInput(
             metric_definitions=definitions,
             current_series=current_series,
@@ -1010,13 +1368,6 @@ def render_production_report_file(
             include_automated_insights=include_automated_insights,
         ),
     )
-    LOGGER.info("Rendering HTML report")
-    html = render_report_v2(document, template_dir=template_dir)
-
-    resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
-    resolved_output_path.write_text(html, encoding="utf-8")
-    LOGGER.info("Wrote HTML report to %s", resolved_output_path)
-    return resolved_output_path
 
 
 def _compare_production_series(
@@ -1096,28 +1447,65 @@ def render_offline_demo_report_file(
     return resolved_output_path
 
 
-def render_mock_kdb_demo_report_file(
+def export_report_html_to_pdf(
+    input_path: str | Path,
     output_path: str | Path,
     *,
-    options: MockKdbIntegrationDemoOptions | None = None,
-    template_dir: str | Path | None = None,
+    browser_path: str | Path | None = None,
 ) -> Path:
-    """Render the deterministic mock-kdb integration report to an HTML file.
+    """Export a rendered HTML report to PDF with headless Chromium.
 
-    This command path executes rendered q through a deterministic mock client and
-    the real ``KdbMetricRunner`` before delegating into the canonical report
-    builder. It remains offline and does not import PyKX.
+    The function expects the HTML report to be fully self-contained enough to be
+    rendered from a local ``file://`` URL. A Chromium-family browser is used so
+    JavaScript-rendered Plotly figures can complete before PDF capture.
     """
 
+    resolved_input_path = Path(input_path)
+    if not resolved_input_path.exists() or not resolved_input_path.is_file():
+        raise ValueError("input_path must be an existing HTML file")
+
     resolved_output_path = _validated_output_path(output_path)
-
-    document = build_mock_kdb_integration_demo_report(options=options)
-    LOGGER.info("Rendering HTML report")
-    html = render_report_v2(document, template_dir=template_dir)
-
+    browser_executable = _resolve_pdf_browser_executable(browser_path)
     resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
-    resolved_output_path.write_text(html, encoding="utf-8")
+
+    command = [
+        browser_executable,
+        "--headless=new",
+        "--disable-gpu",
+        "--run-all-compositor-stages-before-draw",
+        "--virtual-time-budget=12000",
+        f"--print-to-pdf={resolved_output_path.resolve()}",
+        str(resolved_input_path.resolve().as_uri()),
+    ]
+    LOGGER.info("Exporting PDF with browser %s from %s to %s", browser_executable, resolved_input_path, resolved_output_path)
+    try:
+        subprocess.run(command, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as exc:
+        stderr = (exc.stderr or "").strip()
+        stdout = (exc.stdout or "").strip()
+        detail = stderr or stdout or str(exc)
+        raise RuntimeError(f"headless browser PDF export failed: {detail}") from exc
+
+    if not resolved_output_path.exists() or resolved_output_path.stat().st_size == 0:
+        raise RuntimeError("headless browser finished without producing a non-empty PDF")
     return resolved_output_path
+
+
+def _resolve_pdf_browser_executable(browser_path: str | Path | None) -> str:
+    if browser_path is not None:
+        candidate = Path(browser_path)
+        if not candidate.exists() or not candidate.is_file():
+            raise ValueError("browser_path must point to an existing browser executable")
+        return str(candidate)
+
+    for candidate_name in _CHROMIUM_PDF_CANDIDATES:
+        resolved = shutil.which(candidate_name)
+        if resolved:
+            return resolved
+
+    raise RuntimeError(
+        "no Chromium-family browser executable found; install Chrome/Chromium/Edge or pass --browser-path"
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1183,57 +1571,6 @@ def _offline_demo_options_from_values(
         max_chart_points=max_chart_points,
         max_heatmap_cells=max_heatmap_cells,
         include_intraday_heatmaps=include_intraday_heatmaps,
-        include_drilldown_page=not no_drilldown_page,
-        max_drilldown_rows=_default_when_none(
-            max_drilldown_rows,
-            defaults.max_drilldown_rows,
-        ),
-        detailed_metric_trends_granularity=detailed_trends_granularity,
-        include_automated_insights=include_automated_insights,
-    )
-
-
-def _mock_kdb_demo_options_from_values(
-    *,
-    title: str | None,
-    brand_name: str | None,
-    generated_at_text: str | None,
-    no_appendix: bool,
-    max_metric_cards: int | None,
-    max_comments: int | None,
-    max_table_rows: int | None,
-    max_chart_points: int | None,
-    max_heatmap_cells: int | None,
-    include_intraday_heatmaps: bool,
-    no_drilldown_page: bool,
-    max_drilldown_rows: int | None,
-    detailed_trends_granularity: str,
-    include_automated_insights: bool,
-) -> MockKdbIntegrationDemoOptions:
-    defaults = MockKdbIntegrationDemoOptions()
-    return MockKdbIntegrationDemoOptions(
-        title=title or defaults.title,
-        brand_name=brand_name or defaults.brand_name,
-        generated_at_text=generated_at_text or defaults.generated_at_text,
-        summary_page_title=defaults.summary_page_title,
-        detail_page_title=defaults.detail_page_title,
-        comparison_table_title=defaults.comparison_table_title,
-        comparison_help_text=defaults.comparison_help_text,
-        detail_help_text=defaults.detail_help_text,
-        include_metric_definitions_appendix=not no_appendix,
-        max_metric_cards=_default_when_none(
-            max_metric_cards,
-            defaults.max_metric_cards,
-        ),
-        max_comments=_default_when_none(max_comments, defaults.max_comments),
-        max_table_rows=_default_when_none(
-            max_table_rows,
-            defaults.max_table_rows,
-        ),
-        max_chart_points=max_chart_points,
-        max_heatmap_cells=max_heatmap_cells,
-        include_intraday_heatmaps=include_intraday_heatmaps,
-        max_overview_metrics=defaults.max_overview_metrics,
         include_drilldown_page=not no_drilldown_page,
         max_drilldown_rows=_default_when_none(
             max_drilldown_rows,
