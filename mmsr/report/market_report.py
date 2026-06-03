@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import date
 from html import escape
 import json
+import logging
 from math import isfinite, sqrt
 from statistics import median
 
@@ -62,6 +63,8 @@ from mmsr.report.toxicity import (
     ToxicityReversionPageOptions,
     build_toxicity_reversion_page,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -1497,12 +1500,13 @@ def _build_market_overview_cards_block(
     )
 
     card_specs = (
-        ("Traded Value", "turnover"),
+        ("Daily Turnover", "turnover"),
         ("Quoted Spread", "quoted_spread_bps"),
         ("Top of book Depth", "top_of_book_depth"),
         ("Volatility", volatility_metric_name),
     )
     cards_html: list[str] = []
+    card_payloads: list[dict[str, str]] = []
     for card_label, metric_name in card_specs:
         aggregation_text = _overview_card_aggregation_text(card_label)
         definition = None if metric_name is None else definitions.get(metric_name)
@@ -1517,6 +1521,19 @@ def _build_market_overview_cards_block(
             value_text = _format_overview_card_value(aggregate.target_mean, definition.unit)
             delta_text = _format_overview_delta_text(aggregate.delta_pct)
             delta_class = _delta_direction_class(aggregate.delta_pct)
+            LOGGER.info(
+                "Market Overview card [%s]: target_mean=%.6g benchmark_mean=%.6g "
+                "delta_pct=%.6g delta_text=%s value_text=%s "
+                "(daily_current=%d points, daily_reference=%d points)",
+                card_label,
+                aggregate.target_mean,
+                aggregate.benchmark_mean,
+                aggregate.delta_pct,
+                delta_text,
+                value_text,
+                len(aggregate.daily_current),
+                len(aggregate.daily_reference),
+            )
         cards_html.append(
             '    <article class="market-overview-card">'
             '<div class="market-overview-card__heading">'
@@ -1528,11 +1545,25 @@ def _build_market_overview_cards_block(
             f'{_overview_spark_bar_html(aggregate)}'
             "</article>"
         )
+        card_payloads.append(
+            {
+                "label": card_label,
+                "metric_name": "" if metric_name is None else metric_name,
+                "value_text": value_text,
+                "delta_text": delta_text,
+                "delta_class": delta_class,
+            }
+        )
 
     return HtmlBlock(
         title="Market Overview",
-        help_text="Top-level market cards for traded value, spread, top-of-book depth, and volatility.",
-        body_html='  <section class="market-overview-grid">\n' + "\n".join(cards_html) + "\n  </section>",
+        help_text="Top-level market cards for daily turnover, spread, top-of-book depth, and volatility.",
+        body_html=(
+            '  <section class="market-overview-grid">\n'
+            + "\n".join(cards_html)
+            + "\n  </section>"
+            + f'<script type="application/json" data-market-overview-spec>{_safe_json_script({"cards": card_payloads})}</script>'
+        ),
     )
 
 
@@ -1541,6 +1572,7 @@ def _build_detailed_metric_trends_block(
     definitions: Mapping[str, MetricDefinition],
     *,
     options: MarketReportOptions,
+    market_scope_only: bool = False,
 ) -> HtmlBlock | None:
     if not options.include_detailed_metric_trends_section:
         return None
@@ -1569,6 +1601,7 @@ def _build_detailed_metric_trends_block(
         report_input,
         metric_names=metric_names,
         granularity=options.detailed_metric_trends_granularity,
+        market_scope_only=market_scope_only,
     )
 
     payload_metrics: dict[str, dict[str, object]] = {}
@@ -1864,16 +1897,50 @@ def _metric_trend_comments(
     return comments
 
 
-def _series_period_mean(rolled_points: tuple[tuple[tuple[int, ...], str, float], ...]) -> float | None:
+def _series_period_mean(
+    rolled_points: tuple[tuple[tuple[int, ...], str, float], ...],
+    *,
+    metric_name: str = "?",
+    label: str = "?",
+    market_scope_only: bool = False,
+) -> float | None:
     if not rolled_points:
+        LOGGER.info(
+            "mean[%s] %s market_scope_only=%s: no points → mean=None",
+            metric_name, label, market_scope_only,
+        )
         return None
-    return sum(value for _, _, value in rolled_points) / len(rolled_points)
+    total = sum(value for _, _, value in rolled_points)
+    count = len(rolled_points)
+    mean_value = total / count
+    LOGGER.info(
+        "mean[%s] %s market_scope_only=%s: sum(values) / n = %s / %d = %s",
+        metric_name, label, market_scope_only, total, count, mean_value,
+    )
+    return mean_value
 
 
-def _period_delta_pct(target_mean: float | None, benchmark_mean: float | None) -> float | None:
+def _period_delta_pct(
+    target_mean: float | None,
+    benchmark_mean: float | None,
+    *,
+    metric_name: str = "?",
+    market_scope_only: bool = False,
+) -> float | None:
     if target_mean is None or benchmark_mean is None or benchmark_mean == 0:
+        LOGGER.info(
+            "delta_pct[%s] market_scope_only=%s: target_mean=%s benchmark_mean=%s → delta_pct=None",
+            metric_name, market_scope_only, target_mean, benchmark_mean,
+        )
         return None
-    return (target_mean - benchmark_mean) / benchmark_mean
+    delta = (target_mean - benchmark_mean) / benchmark_mean
+    LOGGER.info(
+        "delta_pct[%s] market_scope_only=%s: (target_mean - benchmark_mean) / benchmark_mean = "
+        "(%s - %s) / %s = %s / %s = %s",
+        metric_name, market_scope_only, target_mean, benchmark_mean, benchmark_mean,
+        target_mean - benchmark_mean, benchmark_mean, delta,
+    )
+    return delta
 
 
 def _build_metric_aggregate_payloads(
@@ -1881,6 +1948,7 @@ def _build_metric_aggregate_payloads(
     *,
     metric_names: Iterable[str],
     granularity: str,
+    market_scope_only: bool = False,
 ) -> dict[str, _MetricAggregatePayload]:
     current_by_metric = {series.metric_name: series for series in report_input.current_series}
     reference_by_metric = {series.metric_name: series for series in report_input.reference_series}
@@ -1890,6 +1958,9 @@ def _build_metric_aggregate_payloads(
         reference_series = reference_by_metric.get(metric_name)
         current_series = None if current_series is None else _series_for_level(current_series, "daily")
         reference_series = None if reference_series is None else _series_for_level(reference_series, "daily")
+        if market_scope_only:
+            current_series = None if current_series is None else _filter_series_for_market_scope(current_series)
+            reference_series = None if reference_series is None else _filter_series_for_market_scope(reference_series)
         daily_current = tuple(() if current_series is None else _metric_daily_rollups(metric_name, current_series))
         daily_reference = tuple(() if reference_series is None else _metric_daily_rollups(metric_name, reference_series))
         bucketed_current = tuple(
@@ -1907,8 +1978,28 @@ def _build_metric_aggregate_payloads(
             )
         )
         spark_points = tuple(_bin_trend_points(list(daily_current)))
-        target_mean = _series_period_mean(bucketed_current)
-        benchmark_mean = _series_period_mean(bucketed_reference)
+        target_mean = _series_period_mean(
+            bucketed_current, metric_name=metric_name, label="target",
+            market_scope_only=market_scope_only,
+        )
+        benchmark_mean = _series_period_mean(
+            bucketed_reference, metric_name=metric_name, label="benchmark",
+            market_scope_only=market_scope_only,
+        )
+        delta_pct = _period_delta_pct(
+            target_mean, benchmark_mean,
+            metric_name=metric_name, market_scope_only=market_scope_only,
+        )
+        LOGGER.info(
+            "aggregate[%s] market_scope_only=%s granularity=%s: "
+            "target_mean=%s benchmark_mean=%s delta_pct=%s "
+            "(daily_current=%d points, daily_reference=%d points, "
+            "bucketed_current=%d buckets, bucketed_reference=%d buckets)",
+            metric_name, market_scope_only, granularity,
+            target_mean, benchmark_mean, delta_pct,
+            len(daily_current), len(daily_reference),
+            len(bucketed_current), len(bucketed_reference),
+        )
         payloads[metric_name] = _MetricAggregatePayload(
             metric_name=metric_name,
             daily_current=daily_current,
@@ -1918,9 +2009,51 @@ def _build_metric_aggregate_payloads(
             spark_points=spark_points,
             target_mean=target_mean,
             benchmark_mean=benchmark_mean,
-            delta_pct=_period_delta_pct(target_mean, benchmark_mean),
+            delta_pct=delta_pct,
         )
     return payloads
+
+
+def _filter_series_for_market_scope(series: MetricTimeSeries) -> MetricTimeSeries:
+    supplemental_market_observations = series.metadata.get("supplemental_market_observations", ())
+    source_observations = (
+        supplemental_market_observations
+        if supplemental_market_observations
+        else series.observations
+    )
+    filtered = tuple(
+        observation
+        for observation in source_observations
+        if _is_market_scope_observation(observation)
+    )
+    LOGGER.info(
+        "filter_market_scope[%s]: supplemental=%d regular=%d source=%d filtered=%d",
+        series.metric_name,
+        len(supplemental_market_observations) if supplemental_market_observations else 0,
+        len(series.observations),
+        len(source_observations),
+        len(filtered),
+    )
+    return MetricTimeSeries(
+        metric_name=series.metric_name,
+        observations=filtered,
+        metadata=series.metadata,
+    )
+
+
+def _is_market_scope_observation(observation: MetricObservation) -> bool:
+    if observation.group:
+        return False
+    aggregation_level = str(observation.metadata.get("aggregationLevel") or "").strip().lower()
+    if aggregation_level:
+        return aggregation_level == "market"
+    group_type = str(observation.metadata.get("groupType") or "").strip().lower()
+    if group_type:
+        return group_type == "market"
+    group_value = str(observation.metadata.get("groupValue") or "").strip().upper()
+    if group_value:
+        return group_value in {"TSE", "ALL"}
+    return True
 
 
 def _metric_interpretation_direction(metric_name: str, pct: float) -> str:
@@ -2085,13 +2218,21 @@ def _delta_direction_class(change_pct: float | None) -> str:
 
 def _overview_card_aggregation_text(card_label: str) -> str:
     metric_name = {
-        "Traded Value": "turnover",
+        "Daily Turnover": "turnover",
         "Quoted Spread": "quoted_spread_bps",
         "Top of book Depth": "top_of_book_depth",
         "Volatility": "parkinson_volatility_bps",
     }.get(card_label)
     if metric_name is not None:
-        return f"Aggregation: {_metric_aggregation_methodology(metric_name)}"
+        if metric_name == "turnover":
+            return (
+                "Aggregation: Daily market-level turnover is summed within each trading day. "
+                "The displayed period value is the simple average of those daily market totals."
+            )
+        return (
+            "Aggregation: Values are first rolled to daily market-level observations. "
+            "The displayed period value is the simple average of those daily values."
+        )
     return "Aggregation: Period summary"
 
 

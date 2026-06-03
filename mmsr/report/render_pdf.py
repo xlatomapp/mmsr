@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import re
 import tempfile
@@ -12,6 +13,11 @@ from typing import Any
 
 from mmsr.report.components import HtmlBlock, MetricCard, ReportDocument
 
+# Suppress noisy debug/info output from image rendering libraries.
+logging.getLogger("PIL").setLevel(logging.WARNING)
+logging.getLogger("matplotlib").setLevel(logging.WARNING)
+logging.getLogger("matplotlib.font_manager").setLevel(logging.WARNING)
+
 _SCRIPT_RE = re.compile(
     r'<script[^>]*type="application/json"[^>]*?(?:class="(?P<class>[^"]+)"|(?P<attr>data-[^=\s>]+))[^>]*>(?P<body>.*?)</script>',
     re.DOTALL,
@@ -22,6 +28,14 @@ _PTS_VENUE_CARD_RE = re.compile(
     r'<div class="turnover-distribution__card-title">(?P<title>[^<]+)</div>.*?'
     r'(?P<table><table class="pts-stats__venue-table">.*?</table>)'
     r".*?</section>",
+    re.DOTALL,
+)
+_MARKET_OVERVIEW_CARD_RE = re.compile(
+    r'<article class="market-overview-card">.*?'
+    r'<p class="market-overview-card__label">(?P<label>[^<]+)</p>.*?'
+    r'<p class="market-overview-card__value">(?P<value>[^<]+)</p>.*?'
+    r'<p class="market-overview-card__delta [^"]+">(?P<delta>[^<]+)</p>.*?'
+    r"</article>",
     re.DOTALL,
 )
 
@@ -112,7 +126,7 @@ class _PdfRenderer:
         self._render_cover_page()
         summary_page = self._summary_page()
         if summary_page is not None:
-            self._render_market_summary(summary_page.metric_cards)
+            self._render_market_summary(summary_page)
             self._render_summary_html_blocks(summary_page.html_blocks)
         self._pdf.output(str(output_path))
 
@@ -145,11 +159,16 @@ class _PdfRenderer:
         pdf.ln(4)
         self._render_header_meta_box()
 
-    def _render_market_summary(self, cards: list[MetricCard]) -> None:
+    def _render_market_summary(self, summary_page: Any) -> None:
+        has_market_overview_block = any(block.title == "Market Overview" for block in summary_page.html_blocks)
+        cards = _extract_market_overview_cards(summary_page.html_blocks)
+        if not cards and not has_market_overview_block:
+            cards = _select_market_summary_cards(summary_page.metric_cards)
         cards = _select_market_summary_cards(cards)
         if not cards:
             return
         pdf = self._pdf
+        pdf.ln(4)
         self._section_heading("Market Summary")
         top_y = pdf.get_y()
         gap = 4.0
@@ -168,7 +187,7 @@ class _PdfRenderer:
             y = top_y + row * (card_height + gap)
             self._draw_metric_card(card, x=x, y=y, width=card_width, height=card_height)
         consumed_rows = min(rows_per_page, math.ceil(min(len(cards), rows_per_page * 2) / 2))
-        pdf.set_y(top_y + consumed_rows * (card_height + gap) + 2)
+        pdf.set_y(top_y + consumed_rows * (card_height + gap) + 6)
 
     def _render_header_meta_box(self) -> None:
         header = dict(self.document.header_meta or {})
@@ -283,9 +302,11 @@ class _PdfRenderer:
 
         if not assets:
             return
-        self._pdf.add_page()
         self._section_heading("Detailed Metric Trends")
         for asset in assets:
+            if self._pdf.get_y() + 85 > self._pdf.page_break_trigger:
+                self._pdf.add_page()
+                self._section_heading("Detailed Metric Trends")
             self._render_full_width_chart(asset, height=72)
 
     def _render_turnover_distribution_block(self, block: HtmlBlock) -> None:
@@ -550,9 +571,10 @@ def _status_rgb(status: str) -> tuple[int, int, int]:
 
 
 def _delta_text_rgb(text: str) -> tuple[int, int, int]:
-    if text.startswith("+"):
+    normalized = _normalize_delta_text(text)
+    if normalized.startswith("+"):
         return (27, 140, 74)
-    if text.startswith("-"):
+    if normalized.startswith("-"):
         return (180, 43, 43)
     return (38, 52, 69)
 
@@ -562,12 +584,20 @@ def _card_delta_text(reference_text: str | None) -> str:
         return "n/a"
     match = re.search(r"\(([^()]*)\)\s*$", reference_text)
     if match is None:
-        return reference_text
-    return match.group(1).strip() or "n/a"
+        return _normalize_delta_text(reference_text)
+    return _normalize_delta_text(match.group(1).strip()) or "n/a"
 
 
 def _card_delta_rgb(reference_text: str | None) -> tuple[int, int, int]:
     return _delta_text_rgb(_card_delta_text(reference_text))
+
+
+def _normalize_delta_text(text: str) -> str:
+    normalized = str(text).strip()
+    normalized = normalized.replace("↑", "+").replace("↓", "-")
+    normalized = normalized.replace("↗", "+").replace("↘", "-")
+    normalized = re.sub(r"^\?\s*", "", normalized)
+    return normalized
 
 
 def _select_market_summary_cards(cards: list[MetricCard]) -> list[MetricCard]:
@@ -587,6 +617,93 @@ def _select_market_summary_cards(cards: list[MetricCard]) -> list[MetricCard]:
     if selected:
         return selected[:4]
     return [card for card in cards if card.metric.name not in {"trade_count", "volume"}][:4]
+
+
+def _extract_market_overview_cards(blocks: list[HtmlBlock]) -> list[MetricCard]:
+    cards: list[MetricCard] = []
+    for block in blocks:
+        if block.title != "Market Overview":
+            continue
+        spec = _extract_named_json_script(block.body_html, "data-market-overview-spec")
+        if spec is not None:
+            payload = json.loads(spec)
+            for item in payload.get("cards", []):
+                if not isinstance(item, dict):
+                    continue
+                label = str(item.get("label") or "")
+                value = str(item.get("value_text") or "")
+                delta = str(item.get("delta_text") or "")
+                metric = _metric_definition_for_market_overview_label(label)
+                if metric is None:
+                    continue
+                cards.append(
+                    MetricCard(
+                        metric=metric,
+                        value_text=value,
+                        reference_text=delta,
+                        status=_delta_status_from_text(delta),
+                    )
+                )
+            return cards
+        for match in _MARKET_OVERVIEW_CARD_RE.finditer(block.body_html):
+            label = _clean_html_text(match.group("label"))
+            value = _clean_html_text(match.group("value"))
+            delta = _clean_html_text(match.group("delta"))
+            metric = _metric_definition_for_market_overview_label(label)
+            if metric is None:
+                continue
+            cards.append(
+                MetricCard(
+                    metric=metric,
+                    value_text=value,
+                    reference_text=delta,
+                    status=_delta_status_from_text(delta),
+                )
+            )
+        break
+    return cards
+
+
+def _metric_definition_for_market_overview_label(label: str):
+    normalized = label.strip().casefold()
+    mappings = {
+        "traded value": ("turnover", "Daily Turnover", "JPY"),
+        "daily turnover": ("turnover", "Daily Turnover", "JPY"),
+        "quoted spread": ("quoted_spread_bps", "Quoted Spread", "bps"),
+        "top of book depth": ("top_of_book_depth", "Top of book Depth", "lots"),
+        "top-of-book depth": ("top_of_book_depth", "Top of book Depth", "lots"),
+        "volatility": ("parkinson_volatility_bps", "Volatility", "bps"),
+    }
+    metric_info = mappings.get(normalized)
+    if metric_info is None:
+        return None
+    from mmsr.metrics.base import MetricDefinition
+
+    name, display_label, unit = metric_info
+    return MetricDefinition(
+        name=name,
+        label=display_label,
+        category="summary",
+        description="PDF summary card extracted from page-1 market overview.",
+        formula="",
+        interpretation="",
+        unit=unit,
+        higher_is_better=None,
+        default_aggregation="page_1_market_overview",
+        supports_intraday=False,
+        supports_symbol_level=False,
+        required_tables=[],
+        required_columns=[],
+    )
+
+
+def _delta_status_from_text(text: str) -> str:
+    stripped = text.strip().lower()
+    if stripped.startswith("-"):
+        return "alert"
+    if stripped.startswith("+"):
+        return "normal"
+    return "comparison_only"
 
 
 def _pdf_period_text(text: str) -> str:

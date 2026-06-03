@@ -313,12 +313,20 @@ class KdbMetricRunner:
                 and _row_matches_group_by(row, metric_query.result_group_by)
             ]
             supplemental_symbol_rows: list[dict[str, Any]] = []
+            supplemental_market_rows: list[dict[str, Any]] = []
             if "sym" not in metric_query.result_group_by:
                 supplemental_symbol_rows = [
                     row
                     for row in unified_rows
                     if row["metricName"] == metric_query.metric_name
                     and _row_matches_group_by(row, ("sym",))
+                ]
+            if metric_query.result_group_by:
+                supplemental_market_rows = [
+                    row
+                    for row in unified_rows
+                    if row["metricName"] == metric_query.metric_name
+                    and _row_matches_group_by(row, ())
                 ]
             series = normalize_metric_result(
                 metric_name=metric_query.metric_name,
@@ -338,6 +346,20 @@ class KdbMetricRunner:
                     metadata={
                         **series.metadata,
                         "supplemental_symbol_observations": supplemental_symbol_series.observations,
+                    },
+                )
+            if supplemental_market_rows:
+                supplemental_market_series = normalize_metric_result(
+                    metric_name=metric_query.metric_name,
+                    result=supplemental_market_rows,
+                    group_by=(),
+                    metadata={},
+                )
+                series = replace(
+                    series,
+                    metadata={
+                        **series.metadata,
+                        "supplemental_market_observations": supplemental_market_series.observations,
                     },
                 )
             normalized[metric_query.metric_name] = series

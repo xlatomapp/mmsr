@@ -2,6 +2,46 @@
 
 This file must be updated after every implementation step.
 
+## 2026-06-04 — Market Summary delta consistency fix + debug logging
+
+### What changed
+- **Fix:** Made `_build_detailed_metric_trends_block` accept `market_scope_only` parameter
+  and set it to `True` in `_build_summary_page` so the Detailed Metric Trends chart
+  uses the same market-level data as the Market Overview cards. Previously the chart
+  used all group-level observations (sector/segment etc.) while the cards used only
+  `supplemental_market_observations` (TSE-wide aggregates), causing inconsistent
+  means and deltas between the two sections.
+- **Added INFO-level logging** to key calculation functions:
+  - `_series_period_mean` — logs formula: `sum(values) / n = total / count = mean`
+  - `_period_delta_pct` — logs formula: `(target - benchmark) / benchmark = delta`
+  - `_build_metric_aggregate_payloads` — logs target_mean, benchmark_mean, delta_pct,
+    point/bucket counts, and market_scope_only flag
+  - `_build_market_overview_cards_block` — logs per-card values and delta
+  - `_filter_series_for_market_scope` — logs supplemental vs regular observation counts
+- Added `import logging` and `LOGGER = logging.getLogger(__name__)` to market_report.py
+
+### Files changed
+- `mmsr/report/market_report.py`: Added logging, `market_scope_only` parameter to
+  `_build_detailed_metric_trends_block`, passed `market_scope_only=True` from
+  `_build_summary_page`
+
+### Tests
+- All 47 core tests pass (test_comparison, test_offline_fixtures, test_config_models,
+  test_periods, test_metric_registry, test_metric_timeseries)
+- No new test failures introduced (pre-existing failures in test_market_report.py
+  and test_cli.py related to parkinson_volatility_bps requirement in liquidity
+  distribution block are unchanged)
+
+### Validation
+- `poetry run pytest tests/test_comparison.py tests/test_offline_fixtures.py ...` — PASSED
+
+### Notes
+- The Market Overview card delta was already using `market_scope_only=True` before
+  this fix; the card's +43.4% delta is based on actual market-level data from
+  `supplemental_market_observations`. If the number seems unexpectedly high, run
+  with INFO logging to see the exact `target_mean`, `benchmark_mean`, and formula.
+- The Detailed Trends chart now shows consistent means (same data source as the card).
+
 ## 2026-05-30 — D2 implementation start: lead-chart-first defaults per section
 
 ### What changed
