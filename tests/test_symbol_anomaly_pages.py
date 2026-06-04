@@ -14,7 +14,7 @@ from mmsr.report import (
     SymbolAnomalyPageOptions,
     SymbolDetailIndexOptions,
     SymbolDetailPageOptions,
-    build_market_monitor_report,
+    build_market_report_document,
     build_symbol_anomaly_page,
     build_symbol_detail_index_block,
     build_symbol_detail_pages,
@@ -180,7 +180,7 @@ def test_market_report_skips_symbol_page_by_default() -> None:
         empirical_tail=0.01,
     )
 
-    document = build_market_monitor_report(
+    document = build_market_report_document(
         MarketReportInput(
             metric_definitions={
                 "quoted_spread_bps": definitions.get("quoted_spread_bps"),
@@ -207,7 +207,7 @@ def test_market_report_includes_symbol_page_when_explicitly_enabled() -> None:
         empirical_tail=0.01,
     )
 
-    document = build_market_monitor_report(
+    document = build_market_report_document(
         MarketReportInput(
             metric_definitions={
                 "quoted_spread_bps": definitions.get("quoted_spread_bps"),
@@ -238,7 +238,7 @@ def test_market_report_symbol_page_can_be_disabled() -> None:
         empirical_tail=0.01,
     )
 
-    document = build_market_monitor_report(
+    document = build_market_report_document(
         MarketReportInput(
             metric_definitions={
                 "quoted_spread_bps": definitions.get("quoted_spread_bps"),
@@ -479,7 +479,7 @@ def test_market_report_includes_symbol_detail_pages_when_symbol_series_exist() -
         ),
     )
 
-    document = build_market_monitor_report(
+    document = build_market_report_document(
         MarketReportInput(
             metric_definitions={
                 "quoted_spread_bps": definitions.get("quoted_spread_bps"),
@@ -496,7 +496,7 @@ def test_market_report_includes_symbol_detail_pages_when_symbol_series_exist() -
         "Intraday Detail",
     ]
 
-    document = build_market_monitor_report(
+    document = build_market_report_document(
         MarketReportInput(
             metric_definitions={
                 "quoted_spread_bps": definitions.get("quoted_spread_bps"),
@@ -540,7 +540,7 @@ def test_market_report_adds_symbol_detail_index_when_detail_pages_exist() -> Non
         ),
     )
 
-    document = build_market_monitor_report(
+    document = build_market_report_document(
         MarketReportInput(
             metric_definitions={
                 "quoted_spread_bps": definitions.get("quoted_spread_bps"),
@@ -608,7 +608,7 @@ def test_market_report_symbol_detail_index_can_be_disabled() -> None:
         ),
     )
 
-    document = build_market_monitor_report(
+    document = build_market_report_document(
         MarketReportInput(
             metric_definitions={
                 "quoted_spread_bps": definitions.get("quoted_spread_bps"),
@@ -644,7 +644,7 @@ def test_market_report_symbol_detail_pages_can_be_disabled() -> None:
         ),
     )
 
-    document = build_market_monitor_report(
+    document = build_market_report_document(
         MarketReportInput(
             metric_definitions={
                 "quoted_spread_bps": definitions.get("quoted_spread_bps"),
@@ -690,7 +690,7 @@ def test_market_report_uses_custom_symbol_group_keys_for_summary_and_details() -
         ),
     )
 
-    without_custom_keys = build_market_monitor_report(
+    without_custom_keys = build_market_report_document(
         MarketReportInput(
             metric_definitions={
                 "quoted_spread_bps": definitions.get("quoted_spread_bps"),
@@ -701,7 +701,7 @@ def test_market_report_uses_custom_symbol_group_keys_for_summary_and_details() -
         ),
         options=MarketReportOptions(include_metric_definitions_appendix=False),
     )
-    with_custom_keys = build_market_monitor_report(
+    with_custom_keys = build_market_report_document(
         MarketReportInput(
             metric_definitions={
                 "quoted_spread_bps": definitions.get("quoted_spread_bps"),

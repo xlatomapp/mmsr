@@ -642,6 +642,11 @@
       flex-direction: column;
       padding: 5px;
     }
+    .turnover-distribution__card--bar [data-turnover-mix-table] {
+      display: flex;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
     .turnover-distribution__card--line {
       display: flex;
       flex-direction: column;
@@ -649,10 +654,61 @@
     .turnover-distribution__card--bar .plotly-chart__figure,
     .turnover-distribution__card--line .plotly-chart__figure {
       flex: 1 1 auto;
-      min-height: 0;
+      min-height: 320px;
     }
     .turnover-distribution__card--table {
       grid-column: 1 / -1;
+    }
+    .turnover-distribution__aggregate {
+      display: flex;
+      flex: 1 1 auto;
+      width: 100%;
+      overflow: auto;
+    }
+    .turnover-distribution__aggregate-table {
+      width: 100%;
+      height: 100%;
+      border-collapse: collapse;
+      font-size: 10px;
+    }
+    .turnover-distribution__aggregate-table thead th {
+      background: #f3f7fd;
+      color: var(--mmsr-muted);
+      text-align: center;
+      font-weight: 700;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .turnover-distribution__aggregate-table th,
+    .turnover-distribution__aggregate-table td {
+      border: 1px solid #dbe4f0;
+      padding: 5px 6px;
+      white-space: nowrap;
+      vertical-align: middle;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+    .turnover-distribution__aggregate-table tbody th {
+      background: #f9fbff;
+      color: #1f2d3d;
+      text-align: left;
+      font-weight: 700;
+    }
+    .turnover-distribution__daily-grid {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .turnover-distribution__card--daily {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .turnover-distribution__card--daily .plotly-chart__figure {
+      flex: 1 1 auto;
+      min-height: 260px;
     }
     .turnover-distribution__card-title {
       margin: 0 0 6px;
@@ -661,6 +717,30 @@
       text-transform: uppercase;
       letter-spacing: 0.04em;
       font-weight: 700;
+    }
+    .turnover-distribution__card-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .turnover-distribution__card-title-row .turnover-distribution__card-title {
+      margin-bottom: 0;
+    }
+    .turnover-distribution__curve-select {
+      min-width: 150px;
+      border: 1px solid var(--mmsr-border);
+      border-radius: 6px;
+      background: #fff;
+      color: #1f2d3d;
+      font-size: 12px;
+      padding: 4px 8px;
+    }
+    .turnover-distribution__help--inline {
+      margin-top: 0;
+      margin-left: auto;
+      align-self: center;
     }
     .turnover-distribution__heatmap {
       margin-top: 0;
@@ -730,14 +810,13 @@
     }
     .turnover-distribution__heatmap-row.is-selected th,
     .turnover-distribution__heatmap-row.is-selected td {
-      border-top: 2px solid #2d5d93;
-      border-bottom: 2px solid #2d5d93;
+      box-shadow: inset 0 2px 0 #2d5d93, inset 0 -2px 0 #2d5d93;
     }
     .turnover-distribution__heatmap-row.is-selected th {
-      border-left: 2px solid #2d5d93;
+      box-shadow: inset 2px 0 0 #2d5d93, inset 0 2px 0 #2d5d93, inset 0 -2px 0 #2d5d93;
     }
     .turnover-distribution__heatmap-row.is-selected td:last-child {
-      border-right: 2px solid #2d5d93;
+      box-shadow: inset -2px 0 0 #2d5d93, inset 0 2px 0 #2d5d93, inset 0 -2px 0 #2d5d93;
     }
     .turnover-distribution .plotly-chart__figure {
       min-width: 0 !important;
@@ -767,6 +846,9 @@
     .liquidity-distribution .turnover-distribution__card--bar .turnover-distribution__heatmap-table {
       height: 100%;
     }
+    .liquidity-distribution .turnover-distribution__card--line .plotly-chart__figure {
+      min-height: 320px;
+    }
     .pts-stats__stack {
       display: flex;
       flex-direction: column;
@@ -774,7 +856,7 @@
     }
     .pts-stats__summary-row {
       display: grid;
-      grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+      grid-template-columns: minmax(200px, 20%) minmax(0, 1fr);
       gap: 12px;
       align-items: stretch;
     }
@@ -899,6 +981,9 @@
       }
       .turnover-distribution__card--table {
         grid-column: auto;
+      }
+      .turnover-distribution__daily-grid {
+        grid-template-columns: 1fr;
       }
       .pts-stats__summary-row {
         grid-template-columns: 1fr;
@@ -1814,6 +1899,30 @@
       padding: 12px 14px;
       background: var(--mmsr-panel);
     }
+    .metric-definitions-page {
+      border-top: 1px solid var(--mmsr-border);
+      padding-top: 10px;
+    }
+    .metric-definitions-page summary {
+      list-style: none;
+    }
+    .metric-definitions-page summary::-webkit-details-marker { display: none; }
+    .metric-definitions-page summary::marker { content: ""; }
+    .metric-definitions-page__toggle {
+      margin-left: auto;
+      border: 1px solid var(--mmsr-border);
+      border-radius: 6px;
+      background: #fff;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #1f2d3d;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .metric-definitions-page__body {
+      margin-top: 10px;
+    }
     .metric-definition summary { cursor: pointer; }
     .metric-definition__category { color: var(--mmsr-muted); font-weight: 400; }
     .metric-definition__fields {
@@ -1913,8 +2022,21 @@
         {%- set page_class = page_class + ' report-page--daily-trends' -%}
         {%- endif -%}
       <section class="{{ page_class }}"{% if page.anchor_id %} id="{{ page.anchor_id }}"{% endif %}>
+        {% if page.title == "Metric Definitions Appendix" %}
+          <details class="metric-definitions-page">
+            <summary class="report-page__header">
+              <h2 class="report-page__title">{{ page.title }}</h2>
+              <span class="metric-definitions-page__toggle">Show / Hide</span>
+            </summary>
+            <div class="metric-definitions-page__body">
+              {% for block in page.html_blocks %}
+                <div class="html-block__body">{{ block.body_html | safe }}</div>
+              {% endfor %}
+            </div>
+          </details>
+        {% else %}
         <div class="report-page__header">
-          {% if page.title != "Market Summary" %}
+          {% if page.title != "Market Summary" and page.title != "Metric Definitions Appendix" %}
             <span class="report-page__index">{{ loop.index }}</span>
           {% endif %}
           <h2 class="report-page__title">{{ page.title }}</h2>
@@ -2017,15 +2139,18 @@
             {% include "partials/commentary_block.html.j2" %}
           {% endfor %}
         {% endif %}
+        {% endif %}
       </section>
     {% endfor %}
 
-    <footer class="brand-footer">
-      {% if document.branding.footer_image_src %}
-        <img class="footer-banner" src="{{ document.branding.footer_image_src }}" alt="Report footer image">
-      {% endif %}
-      {% if document.branding.footer_text %}<div>{{ document.branding.footer_text }}</div>{% endif %}
-    </footer>
+    {% if document.branding.footer_image_src or document.branding.footer_text %}
+      <footer class="brand-footer">
+        {% if document.branding.footer_image_src %}
+          <img class="footer-banner" src="{{ document.branding.footer_image_src }}" alt="Report footer image">
+        {% endif %}
+        {% if document.branding.footer_text %}<div>{{ document.branding.footer_text }}</div>{% endif %}
+      </footer>
+    {% endif %}
   </main>
   <script>
     window.addEventListener("DOMContentLoaded", function () {

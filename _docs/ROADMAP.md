@@ -429,7 +429,7 @@ calculation paths unless the product scope explicitly changes.
 
 - `build_toxicity_reversion_page()` consumes normalized kdb-backed
   `MetricTimeSeries` rows for `primary_quote_reversion_*_bps` metrics.
-- The canonical `build_market_monitor_report()` inserts the `Cross-Venue
+- The canonical `build_market_report_document()` inserts the `Cross-Venue
   Toxicity` page when those rows are present and keeps it opt-out through
   `MarketReportOptions.include_toxicity_reversion_page`.
 - The visual uses the standard deterministic SVG time-series component with
@@ -691,7 +691,7 @@ users define raw trade/quote access while MMSR owns metric q calculations.
   and `liquidity` queries through `KdbMetricRunner` and a tiny mock client.
 - The mock-kdb result is normalized into canonical `MetricTimeSeries` objects,
   compared with deterministic reference observations, and rendered through the
-  same `build_market_monitor_report()` path as production-format reports.
+  same `build_market_report_document()` path as production-format reports.
 - Starter-template output schema contracts now cover the default
   market-monitoring templates (`activity`, `liquidity`, and
   `toxicity_reversion`) plus optional market-microstructure add-ons
@@ -741,7 +741,7 @@ without calculating metrics in the report layer or requiring live kdb access.
   and keeps the worst comparison per symbol.
 - `build_symbol_anomaly_page()` formats the selected comparisons as a metric
   table with metric help and human-readable scope labels.
-- The canonical `build_market_monitor_report()` path automatically inserts the
+- The canonical `build_market_report_document()` path automatically inserts the
   page when symbol-scoped anomaly rows are present and can disable it through
   `MarketReportOptions.include_symbol_anomaly_page`.
 - Tests cover ranking, deduplication, normal-row watchlist mode, metric-table
@@ -804,7 +804,7 @@ layer or requiring live kdb access.
   human-readable date, bucket, and group labels.
 - `MarketReportOptions` exposes `include_drilldown_page`, page/table/help labels,
   `drilldown_group_keys`, and `max_drilldown_rows`.
-- `build_market_monitor_report()` inserts the drilldown page only when matching
+- `build_market_report_document()` inserts the drilldown page only when matching
   group-level comparison rows are present, and the page remains opt-out through
   report options.
 - `OfflineDemoReportOptions` passes drilldown-page inclusion and row-limit

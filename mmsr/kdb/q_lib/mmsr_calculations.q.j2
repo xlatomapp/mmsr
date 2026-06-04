@@ -4,9 +4,13 @@
 
 {{ calculation_namespace }}.partedSym:{[t]
     / Reversion aj paths are day-scoped in production. After xasc by the aj
-    / grouping keys, sym is contiguous for one runDate, so p# lets aj use the
-    / partitioned sym attribute instead of repeatedly scanning symbol groups.
-    $[`sym in cols t; @[t;`sym;{`p#x}]; t]
+    / grouping keys, sym is contiguous within the quote/trade search path, so
+    / g# lets aj use grouped symbol lookup instead of repeated full scans.
+    $[`sym in cols t; @[t;`sym;{`g#x}]; t]
+    };
+
+{{ calculation_namespace }}.venueSymKey:{[sym;venue]
+    `$ {x,".",y}'[string sym; string venue]
     };
 
 / flip to table
@@ -795,6 +799,7 @@
               tradePrice > 0,
               not null venue,
               not null sym;
+    ptsTrades: update sym1: {{ calculation_namespace }}.venueSymKey[sym;venue] from ptsTrades;
     ptsQuotes:
         select
             date,
@@ -810,6 +815,7 @@
               askPrice > bidPrice,
               not null venue,
               not null sym;
+    ptsQuotes: update sym1: {{ calculation_namespace }}.venueSymKey[sym;venue] from ptsQuotes;
     primaryQuotes:
         select
             date,
@@ -825,19 +831,19 @@
               bidPrice > 0,
               askPrice > bidPrice,
               not null sym;
-    sortedPtsTrades: {{ calculation_namespace }}.partedSym[`date`sym`venue`time xasc ptsTrades];
-    sortedPtsQuotes: {{ calculation_namespace }}.partedSym[`date`sym`venue`time xasc ptsQuotes];
+    sortedPtsTrades: {{ calculation_namespace }}.partedSym[`sym1`time xasc ptsTrades];
+    sortedPtsQuotes: {{ calculation_namespace }}.partedSym[`sym1`time xasc ptsQuotes];
     tradeWithPtsQuote:
         aj[
-            `date`sym`venue`time;
+            `sym1`time;
             sortedPtsTrades;
             sortedPtsQuotes
         ];
-    sortedTradeWithPtsQuote: {{ calculation_namespace }}.partedSym[`date`sym`time xasc tradeWithPtsQuote];
-    sortedPrimaryQuotes: {{ calculation_namespace }}.partedSym[`date`sym`time xasc primaryQuotes];
+    sortedTradeWithPtsQuote: {{ calculation_namespace }}.partedSym[`sym`time xasc tradeWithPtsQuote];
+    sortedPrimaryQuotes: {{ calculation_namespace }}.partedSym[`sym`time xasc primaryQuotes];
     tradeWithPreMid:
         aj[
-            `date`sym`time;
+            `sym`time;
             sortedTradeWithPtsQuote;
             sortedPrimaryQuotes
         ];
@@ -849,7 +855,7 @@
             sym,
             postMid: primaryMid
         from primaryQuotes;
-    postQuotes: {{ calculation_namespace }}.partedSym[`date`sym`horizonTime xasc postQuotes];
+    postQuotes: {{ calculation_namespace }}.partedSym[`sym`horizonTime xasc postQuotes];
     `tradeWithPreMid`postQuotes!(tradeWithPreMid;postQuotes)
     };
 
@@ -861,11 +867,11 @@
             ptsQuoteAge: time - ptsQuoteTime,
             primaryQuoteAge: time - primaryQuoteTime
         from tradeWithPreMid;
-    sortedTradeForHorizon: {{ calculation_namespace }}.partedSym[`date`sym`horizonTime xasc tradeForHorizon];
-    sortedPostQuotes: {{ calculation_namespace }}.partedSym[`date`sym`horizonTime xasc postQuotes];
+    sortedTradeForHorizon: {{ calculation_namespace }}.partedSym[`sym`horizonTime xasc tradeForHorizon];
+    sortedPostQuotes: {{ calculation_namespace }}.partedSym[`sym`horizonTime xasc postQuotes];
     tradeWithPostMid:
         aj[
-            `date`sym`horizonTime;
+            `sym`horizonTime;
             sortedTradeForHorizon;
             sortedPostQuotes
         ];

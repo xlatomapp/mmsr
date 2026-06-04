@@ -191,7 +191,7 @@ def _metric_definition_details(metric: MetricDefinition) -> str:
         _yes_no(metric.supports_symbol_level),
     )
     return (
-        '<details class="metric-definition" open>\n'
+        '<details class="metric-definition">\n'
         f"  <summary><strong>{escape(metric.label)}</strong> "
         f'<span class="metric-definition__category">({escape(metric.category)})</span>'
         "</summary>\n"

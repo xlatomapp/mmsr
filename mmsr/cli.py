@@ -39,7 +39,7 @@ from mmsr.periods.symbols import KdbSymbolUniverseSource
 from mmsr.report.market_report import (
     MarketReportInput,
     MarketReportOptions,
-    build_market_monitor_report,
+    build_market_report_document,
 )
 from mmsr.report.render_html import render_report_v2
 from mmsr.report.render_pdf import render_report_pdf_file
@@ -1350,7 +1350,7 @@ def build_production_report_document(
         current_series=current_series,
         reference_series=reference_series,
     )
-    return build_market_monitor_report(
+    return build_market_report_document(
         MarketReportInput(
             metric_definitions=definitions,
             current_series=current_series,
@@ -1362,6 +1362,8 @@ def build_production_report_document(
             brand_name=report_config.html.branding.brand_name,
             generated_at_text="production kdb-backed run",
             summary_scope_label="production kdb",
+            include_activity_distribution_page=False,
+            include_displayed_liquidity_page=False,
             include_metric_definitions_appendix=True,
             include_toxicity_reversion_page=report_config.toxicity.enabled,
             detailed_metric_trends_granularity=detailed_trends_granularity,

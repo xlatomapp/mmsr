@@ -26,7 +26,7 @@ from mmsr.report.drilldowns import (
 from mmsr.report.market_report import (
     MarketReportInput,
     MarketReportOptions,
-    build_market_monitor_report,
+    build_market_report_document,
 )
 from mmsr.report.render_quarto import (
     render_report_qmd,
@@ -115,7 +115,7 @@ __all__ = [
     "build_executive_market_overview_block",
     "build_heatmap",
     "build_reference_target_intraday_profile_chart",
-    "build_market_monitor_report",
+    "build_market_report_document",
     "build_metric_definitions_appendix_page",
     "render_report_qmd",
     "render_report_qmd_file",

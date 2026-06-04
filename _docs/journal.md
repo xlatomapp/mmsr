@@ -3048,8 +3048,8 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - Restarted from `mmsr_phase9_iteration21(1).zip` as the base package.
 - Updated the roadmap to insert Milestone 9A before Milestone 10, reflecting user feedback that report quality must be hardened before kdb integration.
 - Documented that the mock-data demo must use the exact same production-format report builder, page structure, packaged Jinja template, component partials, and metric-help behavior as production; only the data source changes.
-- Added `mmsr.report.market_report.MarketReportInput`, `MarketReportOptions`, and `build_market_monitor_report()` as the canonical production-format report assembly path.
-- Refactored `mmsr.examples.offline_demo.build_offline_demo_report()` into a mock-data adapter that converts fixture metrics into `MarketReportInput` and delegates to `build_market_monitor_report()`.
+- Added `mmsr.report.market_report.MarketReportInput`, `MarketReportOptions`, and `build_market_report_document()` as the canonical production-format report assembly path.
+- Refactored `mmsr.examples.offline_demo.build_offline_demo_report()` into a mock-data adapter that converts fixture metrics into `MarketReportInput` and delegates to `build_market_report_document()`.
 - Updated the default mock-data demo wording from offline-specific page names to production-format page names: `Market Summary` and `Intraday Detail`.
 - Updated README and milestone status documentation to describe the demo as a production-format mock-data acceptance harness rather than a separate report layout.
 - Added the requested info-icon/popover issue to Milestone 9A as an explicit requirement: title-only/inert info buttons are not sufficient, and metric/help controls must become accessible deterministic expandable/popover-style controls in a later iteration.
@@ -3074,7 +3074,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - Added `tests/test_market_report.py` to verify the canonical production-format report builder, packaged template rendering, component limits, appendix omission, and missing metric-definition validation.
 - Updated offline demo tests to assert that the mock-data demo uses production-format page names and delegates through the canonical report shape.
 - Updated CLI tests for the new mock-data production-format wording.
-- Updated README governance test to assert that the quickstart documents `build_market_monitor_report()` and the rule that only the data source changes.
+- Updated README governance test to assert that the quickstart documents `build_market_report_document()` and the rule that only the data source changes.
 
 ### Validation performed
 
@@ -3554,7 +3554,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - Continued from `mmsr_phase9_iteration28.zip`.
 - Began Milestone 10 by adding a deterministic mock-kdb integration demo that executes rendered q templates through the existing `KdbMetricRunner` path.
 - Added `DeterministicMockKdbClient`, `MockKdbIntegrationDemoOptions`, `MockKdbIntegrationDemoResult`, `build_mock_kdb_integration_demo_result()`, and `build_mock_kdb_integration_demo_report()`.
-- The mock-kdb path executes starter `activity` and `liquidity` template queries for current and reference periods, normalizes table-shaped mock results into `MetricTimeSeries`, computes reference comparisons, and delegates into the canonical `build_market_monitor_report()` report path.
+- The mock-kdb path executes starter `activity` and `liquidity` template queries for current and reference periods, normalizes table-shaped mock results into `MetricTimeSeries`, computes reference comparisons, and delegates into the canonical `build_market_report_document()` report path.
 - Added the `mmsr mock-kdb-demo --output <path>` CLI command and programmatic `render_mock_kdb_demo_report_file()` helper.
 - Documented the mock-kdb quickstart in README and updated roadmap/status docs to mark Milestone 10 as in progress.
 
@@ -4198,7 +4198,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - Deduplicated symbol anomaly output to the worst comparison per symbol and
   excluded normal rows by default, while retaining an explicit normal-row
   watchlist mode.
-- Wired the canonical `build_market_monitor_report()` path to automatically
+- Wired the canonical `build_market_report_document()` path to automatically
   insert a symbol anomaly page when symbol-scoped anomaly rows are present, with
   an opt-out through `MarketReportOptions.include_symbol_anomaly_page`.
 - Documented the symbol anomaly page behavior in README, roadmap, and milestone
@@ -4412,7 +4412,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - Added `MarketReportOptions.include_symbol_detail_pages`,
   `symbol_detail_page_title_template`, `symbol_detail_help_text`, and
   `max_symbol_detail_pages`.
-- Wired `build_market_monitor_report()` to insert per-symbol detail pages only
+- Wired `build_market_report_document()` to insert per-symbol detail pages only
   when selected anomaly symbols also have symbol-scoped time-series rows.
 - Added deterministic offline symbol detail fixtures via
   `build_offline_symbol_metric_time_series()` and routed `mmsr offline-demo`
@@ -4671,7 +4671,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 ### Remaining work before milestone completion
 
 - Build a deterministic drilldown report page with metric help controls.
-- Wire the drilldown page into `build_market_monitor_report()` behind report
+- Wire the drilldown page into `build_market_report_document()` behind report
   options.
 - Add offline-demo fixture coverage so sector, segment, and market-cap drilldown
   pages are visibly rendered without live kdb+, PyKX, real market data, or LLM
@@ -4773,7 +4773,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 ### Remaining work before milestone completion
 
-- Wire the drilldown page into `build_market_monitor_report()` behind report
+- Wire the drilldown page into `build_market_report_document()` behind report
   options.
 - Add offline-demo fixture coverage so sector, segment, and market-cap drilldown
   pages are visibly rendered without live kdb+, PyKX, real market data, or LLM
@@ -4820,7 +4820,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
   - `drilldown_help_text`
   - `max_drilldown_rows`
   - `drilldown_group_keys`
-- Wired `build_drilldown_report_page()` into `build_market_monitor_report()`.
+- Wired `build_drilldown_report_page()` into `build_market_report_document()`.
   The page is inserted only when matching group-level comparison rows are
   present and remains opt-out through `include_drilldown_page=False`.
 - Reused the existing symbol key configuration when excluding symbol-scoped rows
@@ -5246,7 +5246,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
   line per venue.
 - Added low-confidence sample-size metadata display and deterministic toxicity
   commentary from existing reversion curve facts.
-- Wired the page into `build_market_monitor_report()` with opt-out and limit
+- Wired the page into `build_market_report_document()` with opt-out and limit
   controls on `MarketReportOptions`.
 - Exported the new production report builder from `mmsr.report`.
 - Updated README, roadmap, and milestone status to describe the production
@@ -5435,7 +5435,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 
 - Continued from `mmsr_phase10_iteration47.zip`.
 - Added `MarketReportOptions.include_toxicity_reversion_metrics_in_detail_page`, defaulting to `False`.
-- Updated the canonical `build_market_monitor_report()` flow so it first determines whether the dedicated `Cross-Venue Toxicity` page is present, then filters `primary_quote_reversion_*_bps` series out of the generic `Intraday Detail` page by default.
+- Updated the canonical `build_market_report_document()` flow so it first determines whether the dedicated `Cross-Venue Toxicity` page is present, then filters `primary_quote_reversion_*_bps` series out of the generic `Intraday Detail` page by default.
 - Kept a deterministic opt-in path for production callers that explicitly want both the dedicated toxicity curves and the generic detail charts/heatmaps.
 - Preserved generic Intraday Detail rendering for reversion series when the dedicated toxicity page is disabled or absent, so supplied data remains visible.
 - Updated README, roadmap, and milestone status documentation to describe the duplicate-suppression behavior and the opt-in option.
@@ -5583,7 +5583,7 @@ Wire `MetricDefinition.higher_is_better` into `compare_metric_timeseries` throug
 - Added `SymbolDetailIndexOptions` and `build_symbol_detail_index_block()` to
   build a compact trusted-HTML navigation table from already-computed
   symbol-scoped comparison facts and emitted symbol detail pages.
-- Updated the canonical `build_market_monitor_report()` flow so the
+- Updated the canonical `build_market_report_document()` flow so the
   `Symbol Anomalies` page includes a `Symbol Detail Index` by default whenever
   per-symbol detail pages are emitted.
 - Added `MarketReportOptions.include_symbol_detail_index`,

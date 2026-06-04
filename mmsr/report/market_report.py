@@ -419,7 +419,7 @@ def _series_for_level(series: MetricTimeSeries, level: str) -> MetricTimeSeries:
     )
 
 
-def build_market_monitor_report(
+def build_market_report_document(
     report_input: MarketReportInput,
     *,
     options: MarketReportOptions | None = None,
@@ -454,7 +454,7 @@ def build_market_monitor_report(
     )
     if not resolved_options.include_metric_definitions_appendix:
         return document
-    return append_metric_definitions_appendix(document)
+    return append_metric_definitions_appendix(document, metric_definitions=report_input.metric_definitions)
 
 
 def _build_summary_page(
@@ -568,7 +568,16 @@ def _build_liquidity_distribution_summary_block(
         for series in report_input.reference_series
         if not _series_has_symbol_scope(series, options.symbol_group_keys)
     }
-    metric_names = ["quoted_spread_bps", "top_of_book_depth", "parkinson_volatility_bps"]
+    available_metric_names = set(current_by_metric) | set(reference_by_metric) | set(definitions)
+    volatility_metric_name = None
+    for candidate in ("parkinson_volatility_bps", "realized_volatility", "return_volatility", "volatility"):
+        if candidate in available_metric_names:
+            volatility_metric_name = candidate
+            break
+
+    metric_names = ["quoted_spread_bps", "top_of_book_depth"]
+    if volatility_metric_name is not None:
+        metric_names.append(volatility_metric_name)
     missing: list[str] = []
     for metric_name in metric_names:
         if metric_name not in current_by_metric:
@@ -915,6 +924,103 @@ def _build_pts_stats_block(
             "Percentages are each stock's PTS turnover divided by that same stock's aggregate TSE turnover over the same period."
         ),
     )
+    toxicity_metric_series = [
+        series for series in report_input.current_series if _is_toxicity_reversion_metric(series.metric_name)
+    ]
+    toxicity_metric_names = {
+        metric_name for metric_name in definitions if _is_toxicity_reversion_metric(metric_name)
+    } | {series.metric_name for series in toxicity_metric_series}
+    ordered_horizons = [
+        horizon
+        for horizon in options.toxicity_reversion_horizon_order
+        if f"primary_quote_reversion_{horizon}_bps" in toxicity_metric_names
+    ]
+    toxicity_rows_html = ""
+    if ordered_horizons:
+        toxicity_weighted_sum_by_venue_horizon: dict[tuple[str, str], float] = {}
+        toxicity_weight_by_venue_horizon: dict[tuple[str, str], float] = {}
+        for series in toxicity_metric_series:
+            horizon = series.metric_name[len("primary_quote_reversion_") : -len("_bps")]
+            if horizon not in ordered_horizons:
+                continue
+            for observation in series.observations:
+                venue = str(observation.group.get("venue", "")).strip()
+                value = observation.value
+                if not venue or value is None:
+                    continue
+                numeric_value = float(value)
+                if not isfinite(numeric_value):
+                    continue
+                weight = observation.metadata.get("notional")
+                numeric_weight = float(weight) if weight is not None else 1.0
+                if not isfinite(numeric_weight) or numeric_weight <= 0.0:
+                    numeric_weight = 1.0
+                key = (venue, horizon)
+                toxicity_weighted_sum_by_venue_horizon[key] = (
+                    toxicity_weighted_sum_by_venue_horizon.get(key, 0.0) + (numeric_value * numeric_weight)
+                )
+                toxicity_weight_by_venue_horizon[key] = toxicity_weight_by_venue_horizon.get(key, 0.0) + numeric_weight
+
+        toxicity_value_by_venue_horizon = {
+            key: toxicity_weighted_sum_by_venue_horizon[key] / total_weight
+            for key, total_weight in toxicity_weight_by_venue_horizon.items()
+            if total_weight > 0.0
+        }
+
+        toxicity_venues = [
+            venue
+            for venue in options.toxicity_reversion_venue_order
+            if venue in ordered_venues or any((venue, horizon) in toxicity_value_by_venue_horizon for horizon in ordered_horizons)
+        ]
+        remaining_venues = sorted(
+            {
+                venue
+                for (venue, horizon) in toxicity_value_by_venue_horizon
+                if horizon in ordered_horizons and venue not in toxicity_venues
+            }
+        )
+        remaining_venues.extend(
+            venue
+            for venue in ordered_venues
+            if venue not in toxicity_venues and venue not in remaining_venues
+        )
+        toxicity_venues.extend(remaining_venues)
+        max_abs_toxicity = max((abs(value) for value in toxicity_value_by_venue_horizon.values()), default=0.0)
+
+        def _toxicity_style(value: float | None) -> str:
+            if value is None or max_abs_toxicity <= 0:
+                return ""
+            strength = min(1.0, abs(value) / max_abs_toxicity)
+            alpha = 0.08 + 0.34 * strength
+            if value > 0:
+                return f"background: rgba(186, 26, 26, {alpha:.3f}); color: #7b1111;"
+            if value < 0:
+                return f"background: rgba(45, 93, 147, {alpha:.3f}); color: #163b63;"
+            return ""
+
+        toxicity_rows_html = "".join(
+            (
+                "<tr>"
+                f"<th>{escape(venue)}</th>"
+                + "".join(
+                    (
+                        f'<td style="{_toxicity_style(toxicity_value_by_venue_horizon.get((venue, horizon)))}">'
+                        f"{escape('n/a' if toxicity_value_by_venue_horizon.get((venue, horizon)) is None else f'{toxicity_value_by_venue_horizon[(venue, horizon)]:.2f} bps')}"
+                        "</td>"
+                    )
+                    for horizon in ordered_horizons
+                )
+                + "</tr>"
+            )
+            for venue in toxicity_venues
+        )
+    toxicity_help_html = _metric_help_icon_html(
+        title="Venue Toxicity Heatmap",
+        help_text=(
+            "Current-period primary-quote reversion by venue and horizon. "
+            "Cells are mean reversion in bps for the selected venue and horizon; stronger color indicates larger magnitude."
+        ),
+    )
     plot_help_html = _metric_help_icon_html(title=pts_definition.label, help_text=pts_definition.help_text())
     summary_table_help_html = _metric_help_icon_html(
         title="PTS Venue Share Summary",
@@ -957,6 +1063,23 @@ def _build_pts_stats_block(
         f"<p>{escape(options.pts_stats_help_text)} Methodology: each line is one PTS venue numerator; denominator is aggregate TSE turnover; weekly/monthly/quarterly values are computed as sum(numerator) / sum(denominator) within each bucket.</p>"
         "</div></details>"
     )
+    toxicity_section_html = (
+        ""
+        if not toxicity_rows_html
+        else (
+            '<div class="pts-stats__toxicity">'
+            '<div class="plotly-chart__card-header">'
+            '<div class="turnover-distribution__card-title">Venue Toxicity Heatmap</div>'
+            f"{toxicity_help_html}"
+            "</div>"
+            '<div class="turnover-distribution__heatmap">'
+            '<table class="turnover-distribution__heatmap-table pts-stats__toxicity-table">'
+            f"<thead><tr><th>Venue</th>{''.join(f'<th>{escape(horizon)}</th>' for horizon in ordered_horizons)}</tr></thead>"
+            f"<tbody>{toxicity_rows_html}</tbody>"
+            "</table></div></div>"
+        )
+    )
+
     body_html = (
         '<section class="pts-stats turnover-distribution">'
         '<div class="turnover-distribution__header">'
@@ -990,6 +1113,7 @@ def _build_pts_stats_block(
         f"{venue_grid_help_html}"
         "</div>"
         f"<div class=\"pts-stats__venue-grid\">{''.join(venue_sections)}</div>"
+        f"{toxicity_section_html}"
         "</div></div></section>"
     )
     return HtmlBlock(title=options.pts_stats_title, body_html=body_html, help_text=None)
@@ -3052,5 +3176,5 @@ def _require_one_of(value: str, field_name: str, allowed_values: tuple[str, ...]
 __all__ = [
     "MarketReportInput",
     "MarketReportOptions",
-    "build_market_monitor_report",
+    "build_market_report_document",
 ]

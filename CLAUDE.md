@@ -105,7 +105,7 @@ config (YAML, Pydantic/dataclass models)
 | `mmsr/kdb/q_lib/mmsr_simulated_sources.q.j2` | Deterministic dev/debug source getters for kdb injection |
 | `mmsr/analysis/comparison.py` | Reference comparison engine (z-scores, percentiles, change stats) |
 | `mmsr/analysis/commentary.py` | Deterministic template commentary from comparison facts |
-| `mmsr/report/market_report.py` | `build_market_monitor_report()` — canonical report assembly |
+| `mmsr/report/market_report.py` | `build_market_report_document()` — canonical report assembly |
 | `mmsr/report/render_html.py` | Jinja2 HTML rendering |
 | `mmsr/report/sections.py` | Comparison tables, time-series charts, heatmaps |
 | `mmsr/report/symbols.py` | Symbol anomaly/detail pages |
@@ -129,12 +129,12 @@ config (YAML, Pydantic/dataclass models)
 7. Each batch: q loads raw trade/quote via user source functions, runs MMSR calc functions, returns aggregated result tables
 8. `KdbMetricRunner` validates each result against output schema contracts, normalizes to `MetricTimeSeries`
 9. Reference comparison engine produces `MetricComparison` objects (robust z-score, empirical percentile)
-10. `build_market_monitor_report()` assembles the canonical report document
+10. `build_market_report_document()` assembles the canonical report document
 11. Jinja2 renders HTML from `mmsr/report/templates/report.html.j2`
 
 ### Offline / demo data flow
 
-`mmsr offline-demo` uses synthetic fixture data but routes through the **same** `build_market_monitor_report()` and the same Jinja2 template. It never imports PyKX or calls an LLM.
+`mmsr offline-demo` uses synthetic fixture data but routes through the **same** `build_market_report_document()` and the same Jinja2 template. It never imports PyKX or calls an LLM.
 
 ## Key design rules
 

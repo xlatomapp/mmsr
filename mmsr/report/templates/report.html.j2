@@ -839,6 +839,30 @@
       padding: 12px 14px;
       background: var(--mmsr-panel);
     }
+    .metric-definitions-page {
+      border-top: 1px solid var(--mmsr-border);
+      padding-top: 10px;
+    }
+    .metric-definitions-page summary {
+      list-style: none;
+    }
+    .metric-definitions-page summary::-webkit-details-marker { display: none; }
+    .metric-definitions-page summary::marker { content: ""; }
+    .metric-definitions-page__toggle {
+      margin-left: auto;
+      border: 1px solid var(--mmsr-border);
+      border-radius: 6px;
+      background: #fff;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #1f2d3d;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .metric-definitions-page__body {
+      margin-top: 10px;
+    }
     .metric-definition summary { cursor: pointer; }
     .metric-definition__category { color: var(--mmsr-muted); font-weight: 400; }
     .metric-definition__fields {
@@ -922,8 +946,23 @@
         {%- set page_class = page_class + ' report-page--daily-trends' -%}
       {%- endif -%}
       <section class="{{ page_class }}"{% if page.anchor_id %} id="{{ page.anchor_id }}"{% endif %}>
+        {% if page.title == "Metric Definitions Appendix" %}
+          <details class="metric-definitions-page">
+            <summary class="report-page__header">
+              <h2 class="report-page__title">{{ page.title }}</h2>
+              <span class="metric-definitions-page__toggle">Show / Hide</span>
+            </summary>
+            <div class="metric-definitions-page__body">
+              {% for block in page.html_blocks %}
+                <div class="html-block__body">{{ block.body_html | safe }}</div>
+              {% endfor %}
+            </div>
+          </details>
+        {% else %}
         <div class="report-page__header">
-          <span class="report-page__index">{{ loop.index }}</span>
+          {% if page.title != "Metric Definitions Appendix" %}
+            <span class="report-page__index">{{ loop.index }}</span>
+          {% endif %}
           <h2 class="report-page__title">{{ page.title }}</h2>
         </div>
         {% if page.title == "Market Summary" %}
@@ -996,15 +1035,18 @@
             {% include "partials/commentary_block.html.j2" %}
           {% endfor %}
         {% endif %}
+        {% endif %}
       </section>
     {% endfor %}
 
-    <footer class="brand-footer">
-      {% if document.branding.footer_image_src %}
-        <img class="footer-banner" src="{{ document.branding.footer_image_src }}" alt="Report footer image">
-      {% endif %}
-      {% if document.branding.footer_text %}<div>{{ document.branding.footer_text }}</div>{% endif %}
-    </footer>
+    {% if document.branding.footer_image_src or document.branding.footer_text %}
+      <footer class="brand-footer">
+        {% if document.branding.footer_image_src %}
+          <img class="footer-banner" src="{{ document.branding.footer_image_src }}" alt="Report footer image">
+        {% endif %}
+        {% if document.branding.footer_text %}<div>{{ document.branding.footer_text }}</div>{% endif %}
+      </footer>
+    {% endif %}
   </main>
   <script>
     window.addEventListener("DOMContentLoaded", function () {

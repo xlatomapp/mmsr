@@ -17,7 +17,7 @@ from mmsr.report.components import ReportDocument
 from mmsr.report.market_report import (
     MarketReportInput,
     MarketReportOptions,
-    build_market_monitor_report,
+    build_market_report_document,
 )
 
 
@@ -123,13 +123,13 @@ def build_offline_demo_report(
     """Build the production-format report document from mock fixture metrics.
 
     The builder is an adapter only: it creates ``MarketReportInput`` from
-    deterministic fixtures, then delegates to ``build_market_monitor_report``.
+    deterministic fixtures, then delegates to ``build_market_report_document``.
     It does not maintain a separate offline-only report layout.
     """
 
     sample = sample_metrics or build_offline_sample_metrics()
     resolved_options = options or OfflineDemoReportOptions()
-    return build_market_monitor_report(
+    return build_market_report_document(
         MarketReportInput(
             metric_definitions=sample.metric_definitions,
             current_series=sample.current_series,

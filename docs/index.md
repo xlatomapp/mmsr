@@ -42,7 +42,7 @@ poetry run mmsr offline-demo --output reports/offline_demo.html
 ```
 
 The offline demo routes synthetic fixtures through the same
-`build_market_monitor_report()` path used by production kdb-backed runs. It does not query kdb+, import PyKX, use real market data, or call an LLM.
+`build_market_report_document()` path used by production kdb-backed runs. It does not query kdb+, import PyKX, use real market data, or call an LLM.
 
 By default, the generated report includes the sector, segment, and market-cap
 drilldown page when the fixture contains matching group-level comparison rows.

@@ -410,7 +410,7 @@ poetry run mmsr offline-demo --output reports/offline_demo.html
 
 The command uses synthetic normalized metrics and precomputed comparisons from
 `mmsr.examples.offline_fixtures`, adapts them into the canonical
-`MarketReportInput`, and routes them through `build_market_monitor_report()`.
+`MarketReportInput`, and routes them through `build_market_report_document()`.
 Production kdb-backed runs should use the same report builder and packaged Jinja
 template; only the data source changes. The output path is treated as a file
 path, and missing parent directories are created automatically.
@@ -633,9 +633,9 @@ enabled, the page keeps the worst alert/watch comparison per symbol and renders
 a metric table with metric help text and human-readable scope labels.
 
 ```python
-from mmsr.report import MarketReportOptions, build_market_monitor_report
+from mmsr.report import MarketReportOptions, build_market_report_document
 
-document = build_market_monitor_report(
+document = build_market_report_document(
     report_input,
     options=MarketReportOptions(
         include_symbol_anomaly_page=True,
@@ -708,7 +708,7 @@ custom `group_keys` for client-specific normalized dimensions. Set
 `include_symbol_scoped=True` only when a drilldown page should intentionally mix
 symbol-scoped rows into sector or segment diagnostics.
 
-The canonical `build_market_monitor_report()` path now inserts this page
+The canonical `build_market_report_document()` path now inserts this page
 automatically when matching group-level comparison rows are present. Configure it
 through `MarketReportOptions.include_drilldown_page`,
 `drilldown_page_title`, `drilldown_table_title`, `drilldown_help_text`,
@@ -771,7 +771,7 @@ The production report includes a dedicated `Cross-Venue Toxicity` page when norm
 
 When production output contains many date, intraday bucket, sector, segment, or symbol contexts, the toxicity page ranks contexts deterministically before applying the chart limit. The default ranking surfaces the contexts with the largest positive reversion first because positive values indicate future TSE/primary-mid movement in the direction of the aggressor inferred from each trade's own PTS quote under `aggressorSide * (future_primary_mid - primary_mid_at_trade) / future_primary_mid * 10000`. Production callers can set `MarketReportOptions.toxicity_reversion_context_ranking` to `max_positive_reversion`, `max_absolute_reversion`, `lowest_confidence`, `context_sort_order`, or `chronological`. When normalized kdb-backed rows include optional `context_sort_order` metadata, `context_sort_order` ranks smaller numeric values first, then falls back to adverse reversion and chronological ordering for ties or missing values.
 
-By default, when the dedicated `Cross-Venue Toxicity` page is present, `build_market_monitor_report()` suppresses the `primary_quote_reversion_*_bps` family from the generic `Intraday Detail` page so the same venue/horizon curves are not duplicated. Production callers that explicitly want both displays can set `MarketReportOptions.include_toxicity_reversion_metrics_in_detail_page=True`; if the dedicated toxicity page is disabled or absent, the generic detail page still renders any supplied reversion series.
+By default, when the dedicated `Cross-Venue Toxicity` page is present, `build_market_report_document()` suppresses the `primary_quote_reversion_*_bps` family from the generic `Intraday Detail` page so the same venue/horizon curves are not duplicated. Production callers that explicitly want both displays can set `MarketReportOptions.include_toxicity_reversion_metrics_in_detail_page=True`; if the dedicated toxicity page is disabled or absent, the generic detail page still renders any supplied reversion series.
 
 ## CI
 

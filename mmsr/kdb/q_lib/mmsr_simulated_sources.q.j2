@@ -280,16 +280,22 @@
     sidSyms:asc distinct t`sym;
     sid:`long$1 + sidSyms ? t`sym;
     volScale:0.006f + 0.0007f * (sid mod 13);
+    spreadBps:4f + 0.9f * (sid mod 9);
     openPx:`float${{ source_namespace }}.dailyCloseBySid[runDate - 1;sid];
     closePx:`float${{ source_namespace }}.dailyCloseBySid[runDate;sid];
     progress:`float${{ source_namespace }}.sessionProgress each t`time;
     noise:(sin 0.21f * ((t`row) + (sid * 5))) * (1.2f * volScale);
     mid:`float$raze enlist each ((openPx + progress * (closePx - openPx)) * (1f + noise));
+    spreadJitterBps:0.42f * sin 0.09f * ((t`row) + sid * 3) + 0.22f * cos 0.04f * ((t`row) + (`long$`int$runDate));
+    spread:`float$raze enlist each (mid * ((spreadBps + 0.9f + spreadJitterBps) % 10000f));
     rowSeed:abs dayInt * 196613j + sid * 15731j + (`long$t`row) * 32771j;
     tradeLots:1 + rowSeed mod 90;
+    venue:(count t)#{{ source_namespace }}.venues;
+    aggressorSign:-1f + 2f * `float$(rowSeed mod 2);
+    aggressorBias:aggressorSign * 0.30f * spread;
     update
-        venue:(count t)#{{ source_namespace }}.venues,
-        tradePrice:mid,
+        venue:venue,
+        tradePrice:mid + aggressorBias,
         tradeSize:`int$100 * tradeLots
     from t
     };

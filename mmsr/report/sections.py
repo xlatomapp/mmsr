@@ -200,7 +200,12 @@ def build_time_series_chart(
     if help_text is not None and not help_text.strip():
         raise ValueError("help_text must not be empty when supplied")
 
-    observations = series.observations if max_points is None else series.observations[:max_points]
+    candidate_observations = series.observations if max_points is None else series.observations[:max_points]
+    observations = tuple(
+        observation
+        for observation in candidate_observations
+        if observation.value is None or isfinite(float(observation.value))
+    )
     return TimeSeriesChart(
         title=chart_title,
         metric=metric_definition,
@@ -254,7 +259,12 @@ def build_intraday_time_bucket_chart(
     if help_text is not None and not help_text.strip():
         raise ValueError("help_text must not be empty when supplied")
 
-    observations = series.observations if max_points is None else series.observations[:max_points]
+    candidate_observations = series.observations if max_points is None else series.observations[:max_points]
+    observations = tuple(
+        observation
+        for observation in candidate_observations
+        if observation.value is None or isfinite(float(observation.value))
+    )
     return TimeSeriesChart(
         title=chart_title,
         metric=metric_definition,
@@ -497,10 +507,13 @@ def _activity_distribution_figure(
         },
     ]
 
+    reference_session_pct = _session_aggregate_percentages(prepared.bucket_labels, prepared.reference_bucket_pct)
+    current_session_pct = _session_aggregate_percentages(prepared.bucket_labels, prepared.current_bucket_pct)
+
     period_labels = ["Reference period", "Current period"]
     for session in _ACTIVITY_SESSION_ORDER:
-        reference_pct = prepared.reference_session_pct.get(session, 0.0)
-        current_pct = prepared.current_session_pct.get(session, 0.0)
+        reference_pct = reference_session_pct.get(session, 0.0)
+        current_pct = current_session_pct.get(session, 0.0)
         if reference_pct == 0.0 and current_pct == 0.0:
             continue
         traces.append(
@@ -604,6 +617,9 @@ def _build_cumulative_distribution_figure(
 ) -> dict[str, Any]:
     """Build the cumulative distribution line-plot figure."""
 
+    bucket_positions = _activity_bucket_positions(prepared.bucket_labels)
+    tickvals, ticktext = _major_activity_ticks(prepared.bucket_labels, bucket_positions)
+    bucket_labels = [_format_bucket_text(bucket) or str(bucket) for bucket in prepared.bucket_labels]
     reference_median: list[float | None] = []
     for bucket in prepared.bucket_labels:
         values = prepared.reference_cumulative_pct_by_bucket.get(bucket, ())
@@ -611,33 +627,90 @@ def _build_cumulative_distribution_figure(
             reference_median.append(_percentile(values, 50))
         else:
             reference_median.append(None)
+    delta_values = [
+        (
+            None
+            if reference_value is None or current_value is None
+            else current_value - reference_value
+        )
+        for reference_value, current_value in zip(reference_median, prepared.current_cumulative_pct, strict=True)
+    ]
+    auction_indexes = [
+        index
+        for index, bucket in enumerate(prepared.bucket_labels)
+        if _activity_session_label(bucket) in {"AM open", "AM close", "PM open", "PM close"}
+    ]
+    hover_customdata = [
+        [label, reference_value, current_value, delta_value]
+        for label, reference_value, current_value, delta_value in zip(
+            bucket_labels, reference_median, prepared.current_cumulative_pct, delta_values, strict=True
+        )
+    ]
 
     traces: list[dict[str, Any]] = [
         {
             "type": "scatter",
-            "mode": "lines+markers",
+            "mode": "lines",
             "name": "Reference median cumulative %",
-            "x": list(prepared.bucket_labels),
+            "x": bucket_positions,
             "y": reference_median,
-            "marker": {"symbol": "square", "size": 7, "color": "#8ea4bd"},
             "line": {"width": 2, "color": "#8ea4bd"},
             "xaxis": "x",
             "yaxis": "y",
-            "hovertemplate": (
-                "%{x}<br>%{y:.2f}%<extra>Reference median</extra>"
-            ),
+            "hoverinfo": "skip",
         },
         {
             "type": "scatter",
-            "mode": "lines+markers",
+            "mode": "markers",
+            "name": "Reference auctions",
+            "x": [bucket_positions[index] for index in auction_indexes],
+            "y": [reference_median[index] for index in auction_indexes],
+            "marker": {"symbol": "square", "size": 7, "color": "#8ea4bd"},
+            "showlegend": False,
+            "xaxis": "x",
+            "yaxis": "y",
+            "hoverinfo": "skip",
+        },
+        {
+            "type": "scatter",
+            "mode": "lines",
             "name": "Current mean cumulative %",
-            "x": list(prepared.bucket_labels),
+            "x": bucket_positions,
             "y": list(prepared.current_cumulative_pct),
-            "marker": {"symbol": "circle", "size": 8, "color": "#2d5d93"},
             "line": {"width": 3, "color": "#2d5d93"},
             "xaxis": "x",
             "yaxis": "y",
-            "hovertemplate": "%{x}<br>%{y:.2f}%<extra>Current mean</extra>",
+            "hoverinfo": "skip",
+        },
+        {
+            "type": "scatter",
+            "mode": "markers",
+            "name": "Target auctions",
+            "x": [bucket_positions[index] for index in auction_indexes],
+            "y": [prepared.current_cumulative_pct[index] for index in auction_indexes],
+            "marker": {"symbol": "circle", "size": 8, "color": "#2d5d93"},
+            "showlegend": False,
+            "xaxis": "x",
+            "yaxis": "y",
+            "hoverinfo": "skip",
+        },
+        {
+            "type": "scatter",
+            "mode": "markers",
+            "name": "",
+            "x": bucket_positions,
+            "y": list(prepared.current_cumulative_pct),
+            "customdata": hover_customdata,
+            "marker": {"size": 16, "opacity": 0},
+            "showlegend": False,
+            "xaxis": "x",
+            "yaxis": "y",
+            "hovertemplate": (
+                "%{customdata[0]}<br>"
+                "Reference: %{customdata[1]:.2f}%<br>"
+                "Target: %{customdata[2]:.2f}%<br>"
+                "Delta: %{customdata[3]:+.2f}pp<extra></extra>"
+            ),
         },
     ]
 
@@ -649,11 +722,24 @@ def _build_cumulative_distribution_figure(
             "margin": {"l": 70, "r": 20, "t": 20, "b": 108},
             "showlegend": True,
             "legend": {"orientation": "h", "x": 0.5, "xanchor": "center", "y": -0.26},
+            "hovermode": "closest",
+            "hoverlabel": {
+                "bgcolor": "#ffffff",
+                "bordercolor": "#dbe4f0",
+                "font": {"color": "#1f2d3d", "size": 12},
+            },
             "xaxis": {
                 "anchor": "y",
-                "type": "category",
-                "categoryorder": "array",
-                "categoryarray": list(prepared.bucket_labels),
+                "type": "linear",
+                "tickmode": "array",
+                "tickvals": tickvals,
+                "ticktext": ticktext,
+                "range": _activity_bucket_range(bucket_positions, left_pad=2.2, right_pad=1.8),
+                "tickangle": 45,
+                "tickfont": {"size": 10},
+                "automargin": True,
+                "showgrid": False,
+                "zeroline": False,
                 "showticklabels": True,
             },
             "yaxis": {
@@ -661,7 +747,133 @@ def _build_cumulative_distribution_figure(
                 "anchor": "x",
                 "ticksuffix": "%",
                 "range": [0, 105],
+                "showline": False,
+                "zeroline": False,
             },
+        },
+        "config": {"displaylogo": False, "responsive": True},
+    }
+
+
+def _build_non_cumulative_distribution_figure(
+    *,
+    metric_definition: MetricDefinition,
+    prepared: _ActivityDistributionInputs,
+    figure_height: int = 470,
+) -> dict[str, Any]:
+    bucket_positions = _activity_bucket_positions(prepared.bucket_labels)
+    tickvals, ticktext = _major_activity_ticks(prepared.bucket_labels, bucket_positions)
+    bucket_labels = [_format_bucket_text(bucket) or str(bucket) for bucket in prepared.bucket_labels]
+    reference_mean_bucket_pct = list(prepared.reference_bucket_pct)
+    current_bucket_pct = list(prepared.current_bucket_pct)
+    delta_values = [
+        current_value - reference_value
+        for reference_value, current_value in zip(reference_mean_bucket_pct, current_bucket_pct, strict=True)
+    ]
+    hover_customdata = [
+        [label, reference_value, current_value, delta_value]
+        for label, reference_value, current_value, delta_value in zip(
+            bucket_labels, reference_mean_bucket_pct, current_bucket_pct, delta_values, strict=True
+        )
+    ]
+    numeric_values = [
+        value
+        for value in [*reference_mean_bucket_pct, *current_bucket_pct]
+        if isinstance(value, int | float) and isfinite(value)
+    ]
+    y_range: list[float] | None = None
+    if numeric_values:
+        min_value = min(numeric_values)
+        max_value = max(numeric_values)
+        span = max_value - min_value
+        padding = max(0.2, span * 0.12)
+        if span == 0:
+            padding = max(0.2, abs(max_value) * 0.05, 0.2)
+        y_range = [max(0.0, min_value - padding), max_value + padding]
+
+    traces: list[dict[str, Any]] = [
+        {
+            "type": "bar",
+            "name": "Reference mean bucket %",
+            "x": [position - 0.18 for position in bucket_positions],
+            "y": reference_mean_bucket_pct,
+            "marker": {"color": "#8ea4bd"},
+            "width": 0.34,
+            "xaxis": "x",
+            "yaxis": "y",
+            "hoverinfo": "skip",
+        },
+        {
+            "type": "bar",
+            "name": "Target mean bucket %",
+            "x": [position + 0.18 for position in bucket_positions],
+            "y": current_bucket_pct,
+            "marker": {"color": "#2d5d93"},
+            "width": 0.34,
+            "xaxis": "x",
+            "yaxis": "y",
+            "hoverinfo": "skip",
+        },
+        {
+            "type": "scatter",
+            "mode": "markers",
+            "name": "",
+            "x": bucket_positions,
+            "y": current_bucket_pct,
+            "customdata": hover_customdata,
+            "marker": {"size": 18, "opacity": 0},
+            "showlegend": False,
+            "xaxis": "x",
+            "yaxis": "y",
+            "hovertemplate": (
+                "%{customdata[0]}<br>"
+                "Reference: %{customdata[1]:.2f}%<br>"
+                "Target: %{customdata[2]:.2f}%<br>"
+                "Delta: %{customdata[3]:+.2f}pp<extra></extra>"
+            ),
+        },
+    ]
+
+    y_axis: dict[str, Any] = {
+        "domain": [0.0, 1.0],
+        "anchor": "x",
+        "ticksuffix": "%",
+        "showline": False,
+        "zeroline": False,
+    }
+    if y_range is not None:
+        y_axis["range"] = y_range
+
+    return {
+        "data": traces,
+        "layout": {
+            "template": "plotly_white",
+            "height": figure_height,
+            "margin": {"l": 70, "r": 20, "t": 20, "b": 108},
+            "showlegend": True,
+            "legend": {"orientation": "h", "x": 0.5, "xanchor": "center", "y": -0.26},
+            "hovermode": "closest",
+            "hoverlabel": {
+                "bgcolor": "#ffffff",
+                "bordercolor": "#dbe4f0",
+                "font": {"color": "#1f2d3d", "size": 12},
+            },
+            "xaxis": {
+                "anchor": "y",
+                "type": "linear",
+                "tickmode": "array",
+                "tickvals": tickvals,
+                "ticktext": ticktext,
+                "range": _activity_bucket_range(bucket_positions, left_pad=2.4, right_pad=2.0),
+                "tickangle": 45,
+                "tickfont": {"size": 10},
+                "automargin": True,
+                "showgrid": False,
+                "zeroline": False,
+                "showticklabels": True,
+            },
+            "yaxis": y_axis,
+            "bargap": 0.08,
         },
         "config": {"displaylogo": False, "responsive": True},
     }
@@ -814,46 +1026,49 @@ def _delta_cell_style(delta_pp: float, max_abs_delta_pp: float) -> str:
     return ""
 
 
-def _build_session_aggregate_table_html(prepared: _ActivityDistributionInputs) -> str:
-    session_columns = (
-        ("AM open", "AM open"),
-        ("AM continuous session", "AM Zaraba"),
-        ("AM close", "AM close"),
-        ("PM open", "PM open"),
-        ("PM continuous session", "PM Zaraba"),
-        ("PM close", "PM close"),
+def _session_mix_density_style(value_pct: float, max_value_pct: float) -> str:
+    if max_value_pct <= 0 or value_pct <= 0:
+        return ""
+    strength = min(1.0, value_pct / max_value_pct)
+    alpha = 0.08 + 0.34 * strength
+    return f"background: rgba(45, 93, 147, {alpha:.3f}); color: #102033;"
+
+
+def _build_session_mix_heatmap_table_html(prepared: _ActivityDistributionInputs) -> str:
+    session_rows = (
+        ("PM close", "PMC"),
+        ("PM continuous session", "PMZ"),
+        ("PM open", "PMO"),
+        ("AM close", "AMC"),
+        ("AM continuous session", "AMZ"),
+        ("AM open", "AMO"),
     )
     current = _session_aggregate_percentages(prepared.bucket_labels, prepared.current_bucket_pct)
     reference = _session_aggregate_percentages(prepared.bucket_labels, prepared.reference_bucket_pct)
-    delta = {key: current[key] - reference[key] for key, _ in session_columns}
+    delta = {key: current[key] - reference[key] for key, _ in session_rows}
     max_abs_delta = max((abs(value) for value in delta.values()), default=0.0)
+    max_value = max(
+        [reference[key] for key, _ in session_rows] + [current[key] for key, _ in session_rows],
+        default=0.0,
+    )
 
-    header_cells = "".join(f"<th>{escape(label)}</th>" for _, label in session_columns)
-    reference_cells = "".join(
-        f"<td>{reference[key]:.2f}%</td>" for key, _ in session_columns
-    )
-    current_cells = "".join(
-        f"<td>{current[key]:.2f}%</td>" for key, _ in session_columns
-    )
-    delta_cells = "".join(
+    row_html = "".join(
         (
-            f'<td style="{_delta_cell_style(delta[key], max_abs_delta)}">'
-            f"{delta[key]:+.2f}pp</td>"
+            "<tr>"
+            f"<th>{escape(label)}</th>"
+            f'<td style="{_session_mix_density_style(reference[key], max_value)}">{reference[key]:.2f}%</td>'
+            f'<td style="{_session_mix_density_style(current[key], max_value)}">{current[key]:.2f}%</td>'
+            f'<td style="{_delta_cell_style(delta[key], max_abs_delta)}">{delta[key]:+.2f}pp</td>'
+            "</tr>"
         )
-        for key, _ in session_columns
+        for key, label in session_rows
     )
 
     return (
         '<div class="turnover-distribution__aggregate">'
         '<table class="turnover-distribution__aggregate-table">'
-        "<thead><tr><th>Session</th>"
-        f"{header_cells}"
-        "</tr></thead>"
-        "<tbody>"
-        f"<tr><th>Reference</th>{reference_cells}</tr>"
-        f"<tr><th>Current</th>{current_cells}</tr>"
-        f"<tr><th>Delta</th>{delta_cells}</tr>"
-        "</tbody></table></div>"
+        "<thead><tr><th>Session</th><th>Reference</th><th>Target</th><th>Delta</th></tr></thead>"
+        f"<tbody>{row_html}</tbody></table></div>"
     )
 
 
@@ -1002,6 +1217,152 @@ def _mean_daily_session_share_by_row(
     return result
 
 
+def _daily_session_share_series_by_row(
+    observations: Sequence[MetricObservation],
+    *,
+    period_flag: str,
+) -> dict[str, dict[str, list[tuple[str, float, str]]]]:
+    by_date_row_session: dict[tuple[object, str, str], float] = {}
+    for observation in observations:
+        value = _finite_observation_value(observation)
+        if value is None:
+            continue
+        session = _turnover_session_bucket_code(observation.time_bucket)
+        for row in _turnover_heatmap_row_keys(observation):
+            key = (observation.date, row, session)
+            by_date_row_session[key] = by_date_row_session.get(key, 0.0) + value
+
+    by_date_row: dict[tuple[object, str], dict[str, float]] = {}
+    for (obs_date, row, session), total in by_date_row_session.items():
+        by_date_row.setdefault((obs_date, row), {})[session] = total
+
+    result: dict[str, dict[str, list[tuple[str, float, str]]]] = {}
+    for (obs_date, row), sessions in by_date_row.items():
+        total = sum(sessions.values())
+        if total <= 0:
+            continue
+        amo = sessions.get("AMO", 0.0)
+        amc = sessions.get("AMC", 0.0)
+        amz = sessions.get("AM", 0.0)
+        pmo = sessions.get("PMO", 0.0)
+        pmc = sessions.get("PMC", 0.0)
+        pmz = sessions.get("PM", 0.0)
+        shares = {
+            "AMO": (amo / total * 100.0),
+            "PMC": (pmc / total * 100.0),
+            "AM": ((amo + amz + amc) / total * 100.0),
+            "PM": ((pmo + pmz + pmc) / total * 100.0),
+        }
+        date_label = str(obs_date)
+        row_result = result.setdefault(row, {})
+        for session, share in shares.items():
+            row_result.setdefault(session, []).append((date_label, share, period_flag))
+
+    for sessions in result.values():
+        for points in sessions.values():
+            points.sort(key=lambda item: item[0])
+    return result
+
+
+def _build_turnover_daily_session_figure(
+    *,
+    session_code: str,
+    session_title: str,
+    target_points: Sequence[tuple[str, float, str]],
+    reference_points: Sequence[tuple[str, float, str]],
+    figure_height: int = 240,
+) -> dict[str, Any]:
+    combined = list(reference_points) + list(target_points)
+    labels = [label for label, _, _ in combined]
+    values = [value for _, value, _ in combined]
+    period_flags = [flag for _, _, flag in combined]
+    x_indexes = list(range(len(labels)))
+    colors = ["#a9b5c6" if flag == "reference" else "#2d5d93" for flag in period_flags]
+    finite_values = [value for value in values if isfinite(value)]
+    reference_count = len(reference_points)
+    shapes: list[dict[str, Any]] = []
+    annotations: list[dict[str, Any]] = []
+    if reference_count and reference_count < len(labels):
+        boundary_x = reference_count - 0.5
+        shapes.append(
+            {
+                "type": "line",
+                "xref": "x",
+                "yref": "paper",
+                "x0": boundary_x,
+                "x1": boundary_x,
+                "y0": 0,
+                "y1": 1,
+                "line": {"color": "#c5cfdb", "width": 1, "dash": "dot"},
+            }
+        )
+        annotations.extend(
+            [
+                {
+                    "xref": "x",
+                    "yref": "paper",
+                    "x": max(0, (reference_count - 1) / 2),
+                    "y": 1.12,
+                    "text": "Reference",
+                    "showarrow": False,
+                    "font": {"size": 10, "color": "#6b7785"},
+                },
+                {
+                    "xref": "x",
+                    "yref": "paper",
+                    "x": reference_count + max(0, (len(labels) - reference_count - 1) / 2),
+                    "y": 1.12,
+                    "text": "Target",
+                    "showarrow": False,
+                    "font": {"size": 10, "color": "#6b7785"},
+                },
+            ]
+        )
+
+    y_axis: dict[str, Any] = {"ticksuffix": "%", "fixedrange": True}
+    if finite_values:
+        min_value = min(finite_values)
+        max_value = max(finite_values)
+        span = max_value - min_value
+        padding = max(0.2, span * 0.18)
+        if span == 0:
+            padding = max(0.2, abs(max_value) * 0.05, 0.2)
+        y_axis["range"] = [min_value - padding, max_value + padding]
+
+    return {
+        "data": [
+            {
+                "type": "bar",
+                "x": x_indexes,
+                "y": values,
+                "customdata": labels,
+                "marker": {"color": colors},
+                "hovertemplate": "%{customdata}<br>%{y:.2f}%<extra></extra>",
+                "showlegend": False,
+            }
+        ],
+        "layout": {
+            "template": "plotly_white",
+            "height": figure_height,
+            "margin": {"l": 48, "r": 18, "t": 22, "b": 88},
+            "xaxis": {
+                "type": "linear",
+                "tickmode": "array",
+                "tickvals": x_indexes,
+                "ticktext": labels,
+                "tickangle": 90,
+                "automargin": True,
+                "fixedrange": True,
+            },
+            "yaxis": y_axis,
+            "shapes": shapes,
+            "annotations": annotations,
+        },
+        "config": {"displaylogo": False, "responsive": True, "displayModeBar": False, "staticPlot": True},
+        "meta": {"session_code": session_code, "session_title": session_title},
+    }
+
+
 def _turnover_cell_delta_pct(current: float | None, reference: float | None) -> float | None:
     if current is None or reference is None or reference == 0:
         return None
@@ -1047,7 +1408,7 @@ def _build_turnover_group_session_heatmap_table_html(
     reference_series: MetricTimeSeries,
 ) -> str:
     row_order = ("TSE", "TOPIX Large", "TOPIX Mid", "TOPIX Small", "Non-TOPIX")
-    session_order = ("AMO", "PMC", "AM", "PM")
+    session_order = ("AM", "PM")
     current_share = _mean_daily_session_share_by_row(target_series.observations)
     reference_share = _mean_daily_session_share_by_row(reference_series.observations)
     header_cells = "".join(f"<th>{escape(session)}</th>" for session in session_order)
@@ -1062,9 +1423,8 @@ def _build_turnover_group_session_heatmap_table_html(
             current_text = "n/a" if current_value is None else f"{current_value:.2f}%"
             delta_text = "n/a" if delta_pct is None else f"{delta_pct:+.2%}"
             delta_class = _turnover_delta_cell_class(delta_pct)
-            delta_bucket = _turnover_heatmap_delta_bucket(delta_pct)
             cells.append(
-                f'<td class="turnover-distribution__heatmap-cell turnover-distribution__heatmap-cell--{escape(delta_bucket)}">'
+                f'<td class="turnover-distribution__heatmap-cell">'
                 f'<span class="turnover-distribution__heatmap-current">{escape(current_text)}</span>'
                 f'<span class="turnover-distribution__heatmap-delta turnover-distribution__heatmap-delta--{escape(delta_class)}">{escape(delta_text)}</span>'
                 "</td>"
@@ -1102,6 +1462,14 @@ def _build_turnover_row_plot_payload(
     cumulative_figure_height: int,
 ) -> dict[str, object]:
     rows = ("TSE", "TOPIX Large", "TOPIX Mid", "TOPIX Small", "Non-TOPIX")
+    target_daily_shares = _daily_session_share_series_by_row(target_series.observations, period_flag="target")
+    reference_daily_shares = _daily_session_share_series_by_row(reference_series.observations, period_flag="reference")
+    daily_session_specs = (
+        ("AM", "AM Session"),
+        ("PM", "PM Session"),
+        ("AMO", "AM Open"),
+        ("PMC", "PM Close"),
+    )
     by_row: dict[str, dict[str, object]] = {}
     for row in rows:
         row_target = _filter_series_for_turnover_row(target_series, row)
@@ -1111,16 +1479,29 @@ def _build_turnover_row_plot_payload(
             reference_series=row_reference,
         )
         by_row[row] = {
-            "title": f"Universe: {row}",
-            "line_figure": _build_cumulative_distribution_figure(
-                metric_definition=metric_definition,
-                prepared=prepared,
-                figure_height=cumulative_figure_height,
-            ),
-            "bar_figure": _build_session_mix_bar_figure(
-                prepared=prepared,
-                figure_height=max(260, cumulative_figure_height),
-            ),
+            "title": "",
+            "line_figures": {
+                "cumulative": _build_cumulative_distribution_figure(
+                    metric_definition=metric_definition,
+                    prepared=prepared,
+                    figure_height=cumulative_figure_height,
+                ),
+                "non_cumulative": _build_non_cumulative_distribution_figure(
+                    metric_definition=metric_definition,
+                    prepared=prepared,
+                    figure_height=cumulative_figure_height,
+                ),
+            },
+            "mix_table_html": _build_session_mix_heatmap_table_html(prepared),
+            "daily_figures": {
+                session_code: _build_turnover_daily_session_figure(
+                    session_code=session_code,
+                    session_title=session_title,
+                    target_points=target_daily_shares.get(row, {}).get(session_code, ()),
+                    reference_points=reference_daily_shares.get(row, {}).get(session_code, ()),
+                )
+                for session_code, session_title in daily_session_specs
+            },
         }
     return {"default_row": "TSE", "rows": by_row}
 
@@ -1168,6 +1549,11 @@ def build_summary_activity_distribution_html_block(
         prepared=prepared,
         figure_height=cumulative_figure_height,
     )
+    non_cumulative_figure = _build_non_cumulative_distribution_figure(
+        metric_definition=metric_definition,
+        prepared=prepared,
+        figure_height=cumulative_figure_height,
+    )
     universe_table_html = _build_turnover_group_session_heatmap_table_html(
         target_series=target_series,
         reference_series=reference_series,
@@ -1181,19 +1567,23 @@ def build_summary_activity_distribution_html_block(
     default_row = str(row_plot_payload.get("default_row", "TSE"))
     rows_payload = row_plot_payload.get("rows", {})
     default_row_payload = rows_payload.get(default_row, {})
-    initial_title = str(default_row_payload.get("title", f"Universe: {default_row}"))
+    initial_title = str(default_row_payload.get("title", ""))
+    selected_title_html = (
+        f'<h4 class="turnover-distribution__selected-title" data-turnover-selected-title>{escape(initial_title)}</h4>'
+        if initial_title
+        else ""
+    )
 
+    default_line_figures = default_row_payload.get(
+        "line_figures",
+        {"cumulative": cumulative_figure, "non_cumulative": non_cumulative_figure},
+    )
     line_json = json.dumps(
-        default_row_payload.get("line_figure", cumulative_figure), ensure_ascii=False, separators=(",", ":")
+        default_line_figures.get("cumulative", cumulative_figure), ensure_ascii=False, separators=(",", ":")
     ).replace("</", "<\\/")
-    bar_json = json.dumps(
-        default_row_payload.get(
-            "bar_figure",
-            _build_session_mix_bar_figure(prepared=prepared, figure_height=max(260, cumulative_figure_height)),
-        ),
-        ensure_ascii=False,
-        separators=(",", ":"),
-    ).replace("</", "<\\/")
+    mix_table_html = str(
+        default_row_payload.get("mix_table_html", _build_session_mix_heatmap_table_html(prepared))
+    )
     row_plot_json = json.dumps(
         row_plot_payload, ensure_ascii=False, separators=(",", ":")
     ).replace("</", "<\\/")
@@ -1211,30 +1601,67 @@ def build_summary_activity_distribution_html_block(
             "</div>"
             "</details>"
         )
+    universe_help_html = (
+        '<details class="metric-help turnover-distribution__help turnover-distribution__help--inline">'
+        '<summary class="metric-help__summary metric-info" aria-label="Universe selector help">'
+        '<span class="metric-help__icon" aria-hidden="true">i</span>'
+        "</summary>"
+        '<div class="metric-help__body">'
+        "<strong class=\"metric-help__title\">Universe selector</strong>"
+        "<p>Choose a row in the universe table to update the turnover mix and intraday charts for that universe.</p>"
+        "</div>"
+        "</details>"
+    )
 
     body_html = (
         '<section class="turnover-distribution">'
         '<div class="turnover-distribution__header">'
-        f'<h3 class="turnover-distribution__title">{escape(chart_title)}</h3>'
+        '<h3 class="turnover-distribution__title">Turnover Distribution</h3>'
         f"{help_html}"
         "</div>"
         '<div class="turnover-distribution__body">'
         '<div class="turnover-distribution__chart">'
-        f'<h4 class="turnover-distribution__selected-title" data-turnover-selected-title>{escape(initial_title)}</h4>'
+        f"{selected_title_html}"
         '<div class="turnover-distribution__cards">'
+        '<div class="turnover-distribution__card turnover-distribution__card--table">'
+        '<div class="turnover-distribution__card-title-row">'
+        '<div class="turnover-distribution__card-title">Universe</div>'
+        f"{universe_help_html}"
+        "</div>"
+        f"{universe_table_html}"
+        "</div>"
         '<div class="turnover-distribution__card turnover-distribution__card--bar">'
         '<div class="turnover-distribution__card-title">Session Mix</div>'
-        '<div class="plotly-chart__figure" data-turnover-bar-plot></div>'
-        f'<script type="application/json" class="turnover-bar-chart__spec">{bar_json}</script>'
+        f'<div data-turnover-mix-table>{mix_table_html}</div>'
         "</div>"
         '<div class="turnover-distribution__card turnover-distribution__card--line">'
-        '<div class="turnover-distribution__card-title">Cumulative Intraday Curve</div>'
+        '<div class="turnover-distribution__card-title-row">'
+        '<label class="turnover-distribution__card-title" for="turnover-curve-mode">Intraday Curve</label>'
+        '<select class="turnover-distribution__curve-select" data-turnover-curve-mode aria-label="Intraday curve mode">'
+        '<option value="cumulative">Cumulative</option>'
+        '<option value="non_cumulative">Non-cumulative</option>'
+        "</select>"
+        "</div>"
         '<div class="plotly-chart__figure" data-turnover-line-plot></div>'
         f'<script type="application/json" class="turnover-line-chart__spec">{line_json}</script>'
         "</div>"
-        '<div class="turnover-distribution__card turnover-distribution__card--table">'
-        '<div class="turnover-distribution__card-title">Universe Session Table</div>'
-        f"{universe_table_html}"
+        '<div class="turnover-distribution__daily-grid">'
+        '<div class="turnover-distribution__card turnover-distribution__card--daily">'
+        '<div class="turnover-distribution__card-title">AM Session</div>'
+        '<div class="plotly-chart__figure" data-turnover-daily-plot="AM"></div>'
+        "</div>"
+        '<div class="turnover-distribution__card turnover-distribution__card--daily">'
+        '<div class="turnover-distribution__card-title">AM Open</div>'
+        '<div class="plotly-chart__figure" data-turnover-daily-plot="AMO"></div>'
+        "</div>"
+        '<div class="turnover-distribution__card turnover-distribution__card--daily">'
+        '<div class="turnover-distribution__card-title">PM Session</div>'
+        '<div class="plotly-chart__figure" data-turnover-daily-plot="PM"></div>'
+        "</div>"
+        '<div class="turnover-distribution__card turnover-distribution__card--daily">'
+        '<div class="turnover-distribution__card-title">PM Close</div>'
+        '<div class="plotly-chart__figure" data-turnover-daily-plot="PMC"></div>'
+        "</div>"
         "</div>"
         "</div>"
         f'<script type="application/json" data-turnover-row-plot-spec>{row_plot_json}</script>'
@@ -1247,19 +1674,36 @@ def build_summary_activity_distribution_html_block(
         'document.querySelectorAll(".turnover-distribution").forEach(function(container){'
         'var specNode=container.querySelector("[data-turnover-row-plot-spec]");'
         'var lineTarget=container.querySelector("[data-turnover-line-plot]");'
-        'var barTarget=container.querySelector("[data-turnover-bar-plot]");'
+        'var mixTarget=container.querySelector("[data-turnover-mix-table]");'
         'var titleNode=container.querySelector("[data-turnover-selected-title]");'
-        'if(!specNode||!lineTarget||!barTarget){return;}'
+        'var curveModeSelector=container.querySelector("[data-turnover-curve-mode]");'
+        'var dailyTargets={};'
+        'Array.prototype.slice.call(container.querySelectorAll("[data-turnover-daily-plot]")).forEach(function(node){dailyTargets[node.getAttribute("data-turnover-daily-plot")||""]=node;});'
+        'if(!specNode||!lineTarget||!mixTarget){return;}'
         'var spec=JSON.parse(specNode.textContent||"{}");'
         'var rows=spec.rows||{};'
         'var rowNodes=Array.prototype.slice.call(container.querySelectorAll("[data-turnover-row]"));'
+        'var currentRowKey=spec.default_row||"TSE";'
+        'var renderLineFigure=function(row){'
+        'var mode=(curveModeSelector&&curveModeSelector.value)||"cumulative";'
+        'var figures=row.line_figures||{};'
+        'var figure=figures[mode]||figures.cumulative||{};'
+        'Plotly.react(lineTarget,(figure.data||[]),(figure.layout||{}),(figure.config||{responsive:true,displaylogo:false}));'
+        '};'
         'var renderRow=function(rowKey){'
         'var row=rows[rowKey]; if(!row){return;}'
-        'if(titleNode&&row.title){titleNode.textContent=row.title;}'
-        'Plotly.react(lineTarget,(row.line_figure||{}).data||[],(row.line_figure||{}).layout||{},(row.line_figure||{}).config||{responsive:true,displaylogo:false});'
-        'Plotly.react(barTarget,(row.bar_figure||{}).data||[],(row.bar_figure||{}).layout||{},(row.bar_figure||{}).config||{responsive:true,displaylogo:false,displayModeBar:false,staticPlot:true});'
+        'currentRowKey=rowKey;'
+        'if(titleNode){titleNode.textContent=row.title||"";}'
+        'renderLineFigure(row);'
+        'mixTarget.innerHTML=(row.mix_table_html||"");'
+        'Object.keys(dailyTargets).forEach(function(sessionCode){'
+        'var target=dailyTargets[sessionCode];'
+        'var figure=((row.daily_figures||{})[sessionCode]||{});'
+        'Plotly.react(target,(figure.data||[]),(figure.layout||{}),(figure.config||{responsive:true,displaylogo:false,displayModeBar:false,staticPlot:true}));'
+        '});'
         'rowNodes.forEach(function(node){var on=(node.getAttribute("data-turnover-row")===rowKey);node.classList.toggle("is-selected",on);node.setAttribute("aria-selected",on?"true":"false");});'
         '};'
+        'if(curveModeSelector){curveModeSelector.addEventListener("change",function(){renderRow(currentRowKey);});}'
         'rowNodes.forEach(function(node){node.addEventListener("click",function(){renderRow(node.getAttribute("data-turnover-row")||"");});});'
         'renderRow(spec.default_row||"TSE");'
         '});'
@@ -1371,19 +1815,19 @@ def build_summary_liquidity_distribution_html_block(
         f"{help_html}"
         "</div>"
         '<div class="turnover-distribution__body"><div class="turnover-distribution__chart">'
-        f'<h4 class="turnover-distribution__selected-title" data-liquidity-selected-title>{escape(str(initial["title"]))}</h4>'
         '<div class="turnover-distribution__cards">'
+        '<div class="turnover-distribution__card turnover-distribution__card--table">'
+        '<div class="turnover-distribution__card-title">Universe Metric Table</div>'
+        f"{universe_table_html}</div>"
         '<div class="turnover-distribution__card turnover-distribution__card--bar">'
         '<div class="turnover-distribution__card-title">Metric Selection</div>'
         f'<div data-liquidity-metric-table>{metric_table_html}</div></div>'
         '<div class="turnover-distribution__card turnover-distribution__card--line">'
-        f'<div class="turnover-distribution__card-title" data-liquidity-line-title>{escape(str(initial.get("line_title", initial["title"])))}</div>'
+        f'<div class="turnover-distribution__card-title" data-liquidity-line-title>{escape(str(initial.get("line_title", "")))}</div>'
         '<div class="plotly-chart__figure" data-liquidity-line-plot></div>'
         f'<script type="application/json" class="liquidity-line-chart__spec">{line_json}</script>'
         "</div>"
-        '<div class="turnover-distribution__card turnover-distribution__card--table">'
-        '<div class="turnover-distribution__card-title">Universe Metric Table</div>'
-        f"{universe_table_html}</div></div>"
+        "</div>"
         f'<script type="application/json" data-liquidity-plot-spec>{spec_json}</script>'
         "</div></div>"
         '<script>(function(){var bind=function(){if(!window.Plotly){return;}'
@@ -1391,7 +1835,6 @@ def build_summary_liquidity_distribution_html_block(
         'var specNode=container.querySelector("[data-liquidity-plot-spec]");'
         'var lineTarget=container.querySelector("[data-liquidity-line-plot]");'
         'var lineTitleNode=container.querySelector("[data-liquidity-line-title]");'
-        'var titleNode=container.querySelector("[data-liquidity-selected-title]");'
         'if(!specNode||!lineTarget){return;}'
         'var spec=JSON.parse(specNode.textContent||"{}");var rows=spec.rows||{};'
         'var metricRowsByUniverse=spec.metric_rows_by_universe||{};'
@@ -1422,8 +1865,7 @@ def build_summary_liquidity_distribution_html_block(
         'bindMetricNodes();'
         '};'
         'var render=function(){var rowSpec=rows[activeRow]||{}; var cell=rowSpec[activeMetric]||{};'
-        'if(titleNode&&cell.title){titleNode.textContent=cell.title;}'
-        'if(lineTitleNode&&(cell.line_title||cell.title)){lineTitleNode.textContent=String(cell.line_title||cell.title);}'
+        'if(lineTitleNode){lineTitleNode.textContent=String(cell.line_title||"");}'
         'Plotly.react(lineTarget,(cell.line_figure||{}).data||[],(cell.line_figure||{}).layout||{},(cell.line_figure||{}).config||{responsive:true,displaylogo:false});'
         'rowNodes.forEach(function(node){var key=node.getAttribute("data-liquidity-row")||"";var on=(key===activeRow);node.classList.toggle("is-selected",on);node.setAttribute("aria-selected",on?"true":"false");});'
         'renderMetricTable();};'
@@ -1636,6 +2078,11 @@ def _intraday_profile_figure(
             "margin": {"l": 96, "r": 24, "t": 24, "b": 104},
             "showlegend": True,
             "legend": {"orientation": "h", "y": -0.2},
+            "hoverlabel": {
+                "bgcolor": "#ffffff",
+                "bordercolor": "#dbe4f0",
+                "font": {"color": "#1f2d3d", "size": 12},
+            },
             "xaxis": {
                 "domain": [0.0, 1.0],
                 "anchor": "y",
@@ -1914,6 +2361,64 @@ def _bucket_percentages(
     return tuple(values_by_bucket.get(bucket, 0.0) / total * 100 for bucket in bucket_labels)
 
 
+def _activity_bucket_positions(bucket_labels: Sequence[str]) -> list[float]:
+    if not bucket_labels:
+        return []
+    positions: list[float] = [0.0]
+    previous_session = _activity_session_label(bucket_labels[0])
+    for bucket in bucket_labels[1:]:
+        current_session = _activity_session_label(bucket)
+        step = 1.0
+        if previous_session == "AM close" and current_session == "PM open":
+            step = 4.0
+        positions.append(positions[-1] + step)
+        previous_session = current_session
+    return positions
+
+
+def _activity_bucket_range(bucket_positions: Sequence[float], *, left_pad: float, right_pad: float) -> list[float]:
+    if not bucket_positions:
+        return [-1.0, 1.0]
+    return [bucket_positions[0] - left_pad, bucket_positions[-1] + right_pad]
+
+
+def _major_activity_ticks(bucket_labels: Sequence[str], bucket_positions: Sequence[float]) -> tuple[list[float], list[str]]:
+    tickvals: list[float] = []
+    ticktext: list[str] = []
+    pm_close_index: int | None = None
+    for index, bucket in enumerate(bucket_labels):
+        raw = str(bucket).strip().upper()
+        label = str(bucket)
+        session_label = _activity_session_label(bucket)
+        auction_tick_labels = {
+            "AM open": "AM Open",
+            "AM close": "AM Close",
+            "PM open": "PM Open",
+            "PM close": "PM Close",
+        }
+        if session_label == "PM close":
+            pm_close_index = index
+        show_tick = session_label in auction_tick_labels
+        if not show_tick:
+            hour_minute = _leading_hour_minute(label)
+            show_tick = hour_minute is not None and hour_minute[1] % 15 == 0
+        if show_tick:
+            tickvals.append(bucket_positions[index])
+            ticktext.append(auction_tick_labels.get(session_label, _format_bucket_text(bucket) or label))
+
+    if pm_close_index is not None and bucket_positions:
+        pm_close_position = bucket_positions[pm_close_index]
+        if pm_close_position not in tickvals:
+            tickvals.append(pm_close_position)
+            ticktext.append("PM Close")
+
+    if not tickvals and bucket_labels:
+        fallback_indexes = [0, len(bucket_labels) - 1] if len(bucket_labels) > 1 else [0]
+        tickvals = [bucket_positions[i] for i in fallback_indexes]
+        ticktext = [str(bucket_labels[i]) for i in fallback_indexes]
+    return tickvals, ticktext
+
+
 def _reference_cumulative_percentages_by_bucket(
     values_by_date_bucket: Mapping[object, Mapping[str, float]],
     bucket_labels: Sequence[str],
@@ -2149,14 +2654,17 @@ def _intraday_chart_point_from_observation(
 ) -> TimeSeriesChartPoint:
     date_text = observation.date.isoformat()
     bucket_text = _format_bucket_text(observation.time_bucket)
+    numeric_value = observation.value
+    if numeric_value is not None and not isfinite(float(numeric_value)):
+        numeric_value = None
     return TimeSeriesChartPoint(
         x_text=_format_intraday_chart_x_text(date_text, bucket_text),
         date_text=date_text,
         time_bucket_text=bucket_text,
         series_text=_format_series_text(observation.group, group_by=group_by),
-        value_text=_format_metric_value(observation.value, definition.unit),
+        value_text=_format_metric_value(numeric_value, definition.unit),
         metadata_text=_format_metadata_text(observation.metadata),
-        value=observation.value,
+        value=numeric_value,
     )
 
 

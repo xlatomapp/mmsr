@@ -27,7 +27,7 @@ def test_readme_documents_offline_demo_quickstart() -> None:
     assert "poetry run mmsr offline-demo --output reports/offline_demo.html" in text
     assert "synthetic normalized metrics" in text
     assert "without a live kdb+ connection, PyKX import, or LLM call" in text
-    assert "build_market_monitor_report()" in text
+    assert "build_market_report_document()" in text
     assert "only the data source changes" in text
     assert "does not query kdb+" in text
 

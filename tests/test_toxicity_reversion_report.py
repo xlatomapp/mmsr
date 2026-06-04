@@ -8,7 +8,7 @@ from mmsr.report import (
     MarketReportInput,
     MarketReportOptions,
     ToxicityReversionPageOptions,
-    build_market_monitor_report,
+    build_market_report_document,
     build_toxicity_reversion_page,
 )
 
@@ -341,7 +341,7 @@ def test_toxicity_reversion_page_rejects_unknown_context_ranking() -> None:
         )
 
 
-def test_market_report_inserts_toxicity_reversion_page_from_current_series() -> None:
+def test_market_report_keeps_toxicity_out_of_final_report_pages_by_default() -> None:
     registry = build_default_registry()
     definitions = {definition.name: definition for definition in registry.docs()}
     current_series = (
@@ -367,7 +367,7 @@ def test_market_report_inserts_toxicity_reversion_page_from_current_series() -> 
         ),
     )
 
-    document = build_market_monitor_report(
+    document = build_market_report_document(
         MarketReportInput(
             metric_definitions=definitions,
             current_series=current_series,
@@ -383,14 +383,11 @@ def test_market_report_inserts_toxicity_reversion_page_from_current_series() -> 
 
     assert [page.title for page in document.pages] == [
         "Market Summary",
-        "Cross-Venue Toxicity",
         "Intraday Detail",
     ]
-    assert document.pages[1].plotly_charts[0].x_axis_label == "Horizon"
-    assert len(document.pages[1].metric_tables) == 0
-    assert document.pages[1].plotly_charts[-1].title == ("Reversion current-minus-reference diagnostics")
-    assert document.pages[2].time_series_charts == []
-    assert document.pages[2].heatmaps == []
+    assert "Cross-Venue Toxicity" not in [page.title for page in document.pages]
+    assert document.pages[1].time_series_charts == []
+    assert document.pages[1].heatmaps == []
 
 
 def test_market_report_can_keep_toxicity_reversion_metrics_in_detail_page() -> None:
@@ -404,7 +401,7 @@ def test_market_report_can_keep_toxicity_reversion_metrics_in_detail_page() -> N
         ),
     )
 
-    document = build_market_monitor_report(
+    document = build_market_report_document(
         MarketReportInput(
             metric_definitions=definitions,
             current_series=current_series,
@@ -419,10 +416,9 @@ def test_market_report_can_keep_toxicity_reversion_metrics_in_detail_page() -> N
         ),
     )
 
-    assert document.pages[1].title == "Cross-Venue Toxicity"
-    assert document.pages[2].title == "Intraday Detail"
-    assert len(document.pages[2].time_series_charts) == 1
-    assert document.pages[2].time_series_charts[0].metric.name == "primary_quote_reversion_10ms_bps"
+    assert document.pages[1].title == "Intraday Detail"
+    assert len(document.pages[1].time_series_charts) == 1
+    assert document.pages[1].time_series_charts[0].metric.name == "primary_quote_reversion_10ms_bps"
 
 
 def test_market_report_passes_toxicity_context_ranking_option() -> None:
@@ -443,7 +439,7 @@ def test_market_report_passes_toxicity_context_ranking_option() -> None:
         ),
     )
 
-    document = build_market_monitor_report(
+    document = build_market_report_document(
         MarketReportInput(
             metric_definitions=definitions,
             current_series=current_series,
@@ -483,7 +479,7 @@ def test_market_report_passes_toxicity_context_sort_order_ranking_option() -> No
         ),
     )
 
-    document = build_market_monitor_report(
+    document = build_market_report_document(
         MarketReportInput(
             metric_definitions=definitions,
             current_series=current_series,
@@ -514,7 +510,7 @@ def test_market_report_toxicity_reversion_page_can_be_disabled() -> None:
         ),
     )
 
-    document = build_market_monitor_report(
+    document = build_market_report_document(
         MarketReportInput(
             metric_definitions=definitions,
             current_series=current_series,
@@ -527,5 +523,4 @@ def test_market_report_toxicity_reversion_page_can_be_disabled() -> None:
     )
 
     assert "Cross-Venue Toxicity" not in [page.title for page in document.pages]
-    assert len(document.pages[-1].time_series_charts) == 1
-    assert document.pages[-1].time_series_charts[0].metric.name == "primary_quote_reversion_10ms_bps"
+    assert len(document.pages[-1].time_series_charts) == 0

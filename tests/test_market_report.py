@@ -10,7 +10,7 @@ from mmsr.report import market_report as market_report_module
 from mmsr.report import (
     MarketReportInput,
     MarketReportOptions,
-    build_market_monitor_report,
+    build_market_report_document,
 )
 from mmsr.report.components import ReportDocument
 from mmsr.report.render_html import render_report
@@ -51,7 +51,7 @@ def _extract_card_delta_pct(overview_html: str, card_label: str) -> float | None
 
 
 def test_market_monitor_report_is_canonical_production_format() -> None:
-    document = build_market_monitor_report(
+    document = build_market_report_document(
         _input_from_mock_sample(),
         options=MarketReportOptions(
             title="Japanese Market Microstructure Monitor",
@@ -124,7 +124,7 @@ def test_market_monitor_report_is_canonical_production_format() -> None:
 
 def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> None:
     html = render_report(
-        build_market_monitor_report(
+        build_market_report_document(
             _input_from_mock_sample(),
             options=MarketReportOptions(
                 title="Production Format Acceptance Report",
@@ -238,7 +238,7 @@ def test_market_monitor_report_uses_packaged_template_for_any_data_source() -> N
 
 
 def test_market_monitor_report_can_omit_appendix_and_limit_components() -> None:
-    document = build_market_monitor_report(
+    document = build_market_report_document(
         _input_from_mock_sample(),
         options=MarketReportOptions(
             include_metric_definitions_appendix=False,
@@ -278,7 +278,7 @@ def test_market_monitor_report_validates_detailed_trends_granularity() -> None:
 
 
 def test_market_monitor_report_can_enable_automated_insights() -> None:
-    document = build_market_monitor_report(
+    document = build_market_report_document(
         _input_from_mock_sample(),
         options=MarketReportOptions(include_automated_insights=True),
     )
@@ -350,7 +350,7 @@ def test_metric_daily_rollups_ignore_nan_values() -> None:
 
 
 def test_market_overview_card_delta_matches_detailed_trends_means() -> None:
-    document = build_market_monitor_report(
+    document = build_market_report_document(
         _input_from_mock_sample(),
         options=MarketReportOptions(include_metric_definitions_appendix=False),
     )
@@ -571,6 +571,133 @@ def test_pts_stats_chart_uses_ratio_of_sums_by_venue() -> None:
     assert chi_x_trace["y"] == pytest.approx([12.0, 10.0])
 
 
+def test_pts_stats_block_renders_toxicity_heatmap_from_symbol_scoped_rows() -> None:
+    definitions = {
+        "turnover": MetricDefinition(
+            name="turnover",
+            label="Turnover",
+            category="Activity",
+            description="Summed traded value.",
+            formula="sum(price*qty)",
+            interpretation="Higher values indicate more turnover.",
+            unit="JPY",
+            higher_is_better=None,
+            default_aggregation="sum",
+            supports_intraday=True,
+            supports_symbol_level=True,
+            required_tables=["trades"],
+            required_columns=["tradePrice", "tradeSize"],
+        ),
+        "pts_turnover": MetricDefinition(
+            name="pts_turnover",
+            label="PTS Turnover",
+            category="PTS",
+            description="Summed PTS turnover by venue.",
+            formula="sum(price*qty)",
+            interpretation="Higher values indicate more PTS turnover.",
+            unit="JPY",
+            higher_is_better=None,
+            default_aggregation="sum",
+            supports_intraday=True,
+            supports_symbol_level=True,
+            required_tables=["pts_trades"],
+            required_columns=["venue", "tradePrice", "tradeSize"],
+        ),
+        "primary_quote_reversion_10ms_bps": MetricDefinition(
+            name="primary_quote_reversion_10ms_bps",
+            label="10ms Reversion",
+            category="Toxicity",
+            description="Primary quote reversion 10ms after trade.",
+            formula="side*(future_mid-pre_mid)",
+            interpretation="Positive values indicate adverse reversion.",
+            unit="bps",
+            higher_is_better=None,
+            default_aggregation="weighted_mean",
+            supports_intraday=True,
+            supports_symbol_level=True,
+            required_tables=["pts_trades", "quotes"],
+            required_columns=["venue", "sym", "time"],
+        ),
+    }
+    report_input = MarketReportInput(
+        metric_definitions=definitions,
+        current_series=(
+            MetricTimeSeries(
+                metric_name="turnover",
+                observations=(
+                    MetricObservation("turnover", date(2026, 5, 1), "DAILY", {"topixCapGrp": "Large"}, 100.0),
+                ),
+            ),
+            MetricTimeSeries(
+                metric_name="pts_turnover",
+                observations=(
+                    MetricObservation("pts_turnover", date(2026, 5, 1), "DAILY", {"venue": "SBIJ", "sym": "1111"}, 25.0),
+                    MetricObservation("pts_turnover", date(2026, 5, 1), "DAILY", {"venue": "ODX", "sym": "2222"}, 15.0),
+                ),
+            ),
+            MetricTimeSeries(
+                metric_name="primary_quote_reversion_10ms_bps",
+                observations=(
+                    MetricObservation(
+                        "primary_quote_reversion_10ms_bps",
+                        date(2026, 5, 1),
+                        "DAILY",
+                        {"venue": "SBIJ", "sym": "1111"},
+                        2.0,
+                        metadata={"notional": 20.0},
+                    ),
+                    MetricObservation(
+                        "primary_quote_reversion_10ms_bps",
+                        date(2026, 5, 1),
+                        "DAILY",
+                        {"venue": "SBIJ", "sym": "3333"},
+                        4.0,
+                        metadata={"notional": 10.0},
+                    ),
+                    MetricObservation(
+                        "primary_quote_reversion_10ms_bps",
+                        date(2026, 5, 1),
+                        "DAILY",
+                        {"venue": "ODX", "sym": "2222"},
+                        -1.5,
+                        metadata={"notional": 5.0},
+                    ),
+                ),
+            ),
+        ),
+        comparisons=(),
+        reference_series=(
+            MetricTimeSeries(
+                metric_name="turnover",
+                observations=(
+                    MetricObservation("turnover", date(2026, 4, 1), "DAILY", {"topixCapGrp": "Large"}, 90.0),
+                ),
+            ),
+            MetricTimeSeries(
+                metric_name="pts_turnover",
+                observations=(
+                    MetricObservation("pts_turnover", date(2026, 4, 1), "DAILY", {"venue": "SBIJ", "sym": "1111"}, 20.0),
+                    MetricObservation("pts_turnover", date(2026, 4, 1), "DAILY", {"venue": "ODX", "sym": "2222"}, 10.0),
+                ),
+            ),
+        ),
+    )
+
+    block = market_report_module._build_pts_stats_block(
+        report_input,
+        definitions,
+        options=MarketReportOptions(include_metric_definitions_appendix=False),
+    )
+
+    assert block is not None
+    assert "Venue Toxicity Heatmap" in block.body_html
+    assert ">SBIJ<" in block.body_html
+    assert ">ODX<" in block.body_html
+    assert ">10ms<" in block.body_html
+    assert "2.67 bps" in block.body_html
+    assert "-1.50 bps" in block.body_html
+
+
 def test_turnover_distribution_renders_group_session_heatmap_table() -> None:
     definition = MetricDefinition(
         name="turnover",
@@ -616,7 +743,7 @@ def test_turnover_distribution_renders_group_session_heatmap_table() -> None:
 
 
 def test_market_monitor_report_can_disable_drilldown_page() -> None:
-    document = build_market_monitor_report(
+    document = build_market_report_document(
         _input_from_mock_sample(),
         options=MarketReportOptions(
             include_metric_definitions_appendix=False,
@@ -635,7 +762,7 @@ def test_market_monitor_report_can_disable_drilldown_page() -> None:
 
 def test_market_monitor_report_skips_drilldown_page_without_group_rows() -> None:
     sample = build_offline_sample_metrics()
-    document = build_market_monitor_report(
+    document = build_market_report_document(
         MarketReportInput(
             metric_definitions=sample.metric_definitions,
             current_series=sample.current_series,
@@ -664,7 +791,7 @@ def test_market_monitor_report_defaults_remain_market_first_with_symbol_rows_pre
         group={"sym": "7203"},
         time_bucket="09:00-09:05",
     )
-    document = build_market_monitor_report(
+    document = build_market_report_document(
         MarketReportInput(
             metric_definitions=sample.metric_definitions,
             current_series=sample.current_series,
@@ -704,7 +831,7 @@ def test_market_summary_aggregates_bucket_level_duplicates_for_same_market_conte
         for idx in range(6)
     )
 
-    document = build_market_monitor_report(
+    document = build_market_report_document(
         MarketReportInput(
             metric_definitions=sample.metric_definitions,
             current_series=sample.current_series,
@@ -721,7 +848,7 @@ def test_market_summary_aggregates_bucket_level_duplicates_for_same_market_conte
 
 
 def test_market_monitor_report_passes_custom_drilldown_options() -> None:
-    document = build_market_monitor_report(
+    document = build_market_report_document(
         _input_from_mock_sample(),
         options=MarketReportOptions(
             include_metric_definitions_appendix=False,
@@ -744,7 +871,7 @@ def test_market_monitor_report_passes_custom_drilldown_options() -> None:
 
 
 def test_market_monitor_report_can_opt_into_intraday_heatmaps() -> None:
-    document = build_market_monitor_report(
+    document = build_market_report_document(
         _input_from_mock_sample(),
         options=MarketReportOptions(
             include_metric_definitions_appendix=False,
@@ -769,7 +896,7 @@ def test_market_monitor_report_requires_metric_definitions_for_current_series() 
     )
 
     with pytest.raises(ValueError, match="volume"):
-        build_market_monitor_report(broken_input)
+        build_market_report_document(broken_input)
 
 
 def test_market_report_options_validate_text_and_limits() -> None:

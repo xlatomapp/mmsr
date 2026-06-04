@@ -166,6 +166,45 @@ def test_build_intraday_time_bucket_chart_uses_bucket_only_x_axis() -> None:
     assert chart.points[0].metadata_text == "Sample size: 160"
 
 
+def test_build_intraday_time_bucket_chart_skips_non_finite_values() -> None:
+    series = MetricTimeSeries(
+        metric_name="quoted_spread_bps",
+        observations=(
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 22),
+                time_bucket="AMO",
+                group={"market_cap_bucket": "Large"},
+                value=11.2,
+            ),
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 22),
+                time_bucket="09:00-09:01",
+                group={"market_cap_bucket": "Large"},
+                value=float("nan"),
+            ),
+            MetricObservation(
+                metric_name="quoted_spread_bps",
+                date=date(2026, 5, 22),
+                time_bucket="09:01-09:02",
+                group={"market_cap_bucket": "Large"},
+                value=float("inf"),
+            ),
+        ),
+    )
+
+    chart = build_intraday_time_bucket_chart(
+        "Quoted Spread intraday time-bucket trend",
+        series,
+        QUOTED_SPREAD_BPS,
+        group_by=["market_cap_bucket"],
+    )
+
+    assert [point.x_text for point in chart.points] == ["AM open"]
+    assert [point.value for point in chart.points] == [11.2]
+
+
 def test_build_reference_target_trend_chart_spans_reference_and_target_dates() -> None:
     reference_series = MetricTimeSeries(
         metric_name="quoted_spread_bps",

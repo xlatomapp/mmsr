@@ -93,20 +93,26 @@ def test_calculation_bootstrap_prepares_reversion_common_joins_once() -> None:
 def test_calculation_bootstrap_partitions_sym_before_reversion_aj_inputs() -> None:
     bootstrap = render_calculation_function_bootstrap(".desk.mmsr")
     assert ".desk.mmsr.partedSym:{[t]" in bootstrap
-    assert "sortedPtsTrades: .desk.mmsr.partedSym[`date`sym`venue`time xasc ptsTrades];" in bootstrap
-    assert "sortedPtsQuotes: .desk.mmsr.partedSym[`date`sym`venue`time xasc ptsQuotes];" in bootstrap
-    assert "sortedTradeWithPtsQuote: .desk.mmsr.partedSym[`date`sym`time xasc tradeWithPtsQuote];" in bootstrap
-    assert "sortedPrimaryQuotes: .desk.mmsr.partedSym[`date`sym`time xasc primaryQuotes];" in bootstrap
-    assert "sortedTradeForHorizon: .desk.mmsr.partedSym[`date`sym`horizonTime xasc tradeForHorizon];" in bootstrap
-    assert "sortedPostQuotes: .desk.mmsr.partedSym[`date`sym`horizonTime xasc postQuotes];" in bootstrap
+    assert ".desk.mmsr.venueSymKey:{[sym;venue]" in bootstrap
+    assert "`g#x" in bootstrap
+    assert "ptsTrades: update sym1: .desk.mmsr.venueSymKey[sym;venue] from ptsTrades;" in bootstrap
+    assert "ptsQuotes: update sym1: .desk.mmsr.venueSymKey[sym;venue] from ptsQuotes;" in bootstrap
+    assert "sortedPtsTrades: .desk.mmsr.partedSym[`sym1`time xasc ptsTrades];" in bootstrap
+    assert "sortedPtsQuotes: .desk.mmsr.partedSym[`sym1`time xasc ptsQuotes];" in bootstrap
+    assert "sortedTradeWithPtsQuote: .desk.mmsr.partedSym[`sym`time xasc tradeWithPtsQuote];" in bootstrap
+    assert "sortedPrimaryQuotes: .desk.mmsr.partedSym[`sym`time xasc primaryQuotes];" in bootstrap
+    assert "sortedTradeForHorizon: .desk.mmsr.partedSym[`sym`horizonTime xasc tradeForHorizon];" in bootstrap
+    assert "sortedPostQuotes: .desk.mmsr.partedSym[`sym`horizonTime xasc postQuotes];" in bootstrap
 
     reversion_start = bootstrap.index(".desk.mmsr.prepareToxicityReversion:{")
     reversion_end = bootstrap.index(".desk.mmsr.applyUniverseFilters:{")
     reversion_body = bootstrap[reversion_start:reversion_end]
-    assert ".desk.mmsr.partedSym[`date`sym`venue`time xasc ptsTrades]" in reversion_body
-    assert ".desk.mmsr.partedSym[`date`sym`venue`time xasc ptsQuotes]" in reversion_body
+    assert ".desk.mmsr.partedSym[`sym1`time xasc ptsTrades]" in reversion_body
+    assert ".desk.mmsr.partedSym[`sym1`time xasc ptsQuotes]" in reversion_body
     assert "aj[\n            `date`sym`venue`time;\n            `date`sym`venue`time xasc" not in reversion_body
     assert "aj[`date`sym`horizonTime; `date`sym`horizonTime xasc" not in reversion_body
+    assert "aj[\n            `sym1`time;\n            sortedPtsTrades;\n            sortedPtsQuotes" in reversion_body
+    assert "aj[\n            `sym`horizonTime;\n            sortedTradeForHorizon;\n            sortedPostQuotes" in reversion_body
 
 
 def test_calculation_bootstrap_loads_sources_once_per_chunk() -> None:
