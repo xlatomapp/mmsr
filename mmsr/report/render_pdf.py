@@ -347,7 +347,7 @@ class _PdfRenderer:
                 summary_table = tables[0]
                 self._render_table(summary_table.headers, summary_table.rows, title="Venue Summary")
                 tables = tables[1:]
-            self._render_full_width_chart(plot_asset, height=82)
+            self._render_plot_card(plot_asset, height=82)
         venue_tables = _extract_pts_venue_tables(block.body_html)
         if venue_tables:
             self._subsection_heading("Top 5 Stocks by Venue")
@@ -380,6 +380,31 @@ class _PdfRenderer:
         width = self._content_width()
         self._draw_chart_title(asset.title, x=x, y=y, width=width)
         image_y = y + 7
+        pdf.image(str(asset.path), x=x, y=image_y, w=width, h=height)
+        pdf.set_y(image_y + height + 6)
+
+    def _render_plot_card(self, asset: _PdfChartAsset, *, height: float) -> None:
+        """Render a chart inside a bordered card with the title on the card."""
+        pdf = self._pdf
+        x = pdf.l_margin
+        y = pdf.get_y()
+        width = self._content_width()
+        header_h = 7.0
+        card_height = header_h + height
+        # Card background and border
+        pdf.set_draw_color(214, 224, 236)
+        pdf.set_fill_color(255, 255, 255)
+        pdf.rect(x, y, width, card_height, style="DF")
+        # Title on the card
+        pdf.set_xy(x + 3, y + 1.5)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_text_color(45, 61, 77)
+        pdf.cell(width - 6, 4, _pdf_text(asset.title))
+        # Separator line below title
+        pdf.set_draw_color(214, 224, 236)
+        pdf.line(x, y + header_h, x + width, y + header_h)
+        # Chart image with no padding
+        image_y = y + header_h
         pdf.image(str(asset.path), x=x, y=image_y, w=width, h=height)
         pdf.set_y(image_y + height + 6)
 

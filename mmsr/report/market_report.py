@@ -659,62 +659,84 @@ def _build_pts_stats_block(
         return None
 
     granularity = options.detailed_metric_trends_granularity
-    denominator_by_bucket: dict[tuple[int, ...], float] = {}
-    for obs_date, value in denominator_daily:
-        bucket_key = _time_bucket_key(obs_date, granularity)
-        denominator_by_bucket[bucket_key] = denominator_by_bucket.get(bucket_key, 0.0) + float(value)
 
-    numerator_by_bucket_venue: dict[tuple[tuple[int, ...], str], float] = {}
-    for observation in pts_series.observations:
-        if observation.value is None:
-            continue
-        value = float(observation.value)
-        if not isfinite(value):
-            continue
-        venue = observation.group.get("venue")
-        if venue is None:
-            continue
-        bucket_key = _time_bucket_key(observation.date, granularity)
-        row_key = (bucket_key, str(venue))
-        numerator_by_bucket_venue[row_key] = numerator_by_bucket_venue.get(row_key, 0.0) + value
+    def _build_bucket_denom_numer(
+        t_series: MetricTimeSeries,
+        p_series: MetricTimeSeries,
+    ) -> tuple[dict[tuple[int, ...], float], dict[tuple[tuple[int, ...], str], float]]:
+        denom: dict[tuple[int, ...], float] = {}
+        daily = _metric_daily_rollups("turnover", t_series)
+        for obs_date, value in daily:
+            bucket_key = _time_bucket_key(obs_date, granularity)
+            denom[bucket_key] = denom.get(bucket_key, 0.0) + float(value)
+        numer: dict[tuple[tuple[int, ...], str], float] = {}
+        for observation in p_series.observations:
+            if observation.value is None:
+                continue
+            value = float(observation.value)
+            if not isfinite(value):
+                continue
+            venue = observation.group.get("venue")
+            if venue is None:
+                continue
+            bucket_key = _time_bucket_key(observation.date, granularity)
+            row_key = (bucket_key, str(venue))
+            numer[row_key] = numer.get(row_key, 0.0) + value
+        return denom, numer
 
-    if not numerator_by_bucket_venue:
+    current_denom, current_numer = _build_bucket_denom_numer(turnover_series, pts_series)
+    if not current_numer:
         return None
 
-    ordered_bucket_keys = sorted(
-        bucket_key for bucket_key, denominator in denominator_by_bucket.items() if denominator > 0.0
+    ref_denom: dict[tuple[int, ...], float] = {}
+    ref_numer: dict[tuple[tuple[int, ...], str], float] = {}
+    has_reference = reference_pts_series is not None and reference_turnover_series is not None
+    if has_reference:
+        ref_denom, ref_numer = _build_bucket_denom_numer(reference_turnover_series, reference_pts_series)
+
+    all_bucket_keys: list[tuple[int, ...]] = sorted(
+        set(current_denom.keys()) | set(ref_denom.keys())
     )
-    if not ordered_bucket_keys:
+    if not all_bucket_keys:
         return None
-    labels = [_time_bucket_label(bucket_key, granularity) for bucket_key in ordered_bucket_keys]
+
+    ref_bucket_set = set(ref_denom.keys())
+    current_bucket_set = set(current_denom.keys())
+
+    # Find the boundary index: last reference bucket before the first target bucket.
+    boundary_index: int | None = None
+    if has_reference and ref_bucket_set and current_bucket_set:
+        sorted_ref = sorted(ref_bucket_set)
+        sorted_cur = sorted(current_bucket_set)
+        last_ref = sorted_ref[-1]
+        for i, bk in enumerate(all_bucket_keys):
+            if bk == last_ref:
+                boundary_index = i
+                break
+
+    labels = [_time_bucket_label(bucket_key, granularity) for bucket_key in all_bucket_keys]
 
     venue_totals: dict[str, float] = {}
-    for (_, venue), value in numerator_by_bucket_venue.items():
+    for (_, venue), value in current_numer.items():
         venue_text = str(venue).strip()
         if not venue_text:
             continue
         venue_totals[venue_text] = venue_totals.get(venue_text, 0.0) + value
-    current_denominator_total = sum(float(value) for value in denominator_by_bucket.values() if value > 0.0)
+    current_denominator_total = sum(float(value) for value in current_denom.values() if value > 0.0)
     current_share_by_venue = {
         venue: ((total / current_denominator_total) * 100.0) if current_denominator_total > 0.0 else None
         for venue, total in venue_totals.items()
     }
 
     reference_share_by_venue: dict[str, float | None] = {}
-    if reference_pts_series is not None and reference_turnover_series is not None:
-        reference_denominator_daily = _metric_daily_rollups("turnover", reference_turnover_series)
-        reference_denominator_total = sum(float(value) for _, value in reference_denominator_daily if value is not None and isfinite(float(value)))
+    if has_reference:
+        reference_denominator_total = sum(float(value) for value in ref_denom.values() if value > 0.0)
         reference_venue_totals: dict[str, float] = {}
-        for observation in reference_pts_series.observations:
-            if observation.value is None:
+        for (_, venue), value in ref_numer.items():
+            venue_text = str(venue).strip()
+            if not venue_text:
                 continue
-            numeric_value = float(observation.value)
-            if not isfinite(numeric_value):
-                continue
-            venue = str(observation.group.get("venue", "")).strip()
-            if not venue:
-                continue
-            reference_venue_totals[venue] = reference_venue_totals.get(venue, 0.0) + numeric_value
+            reference_venue_totals[venue_text] = reference_venue_totals.get(venue_text, 0.0) + value
         reference_share_by_venue = {
             venue: ((total / reference_denominator_total) * 100.0) if reference_denominator_total > 0.0 else None
             for venue, total in reference_venue_totals.items()
@@ -737,12 +759,22 @@ def _build_pts_stats_block(
     traces: list[dict[str, object]] = []
     for venue in ordered_venues:
         y_values: list[float | None] = []
-        for bucket_key in ordered_bucket_keys:
-            denominator = denominator_by_bucket.get(bucket_key, 0.0)
-            if denominator <= 0:
+        for bucket_key in all_bucket_keys:
+            if bucket_key in current_bucket_set:
+                denominator = current_denom.get(bucket_key, 0.0)
+                if denominator <= 0:
+                    y_values.append(None)
+                    continue
+                numerator = current_numer.get((bucket_key, venue), 0.0)
+            elif bucket_key in ref_bucket_set:
+                denominator = ref_denom.get(bucket_key, 0.0)
+                if denominator <= 0:
+                    y_values.append(None)
+                    continue
+                numerator = ref_numer.get((bucket_key, venue), 0.0)
+            else:
                 y_values.append(None)
                 continue
-            numerator = numerator_by_bucket_venue.get((bucket_key, venue), 0.0)
             y_values.append((numerator / denominator) * 100.0)
         traces.append(
             {
@@ -756,6 +788,19 @@ def _build_pts_stats_block(
                 "hovertemplate": "%{x}<br>%{fullData.name}: %{y:.2f}%<extra></extra>",
             }
         )
+
+    shapes: list[dict[str, object]] = []
+    if boundary_index is not None and 0 <= boundary_index < len(all_bucket_keys) - 1:
+        shapes.append({
+            "type": "line",
+            "x0": boundary_index + 0.5,
+            "x1": boundary_index + 0.5,
+            "y0": 0,
+            "y1": 1,
+            "xref": "x",
+            "yref": "paper",
+            "line": {"color": "#9AA7B8", "width": 1.5, "dash": "dash"},
+        })
 
     pts_definition = MetricDefinition(
         name="pts_turnover_share_pct",
@@ -788,6 +833,7 @@ def _build_pts_stats_block(
             "yaxis": {"title": "PTS turnover as % of TSE turnover", "ticksuffix": "%"},
             "legend": {"orientation": "h", "y": -0.28},
             "hovermode": "x unified",
+            "shapes": shapes,
         },
         "config": {
             "displaylogo": False,
@@ -930,13 +976,11 @@ def _build_pts_stats_block(
         f"<tbody>{''.join(summary_rows_html)}</tbody>"
         '</table></div></section>'
         '<section class="pts-stats__plot-surface">'
-        '<div class="plotly-chart__card-header">'
-        '<div class="pts-stats__plot-header">'
-        f'<div class="turnover-distribution__card-title pts-stats__plot-title">{escape(pts_definition.label)}</div>'
+        '<div class="turnover-distribution__card turnover-distribution__card--line pts-stats__plot-card">'
+        '<div class="pts-stats__title-row">'
+        f'<div class="turnover-distribution__card-title">{escape(pts_definition.label)}</div>'
         f"{plot_help_html}"
         '</div>'
-        "</div>"
-        '<div class="plotly-chart__visual" role="img" aria-label="PTS Turnover % of TSE Plotly chart">'
         '<div class="plotly-chart__figure" data-mmsr-plotly></div>'
         f'<script type="application/json" class="plotly-chart__spec">{figure_json}</script>'
         '</div></section></div>'

@@ -821,9 +821,26 @@
       padding: 0;
       width: 100%;
     }
-    .pts-stats__plot-surface .plotly-chart__card-header {
-      margin-bottom: 6px;
+    .pts-stats__plot-card {
       padding: 0;
+    }
+    .pts-stats__plot-card .turnover-distribution__card-title {
+      padding: 8px 12px 6px;
+      margin: 0;
+    }
+    .pts-stats__plot-card .pts-stats__title-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 6px;
+    }
+    .pts-stats__plot-card .pts-stats__title-row .metric-help {
+      margin: 0;
+      flex-shrink: 0;
+      align-self: flex-end;
+    }
+    .pts-stats__plot-card .plotly-chart__figure {
+      flex: 1 1 auto;
+      min-height: 0;
     }
     .pts-stats__plot-header {
       align-items: center;
