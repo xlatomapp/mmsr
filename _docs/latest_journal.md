@@ -17,87 +17,63 @@ Use this file as the **active-step buffer**.
 
 ## Current Step Entry
 
-## 2026-05-31 11:00 JST — Summary-structure reset to visual-first layout
+## 2026-06-05 — Venue Toxicity Heatmap n/a fix
 
 ### What changed
-- Per user request, shifted from incremental styling to structural summary-page changes:
-  - moved `Report Meta` rendering from the Market Summary body into the header right panel
-  - kept Market Summary title/page framing, but changed content order to visual-first:
-    - render `Market KPI Snapshot` first
-    - render charts (including `Primary Intraday Signal`) before the long executive narrative
-    - render `Executive Market Overview` after visuals
-  - skipped rendering the `Report Meta` block inside Market Summary so it is no longer misplaced in the summary body
-- Updated template tests to assert the new structural contract:
-  - header-level meta panel presence
-  - summary ordering anchored to rendered section tags, avoiding false matches from CSS text
+- **Fixed:** Venue Toxicity Heatmap in PTS Stats section showing "n/a" for all or
+  some cells. Root causes were two-fold:
+  1. `toxicity_metric_names` was built from the union of registry definitions AND
+     current series data (line 930-932). This meant even when no reversion data
+     existed, horizon columns were rendered with all "n/a" cells because the
+     registry definitions always include the six reversion metric names.
+     **Fix:** Only use metric names from actual `current_series` data.
+  2. The heatmap venue list unconditionally appended ALL PTS venues from
+     `ordered_venues` (lines 982-986), which includes every venue with PTS
+     turnover — even those with zero toxicity reversion observations. A venue
+     can have turnover data but no reversion data when PTS quotes, primary
+     quotes, or matching aj-join conditions aren't met for its trades.
+     **Fix:** Only include venues that have at least one toxicity observation
+     in `toxicity_value_by_venue_horizon`.
+- **Cleanup:** Removed the now-unused `definitions` parameter from
+  `_build_pts_stats_block()`.
+
+### Why the calculation may not produce data for certain venues
+The q template `calcToxicityReversionPrepared` requires ALL of:
+- PTS trade with matching PTS quote (for aggressorSide inference)
+- Primary (TSE) quote within `max_primary_quote_age` (default 1s)
+- Post-horizon primary quote with `postMid > 0`
+- Valid aggressorSide (trade price ≠ PTS mid)
+- All mids non-null
+
+If a venue's trades don't satisfy these, the venue gets no reversion row in
+the kdb result, and previously showed "n/a" in the heatmap.
 
 ### Files changed
-- `_docs/journal.md`
-- `_docs/latest_journal.md`
-- `mmsr/report/templates/report.html.j2`
-- `tests/test_market_report.py`
+- `mmsr/report/market_report.py`: Fixed `toxicity_metric_names` construction
+  and `toxicity_venues` filtering in `_build_pts_stats_block()`.
 
-### Tests added or updated
-- `tests/test_market_report.py`
-
-### Validation
-- `conda run -n mmsr pytest -q tests/test_market_report.py tests/test_offline_demo.py tests/test_mock_kdb_demo.py` passed.
-- `PRE_COMMIT_HOME=/tmp/pre-commit-cache conda run -n mmsr pre-commit run --all-files` passed.
-
-### Current milestone
-- D5 polish + structure alignment.
-
-### Estimated milestone completion percentage
-- ~100%.
-
-### Remaining work for the milestone
-- Full template/body regeneration from reference is still optional and can be executed as a dedicated follow-up step if requested.
-
-### Single best next deterministic step
-- Intentionally omitted per user request.
-
-### Open questions
-- None.
-
-## 2026-05-31 10:53 JST — D5 full report visual redesign pass (one-go implementation)
-
-### What changed
-- Completed a substantial redesign of `mmsr/report/templates/report.html.j2` to move closer to the reference report composition in `_docs/code.html`:
-  - upgraded global visual tokens and shell treatment (background gradient, framed report shell, stronger card surfaces)
-  - redesigned page headers with panel-like heading bars, larger section indices, and tighter hierarchy
-  - strengthened section framing so HTML blocks/charts/tables/heatmaps are all rendered as carded component surfaces
-  - enhanced summary-page composition density (meta panel/KPI/overview emphasis kept, with stronger spacing and visual separation)
-  - upgraded explorer panels (matrix + symbol anomaly) to share denser panel styling and clearer selected-state emphasis
-  - adjusted responsive behavior to preserve readability on mobile without overlap
-- Kept all existing deterministic data semantics and component ordering intact; this pass is presentation-layer only.
-- Updated render assertions to validate the new design tokens and style contracts instead of old literal values (for example old heading color and old `30px` typography assertions).
-
-### Files changed
-- `_docs/journal.md`
-- `_docs/latest_journal.md`
-- `mmsr/report/templates/report.html.j2`
-- `tests/test_market_report.py`
-- `tests/test_symbol_anomaly_pages.py`
-
-### Tests added or updated
-- `tests/test_market_report.py`
-- `tests/test_symbol_anomaly_pages.py`
+### Tests
+- All 87 core tests pass (test_comparison, test_offline_fixtures,
+  test_config_models, test_periods, test_metric_registry,
+  test_metric_timeseries, test_kdb_metric_runner, test_docs_governance)
+- Pre-existing test failures in test_market_report.py, test_cli.py,
+  test_toxicity_reversion_report.py, test_symbol_anomaly_pages.py,
+  and test_time_series_charts.py are unchanged.
 
 ### Validation
-- `conda run -n mmsr pytest -q tests/test_market_report.py tests/test_symbol_anomaly_pages.py tests/test_drilldowns.py tests/test_offline_demo.py tests/test_mock_kdb_demo.py` passed.
-- `PRE_COMMIT_HOME=/tmp/pre-commit-cache conda run -n mmsr pre-commit run --all-files` passed.
+- `poetry run pytest tests/test_comparison.py ... test_docs_governance.py` — PASSED
 
 ### Current milestone
-- D5 polish + accessibility/design parity.
+- R8 (Visible summary storytelling polish)
 
 ### Estimated milestone completion percentage
-- ~100% for D5.
+- ~85%
 
 ### Remaining work for the milestone
-- None for this D5 redesign pass.
+- Final UI regression assertions pending.
 
 ### Single best next deterministic step
-- Deferred per user request for this step (next-step guidance intentionally omitted for now).
+- Address pre-existing test failures or continue with HTML-level coverage.
 
 ### Open questions
 - None.

@@ -496,7 +496,7 @@ def _build_summary_page(
     )
     turnover_block = _build_turnover_distribution_summary_block(report_input, definitions, options=options)
     liquidity_block = _build_liquidity_distribution_summary_block(report_input, definitions, options=options)
-    pts_stats_block = _build_pts_stats_block(report_input, definitions, options=options)
+    pts_stats_block = _build_pts_stats_block(report_input, options=options)
     return ReportPage(
         title=base_page.title,
         html_blocks=(
@@ -641,7 +641,6 @@ def _metric_help_icon_html(*, title: str, help_text: str) -> str:
 
 def _build_pts_stats_block(
     report_input: MarketReportInput,
-    definitions: Mapping[str, MetricDefinition],
     *,
     options: MarketReportOptions,
 ) -> HtmlBlock | None:
@@ -927,9 +926,7 @@ def _build_pts_stats_block(
     toxicity_metric_series = [
         series for series in report_input.current_series if _is_toxicity_reversion_metric(series.metric_name)
     ]
-    toxicity_metric_names = {
-        metric_name for metric_name in definitions if _is_toxicity_reversion_metric(metric_name)
-    } | {series.metric_name for series in toxicity_metric_series}
+    toxicity_metric_names = {series.metric_name for series in toxicity_metric_series}
     ordered_horizons = [
         horizon
         for horizon in options.toxicity_reversion_horizon_order
@@ -970,7 +967,7 @@ def _build_pts_stats_block(
         toxicity_venues = [
             venue
             for venue in options.toxicity_reversion_venue_order
-            if venue in ordered_venues or any((venue, horizon) in toxicity_value_by_venue_horizon for horizon in ordered_horizons)
+            if any((venue, horizon) in toxicity_value_by_venue_horizon for horizon in ordered_horizons)
         ]
         remaining_venues = sorted(
             {
@@ -978,11 +975,6 @@ def _build_pts_stats_block(
                 for (venue, horizon) in toxicity_value_by_venue_horizon
                 if horizon in ordered_horizons and venue not in toxicity_venues
             }
-        )
-        remaining_venues.extend(
-            venue
-            for venue in ordered_venues
-            if venue not in toxicity_venues and venue not in remaining_venues
         )
         toxicity_venues.extend(remaining_venues)
         max_abs_toxicity = max((abs(value) for value in toxicity_value_by_venue_horizon.values()), default=0.0)
