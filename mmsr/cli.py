@@ -41,7 +41,7 @@ from mmsr.report.market_report import (
     MarketReportOptions,
     build_market_report_document,
 )
-from mmsr.report.render_html import render_report_v2
+from mmsr.report.render_html import render_report
 from mmsr.report.render_pdf import render_report_pdf_file
 from mmsr.report.render_quarto import render_report_qmd_file
 
@@ -89,7 +89,7 @@ def _offline_demo_command(
     template_dir: Path | None = typer.Option(
         None,
         "--template-dir",
-        help="Optional directory containing report_v2.html.j2 and partial templates.",
+        help="Optional directory containing report.html.j2 and partial templates.",
     ),
     title: str | None = typer.Option(
         None,
@@ -345,7 +345,7 @@ def _render_command(
     template_dir: Path | None = typer.Option(
         None,
         "--template-dir",
-        help="Optional directory containing report_v2.html.j2 and partial templates.",
+        help="Optional directory containing report.html.j2 and partial templates.",
     ),
     verbose: bool = typer.Option(
         False,
@@ -1166,7 +1166,7 @@ def render_production_report_file(
         output_path=resolved_output_path,
     )
     LOGGER.info("Rendering HTML report")
-    html = render_report_v2(document, template_dir=template_dir)
+    html = render_report(document, template_dir=template_dir)
 
     resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
     resolved_output_path.write_text(html, encoding="utf-8")
@@ -1434,7 +1434,7 @@ def render_offline_demo_report_file(
     """Render the deterministic mock-data report to an HTML file.
 
     The function is intentionally offline-only. It delegates mock data into the
-    canonical production-format report builder, then uses ``render_report_v2()``,
+    canonical production-format report builder, then uses ``render_report()``,
     then writes the deterministic HTML artifact to ``output_path``.
     """
 
@@ -1442,7 +1442,7 @@ def render_offline_demo_report_file(
 
     document = build_offline_demo_report(options=options)
     LOGGER.info("Rendering HTML report")
-    html = render_report_v2(document, template_dir=template_dir)
+    html = render_report(document, template_dir=template_dir)
 
     resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
     resolved_output_path.write_text(html, encoding="utf-8")

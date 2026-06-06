@@ -6,7 +6,7 @@ from mmsr.report.components import (
     ReportDocument,
     ReportPage,
 )
-from mmsr.report.render_html import render_metric_card, render_report, render_report_v2
+from mmsr.report.render_html import render_metric_card, render_report
 
 QUOTED_SPREAD_BPS = next(m for m in STARTER_METRICS if m.name == "quoted_spread_bps")
 
@@ -33,7 +33,6 @@ def test_report_template_renders_branding_images() -> None:
         branding=ReportBranding(
             brand_name="Example Securities",
             logo_image_src="assets/logo.png",
-            header_image_src="assets/header.png",
             footer_image_src="assets/footer.png",
             footer_text="Internal use only",
         ),
@@ -51,14 +50,13 @@ def test_report_template_renders_branding_images() -> None:
 
     assert "Example Securities" in html
     assert "assets/logo.png" in html
-    assert "assets/header.png" in html
     assert "assets/footer.png" in html
     assert "Internal use only" in html
     assert "Executive Summary" in html
     assert "Spread widened." in html
 
 
-def test_report_v2_template_renders_fresh_top_header() -> None:
+def test_report_template_renders_fresh_top_header() -> None:
     document = ReportDocument(
         title="Equity Microstructure Intelligence Report",
         branding=ReportBranding(brand_name="Microstructure AI"),
@@ -71,7 +69,7 @@ def test_report_v2_template_renders_fresh_top_header() -> None:
         },
     )
 
-    html = render_report_v2(document)
+    html = render_report(document)
 
     assert "report-header-v2" in html
     assert "Equity Microstructure Intelligence Report" in html

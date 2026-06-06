@@ -6,6 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ document.title }}</title>
   {% if plotly_inline_js %}<script>{{ plotly_inline_js | safe }}</script>{% endif %}
+  <script>
+    window.MathJax = { tex: { inlineMath: [['\\(', '\\)']] } };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" defer></script>
   <style>
     :root {
       --mmsr-bg: #edf2f8;
@@ -29,10 +33,7 @@
       line-height: 1.5;
     }
     .report-shell {
-      background: var(--mmsr-shell);
-      border-left: 1px solid #d9e2ef;
-      border-right: 1px solid #d9e2ef;
-      box-shadow: 0 18px 40px rgba(15, 34, 58, 0.08);
+      background: transparent;
       max-width: 1360px;
       margin: 0 auto;
       padding: 24px 28px 34px;
@@ -67,39 +68,138 @@
     .brand-banner, .footer-banner { width: 100%; max-height: 120px; object-fit: contain; display: block; }
     .report-title { margin: 0; font-size: 40px; line-height: 1.1; letter-spacing: 0; }
     .report-meta { color: var(--mmsr-muted); margin-top: 4px; font-size: 13px; }
-    .report-page {
-      background: var(--mmsr-card);
+    .report-header-v2 {
+      border-bottom: 1px solid var(--mmsr-border);
+      padding-bottom: 20px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: start;
+      gap: 18px;
+      margin-bottom: 14px;
+    }
+    .report-header-v2__title {
+      display: grid;
+      align-content: start;
+      max-width: 760px;
+    }
+    .report-header-v2__eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .report-header-v2__chip {
+      width: 28px;
+      height: 28px;
+      border-radius: 4px;
+      background: #d2e4ff;
+      color: #00355f;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .report-header-v2__logo {
+      width: 28px;
+      height: 28px;
+      object-fit: contain;
+      display: block;
+    }
+    .report-header-v2__brand {
+      color: #00355f;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .report-header-v2__meta {
       border: 1px solid var(--mmsr-border);
-      border-radius: 12px;
-      box-shadow: 0 8px 22px rgba(15, 34, 58, 0.06);
-      padding: 16px 18px;
+      border-radius: 8px;
+      background: #fff;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-width: 0;
+      width: 640px;
+      max-width: 100%;
+    }
+    .report-header-v2__meta-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .report-header-v2__item {
+      min-width: 0;
+      flex: 1 1 0;
+    }
+    .report-header-v2__label {
+      margin: 0 0 3px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 10px;
+      color: var(--mmsr-muted);
+      font-weight: 700;
+    }
+    .report-header-v2__value {
+      margin: 0;
+      font-size: 13px;
+    }
+    .report-header-v2__sep {
+      width: 1px;
+      height: 32px;
+      background: var(--mmsr-border);
+    }
+    .report-header-v2__action {
+      align-self: flex-start;
+      border: 0;
+      border-radius: 8px;
+      background: #00355f;
+      color: #fff;
+      cursor: pointer;
+      display: inline-flex;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 8px 12px;
+    }
+    .report-header-v2__action:hover {
+      background: #0c4a7c;
+    }
+    .report-header-v2__action:focus-visible {
+      outline: 2px solid #7fb5ff;
+      outline-offset: 2px;
+    }
+    .report-page {
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+      padding: 8px 0 12px;
       margin: 16px 0;
     }
     .report-page__header {
-      align-items: center;
-      background: linear-gradient(90deg, var(--mmsr-heading-soft) 0%, #f9fbff 100%);
-      border: 1px solid var(--mmsr-border);
-      border-radius: 10px;
+      align-items: flex-end;
+      background: transparent;
+      border: 0;
+      border-bottom: 1px solid var(--mmsr-border);
+      border-radius: 0;
       display: flex;
       gap: 10px;
       margin: 0 0 12px;
-      padding: 9px 12px;
+      padding: 0 0 8px;
     }
     .report-page__index {
-      align-items: center;
-      background: var(--mmsr-accent);
-      border-radius: 999px;
-      color: #fff;
-      display: inline-flex;
-      font-size: 12px;
+      color: #111111;
+      background: transparent;
+      display: inline;
+      font-size: 36px;
       font-weight: 700;
-      height: 24px;
-      justify-content: center;
-      width: 24px;
+      line-height: 1.15;
     }
     .report-page__title {
-      color: var(--mmsr-heading);
-      font-size: 28px;
+      color: #111111;
+      font-size: 36px;
       font-weight: 700;
       line-height: 1.15;
       margin: 0;
@@ -154,13 +254,22 @@
       margin-top: 0;
       padding-top: 0;
     }
+    .report-page--summary > .html-block[data-block-title="Market Overview"] {
+      grid-column: 1 / -1;
+      margin-top: 0;
+      padding-top: 0;
+    }
+    .report-page--summary > .html-block[data-block-title="Automated Insight Summary"] {
+      grid-column: 1 / -1;
+      margin-top: 0;
+      padding-top: 0;
+    }
     .report-page--summary > .html-block[data-block-title="Executive Market Overview"] {
       grid-column: 1 / 2;
       margin-top: 0;
       padding-top: 0;
     }
     .report-page--summary > .metric-grid,
-    .report-page--summary > .plotly-chart,
     .report-page--summary > .time-series-chart,
     .report-page--summary > .heatmap,
     .report-page--summary > .metric-table,
@@ -194,6 +303,886 @@
       gap: 13px;
       margin: 16px 0 14px;
     }
+    .market-overview-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin: 4px 0 10px;
+    }
+    .market-overview-card {
+      border: 1px solid var(--mmsr-border);
+      border-radius: 8px;
+      background: #fff;
+      padding: 10px 12px 6px;
+      min-height: 160px;
+    }
+    .market-overview-card__heading {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+    .market-overview-card__label {
+      margin: 0;
+      color: var(--mmsr-muted);
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: 600;
+    }
+    .market-overview-card__value {
+      margin: 6px 0 2px;
+      font-size: 28px;
+      line-height: 1.1;
+      color: var(--mmsr-heading);
+      font-weight: 700;
+    }
+    .market-overview-card__aggregation {
+      margin: 4px 0 2px;
+      color: var(--mmsr-muted);
+      font-size: 12px;
+      line-height: 1.25;
+      font-weight: 400;
+      opacity: 1;
+    }
+    .market-overview-card__delta {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .market-overview-card__delta--up { color: #0f9d58; }
+    .market-overview-card__delta--down { color: #ba1a1a; }
+    .market-overview-card__delta--flat { color: var(--mmsr-muted); }
+    .market-overview-card__spark {
+      margin-top: 10px;
+      height: 56px;
+      border-radius: 4px;
+      background: linear-gradient(180deg, #dfe6ef 0%, #e8edf4 100%);
+      border-bottom: 2px solid #6f8eaf;
+      display: flex;
+      align-items: end;
+      gap: 1px;
+      padding: 0 1px;
+      position: relative;
+    }
+    .market-overview-card__spark-mean {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 0;
+      border-top: 1px dashed #5a6f8b;
+      opacity: 0.8;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .market-overview-card__bar {
+      flex: 1 1 0;
+      min-width: 2px;
+      background: #a9b5c6;
+      border-radius: 1px 1px 0 0;
+      position: relative;
+      z-index: 1;
+    }
+    .automated-insight {
+      border: 1px solid var(--mmsr-border);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 2px 10px rgba(16, 39, 66, 0.06);
+      padding: 12px 14px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .automated-insight--inline {
+      margin-top: 12px;
+    }
+    .automated-insight__icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      border: 1px solid #b9c8dc;
+      color: var(--mmsr-heading);
+      font-size: 12px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+      margin-top: 2px;
+      background: #fff;
+    }
+    .automated-insight__content {
+      min-width: 0;
+      width: 100%;
+    }
+    .automated-insight__title {
+      margin: 0 0 8px;
+      font-size: 16px;
+      line-height: 1.25;
+      color: #1f2d3d;
+      font-weight: 700;
+    }
+    .automated-insight__grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px 12px;
+    }
+    .automated-insight__item {
+      border-left: 2px solid #d7e0ed;
+      padding-left: 8px;
+    }
+    .automated-insight__metric {
+      margin: 0 0 2px;
+      font-size: 13px;
+      line-height: 1.3;
+      font-weight: 700;
+      color: #1f2d3d;
+    }
+    .automated-insight__comment {
+      margin: 0;
+      color: #2b3a4b;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .automated-insight__list {
+      margin: 0;
+      padding-left: 18px;
+      color: #2b3a4b;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .automated-insight__list li {
+      margin: 2px 0;
+    }
+    .detailed-trends {
+      padding: 0;
+      border: 0;
+      background: transparent;
+      width: 100%;
+    }
+    .detailed-trends__header {
+      align-items: center;
+      border-bottom: 1px solid var(--mmsr-border);
+      display: flex;
+      justify-content: flex-start;
+      gap: 10px;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+    }
+    .detailed-trends__title {
+      color: #111111;
+      font-size: 36px;
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: 0;
+      margin: 0;
+    }
+    .detailed-trends__toggle {
+      margin-left: auto;
+      border: 1px solid var(--mmsr-border);
+      border-radius: 8px;
+      background: #fff;
+      color: #111111;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 10px;
+      cursor: pointer;
+    }
+    .detailed-trends__grid {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      width: 100%;
+    }
+    .detailed-trends__mini {
+      border: 1px solid var(--mmsr-border);
+      border-radius: 8px;
+      background: #fff;
+      padding: 8px;
+      box-shadow: 0 2px 10px rgba(16, 39, 66, 0.06);
+    }
+    .detailed-trends__mini-title {
+      margin: 0 0 6px;
+      color: #111111;
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .detailed-trends__help {
+      margin-top: 0;
+      align-self: center;
+    }
+    .detailed-trends__mini-chart {
+      min-height: 240px;
+    }
+    .detailed-trends__detail {
+      width: 100%;
+    }
+    .report-page--summary > div[data-block-title="Detailed Metric Trends"] {
+      grid-column: 1 / -1;
+      width: 100%;
+    }
+    .report-page--summary > div[data-block-title="Detailed Metric Trends"] > .html-block__body {
+      overflow-x: hidden;
+    }
+    .report-page--summary > div[data-block-title="Intraday Turnover Distribution"] {
+      grid-column: 1 / -1;
+      width: 100%;
+    }
+    .report-page--summary > div[data-block-title="PTS Stats"] {
+      grid-column: 1 / -1;
+      width: 100%;
+    }
+    .detailed-trends__detail {
+      overflow-x: hidden;
+    }
+    .detailed-trends__controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .detailed-trends__label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--mmsr-muted);
+    }
+    .detailed-trends__select {
+      min-width: 240px;
+      border: 1px solid var(--mmsr-border);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--mmsr-text);
+      font-size: 12px;
+      padding: 6px 8px;
+    }
+    .detailed-trends__chart {
+      border: 1px solid var(--mmsr-border);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 2px 10px rgba(16, 39, 66, 0.06);
+      padding: 8px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .detailed-trends .plotly-chart__figure {
+      min-width: 0 !important;
+      width: 100%;
+      min-height: 460px;
+    }
+    .detailed-trends .js-plotly-plot,
+    .detailed-trends .plot-container {
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+    .turnover-distribution {
+      padding: 0;
+      border: 0;
+      background: transparent;
+      width: 100%;
+    }
+    .turnover-distribution__header {
+      align-items: center;
+      border-bottom: 1px solid var(--mmsr-border);
+      display: flex;
+      justify-content: flex-start;
+      gap: 10px;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+    }
+    .turnover-distribution__title {
+      color: #111111;
+      font-size: 36px;
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: 0;
+      margin: 0;
+    }
+    .turnover-distribution__help {
+      margin-top: 0;
+      align-self: center;
+    }
+    .turnover-distribution__body {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+    }
+    .turnover-distribution__chart {
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      padding: 0;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .turnover-distribution__selected-title {
+      margin: 0 0 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #1f2d3d;
+    }
+    .turnover-distribution__cards {
+      display: grid;
+      grid-template-columns: minmax(200px, 20%) minmax(0, 1fr);
+      gap: 12px;
+      align-items: stretch;
+    }
+    .turnover-distribution__card {
+      border: 1px solid var(--mmsr-border);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 1px 6px rgba(16, 39, 66, 0.06);
+      padding: 8px;
+      box-sizing: border-box;
+    }
+    .turnover-distribution__card--bar {
+      display: flex;
+      flex-direction: column;
+      padding: 5px;
+    }
+    .turnover-distribution__card--bar [data-turnover-mix-table] {
+      display: flex;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+    .turnover-distribution__card--line {
+      display: flex;
+      flex-direction: column;
+    }
+    .turnover-distribution__card--bar .plotly-chart__figure,
+    .turnover-distribution__card--line .plotly-chart__figure {
+      flex: 1 1 auto;
+      min-height: 320px;
+    }
+    .turnover-distribution__card--table {
+      grid-column: 1 / -1;
+    }
+    .turnover-distribution__aggregate {
+      display: flex;
+      flex: 1 1 auto;
+      width: 100%;
+      overflow: auto;
+    }
+    .turnover-distribution__aggregate-table {
+      width: 100%;
+      height: 100%;
+      border-collapse: collapse;
+      font-size: 10px;
+    }
+    .turnover-distribution__aggregate-table thead th {
+      background: #f3f7fd;
+      color: var(--mmsr-muted);
+      text-align: center;
+      font-weight: 700;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .turnover-distribution__aggregate-table th,
+    .turnover-distribution__aggregate-table td {
+      border: 1px solid #dbe4f0;
+      padding: 5px 6px;
+      white-space: nowrap;
+      vertical-align: middle;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+    .turnover-distribution__aggregate-table tbody th {
+      background: #f9fbff;
+      color: #1f2d3d;
+      text-align: left;
+      font-weight: 700;
+    }
+    .turnover-distribution__daily-grid {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .turnover-distribution__card--daily {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .turnover-distribution__card--daily .plotly-chart__figure {
+      flex: 1 1 auto;
+      min-height: 260px;
+    }
+    .turnover-distribution__card-title {
+      margin: 0 0 6px;
+      font-size: 12px;
+      color: var(--mmsr-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-weight: 700;
+    }
+    .turnover-distribution__card-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .turnover-distribution__card-title-row .turnover-distribution__card-title {
+      margin-bottom: 0;
+    }
+    .turnover-distribution__curve-select {
+      min-width: 150px;
+      border: 1px solid var(--mmsr-border);
+      border-radius: 6px;
+      background: #fff;
+      color: #1f2d3d;
+      font-size: 12px;
+      padding: 4px 8px;
+    }
+    .turnover-distribution__help--inline {
+      margin-top: 0;
+      margin-left: auto;
+      align-self: center;
+    }
+    .turnover-distribution__heatmap {
+      margin-top: 0;
+      overflow: auto;
+      background: transparent;
+      height: auto;
+    }
+    .turnover-distribution__heatmap-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10px;
+    }
+    .turnover-distribution__heatmap-table thead th {
+      background: #f3f7fd;
+      color: var(--mmsr-muted);
+      text-align: center;
+      font-weight: 700;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .turnover-distribution__heatmap-table th,
+    .turnover-distribution__heatmap-table td {
+      border: 1px solid #dbe4f0;
+      padding: 3px 5px;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+    .turnover-distribution__heatmap-table tbody th {
+      background: #f9fbff;
+      color: #1f2d3d;
+      text-align: left;
+      font-weight: 700;
+    }
+    .turnover-distribution__heatmap-cell {
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+    /* Lighter fixed RdBu-style bins */
+    .turnover-distribution__heatmap-cell--na { background: #fafbfc; }
+    .turnover-distribution__heatmap-cell--z0 { background: #f8fafc; }
+    .turnover-distribution__heatmap-cell--n1 { background: #fdf1ed; }
+    .turnover-distribution__heatmap-cell--n2 { background: #fbe5df; }
+    .turnover-distribution__heatmap-cell--n3 { background: #f8d4ca; }
+    .turnover-distribution__heatmap-cell--n4 { background: #f3c0b4; }
+    .turnover-distribution__heatmap-cell--p1 { background: #eef4fb; }
+    .turnover-distribution__heatmap-cell--p2 { background: #e3edf8; }
+    .turnover-distribution__heatmap-cell--p3 { background: #d1e3f4; }
+    .turnover-distribution__heatmap-cell--p4 { background: #bcd8ee; }
+    .turnover-distribution__heatmap-current,
+    .turnover-distribution__heatmap-delta {
+      display: block;
+      line-height: 1.2;
+    }
+    .turnover-distribution__heatmap-current {
+      color: #1f2d3d;
+      font-weight: 600;
+    }
+    .turnover-distribution__heatmap-delta {
+      font-size: 9px;
+    }
+    .turnover-distribution__heatmap-delta--up { color: #0f9d58; }
+    .turnover-distribution__heatmap-delta--down { color: #ba1a1a; }
+    .turnover-distribution__heatmap-delta--neutral { color: var(--mmsr-muted); }
+    .turnover-distribution__heatmap-row {
+      cursor: pointer;
+    }
+    .turnover-distribution__heatmap-row.is-selected th,
+    .turnover-distribution__heatmap-row.is-selected td {
+      box-shadow: inset 0 2px 0 #2d5d93, inset 0 -2px 0 #2d5d93;
+    }
+    .turnover-distribution__heatmap-row.is-selected th {
+      box-shadow: inset 2px 0 0 #2d5d93, inset 0 2px 0 #2d5d93, inset 0 -2px 0 #2d5d93;
+    }
+    .turnover-distribution__heatmap-row.is-selected td:last-child {
+      box-shadow: inset -2px 0 0 #2d5d93, inset 0 2px 0 #2d5d93, inset 0 -2px 0 #2d5d93;
+    }
+    .turnover-distribution .plotly-chart__figure {
+      min-width: 0 !important;
+      width: 100%;
+    }
+    .turnover-distribution .js-plotly-plot,
+    .turnover-distribution .plot-container {
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+    .liquidity-distribution .turnover-distribution__cards {
+      align-items: stretch;
+    }
+    .liquidity-distribution .turnover-distribution__card--bar {
+      display: flex;
+      flex-direction: column;
+    }
+    .liquidity-distribution .turnover-distribution__card--bar [data-liquidity-metric-table] {
+      display: flex;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+    .liquidity-distribution .turnover-distribution__card--bar .turnover-distribution__heatmap {
+      display: flex;
+      flex: 1 1 auto;
+    }
+    .liquidity-distribution .turnover-distribution__card--bar .turnover-distribution__heatmap-table {
+      height: 100%;
+    }
+    .liquidity-distribution .turnover-distribution__card--line .plotly-chart__figure {
+      min-height: 320px;
+    }
+    .pts-stats__stack {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .pts-stats__summary-row {
+      display: grid;
+      grid-template-columns: minmax(200px, 20%) minmax(0, 1fr);
+      gap: 12px;
+      align-items: stretch;
+    }
+    .pts-stats__summary-card {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-width: 0;
+    }
+    .pts-stats__summary-table-wrap {
+      flex: 1 1 auto;
+      overflow-x: auto;
+    }
+    .pts-stats__summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+    .pts-stats__summary-table th,
+    .pts-stats__summary-table td {
+      border-bottom: 1px solid #dbe4f0;
+      padding: 5px 6px;
+      text-align: left;
+      white-space: nowrap;
+    }
+    .pts-stats__summary-table thead th {
+      color: var(--mmsr-muted);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .pts-stats__summary-table tbody th {
+      color: #1f2d3d;
+      font-weight: 700;
+    }
+    .pts-stats__plot-surface {
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      padding: 0;
+      width: 100%;
+    }
+    .pts-stats__plot-card {
+      padding: 0;
+    }
+    .pts-stats__plot-card .turnover-distribution__card-title {
+      padding: 8px 12px 6px;
+      margin: 0;
+    }
+    .pts-stats__plot-card .pts-stats__title-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 6px;
+    }
+    .pts-stats__plot-card .pts-stats__title-row .metric-help {
+      margin: 0;
+      flex-shrink: 0;
+      align-self: flex-end;
+    }
+    .pts-stats__plot-card .plotly-chart__figure {
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+    .pts-stats__plot-header {
+      align-items: center;
+      display: inline-flex;
+      gap: 6px;
+    }
+    .pts-stats__plot-title {
+      margin: 0;
+    }
+    .pts-stats__plot-header .metric-help {
+      margin-top: 0;
+    }
+    .pts-stats__plot-surface .plotly-chart__visual {
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+    .pts-stats__venues {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .pts-stats__venue-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      align-items: start;
+    }
+    .pts-stats__venue-card {
+      min-width: 0;
+      background: #f9fbff;
+    }
+    .pts-stats__venue-table-wrap {
+      overflow-x: auto;
+    }
+    .pts-stats__venue-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+    .pts-stats__venue-table th,
+    .pts-stats__venue-table td {
+      border-bottom: 1px solid #dbe4f0;
+      padding: 4px 6px;
+      text-align: left;
+      white-space: nowrap;
+    }
+    .pts-stats__venue-table thead th {
+      color: var(--mmsr-muted);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    @media (max-width: 980px) {
+      .turnover-distribution__cards {
+        grid-template-columns: 1fr;
+      }
+      .turnover-distribution__card--table {
+        grid-column: auto;
+      }
+      .turnover-distribution__daily-grid {
+        grid-template-columns: 1fr;
+      }
+      .pts-stats__summary-row {
+        grid-template-columns: 1fr;
+      }
+      .pts-stats__venue-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 10mm;
+      }
+      html,
+      body {
+        background: #fff;
+        font-size: 10pt;
+      }
+      .report-shell {
+        max-width: none;
+        padding: 0;
+      }
+      .report-header-v2 {
+        grid-template-columns: 1fr;
+        gap: 10px;
+        margin-bottom: 8px;
+        padding-bottom: 10px;
+      }
+      .report-header-v2__meta {
+        width: auto;
+      }
+      .report-header-v2__action {
+        display: none;
+      }
+      .brand-header,
+      .brand-footer,
+      .plotly-chart__card,
+      .turnover-distribution__card {
+        box-shadow: none;
+      }
+      .brand-header,
+      .brand-footer,
+      .commentary-block,
+      .html-block,
+      .time-series-chart,
+      .plotly-chart,
+      .heatmap,
+      .metric-card,
+      .plotly-chart__card,
+      .turnover-distribution__card {
+        background: #fff;
+      }
+      .report-page {
+        break-inside: auto;
+        page-break-inside: auto;
+        margin: 0;
+        padding: 0;
+      }
+      .report-page + .report-page {
+        break-before: page;
+        page-break-before: always;
+        margin-top: 0;
+      }
+      .report-page__header {
+        margin-bottom: 8px;
+      }
+      .report-page__index,
+      .report-page__title,
+      .turnover-distribution__title {
+        font-size: 20pt;
+      }
+      .report-title {
+        font-size: 24pt;
+      }
+      .report-page--summary {
+        display: block;
+      }
+      .report-page--summary > .html-block[data-block-title="Report Meta"],
+      .report-page--summary > .html-block[data-block-title="Market KPI Snapshot"],
+      .report-page--summary > .html-block[data-block-title="Market Overview"],
+      .report-page--summary > .html-block[data-block-title="Automated Insight Summary"],
+      .report-page--summary > .html-block[data-block-title="Executive Market Overview"],
+      .report-page--summary > .metric-grid,
+      .report-page--summary > .time-series-chart,
+      .report-page--summary > .heatmap,
+      .report-page--summary > .metric-table,
+      .report-page--summary > .commentary-block,
+      .report-page--summary > .html-block {
+        grid-column: auto;
+        grid-row: auto;
+      }
+      .metric-grid,
+      .pts-stats__summary-row,
+      .turnover-distribution__cards,
+      .pts-stats__venue-grid,
+      .brand-header__content {
+        grid-template-columns: 1fr !important;
+      }
+      .kpi-snapshot {
+        display: flex !important;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .kpi-snapshot__card {
+        break-inside: avoid;
+        box-shadow: none;
+        display: inline-flex;
+        flex: 0 0 calc(50% - 4px);
+        flex-direction: column;
+        page-break-inside: avoid;
+        padding: 8px 10px;
+        vertical-align: top;
+        width: calc(50% - 4px) !important;
+      }
+      .kpi-snapshot__value {
+        font-size: 18pt;
+      }
+      .kpi-snapshot__mini {
+        margin-top: 6px;
+      }
+      .time-series-chart__visual,
+      .time-series-chart__data,
+      .plotly-chart__visual,
+      .heatmap__visual,
+      .heatmap__data {
+        border: 1px solid var(--mmsr-border);
+        border-radius: 8px;
+        overflow: visible;
+        padding: 8px;
+        background: #fff;
+      }
+      .plotly-chart__figure,
+      .time-series-chart__svg {
+        min-width: 0 !important;
+        width: 100% !important;
+      }
+      .plotly-chart__figure,
+      .js-plotly-plot,
+      .plot-container,
+      .svg-container,
+      .main-svg {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        max-width: 100% !important;
+        width: 100% !important;
+      }
+      .plotly-chart__visual > .plotly-chart__figure,
+      .turnover-distribution__card .plotly-chart__figure,
+      .detailed-trends__chart .plotly-chart__figure {
+        min-width: 0 !important;
+      }
+      .plotly-chart__figure {
+        min-height: 200px;
+      }
+      .detailed-trends .plotly-chart__figure {
+        min-height: 220px;
+      }
+      .turnover-distribution__card,
+      .plotly-chart__card,
+      .pts-stats__plot-surface,
+      .turnover-distribution__chart,
+      .detailed-trends__mini,
+      .kpi-snapshot__card {
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow: visible;
+      }
+      .metric-help__body,
+      .js-plotly-plot .modebar {
+        display: none !important;
+      }
+      .detailed-trends__grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .detailed-trends__mini {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+      .plotly-chart__visual,
+      .time-series-chart__visual,
+      .heatmap__visual {
+        margin-left: 0;
+        margin-right: 0;
+      }
+      table,
+      tr,
+      td,
+      th,
+      section,
+      article,
+      .html-block,
+      .metric-card,
+      .turnover-distribution__card,
+      .plotly-chart__card {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+    }
     .metric-card {
       border: 1px solid var(--mmsr-border);
       border-radius: 10px;
@@ -220,6 +1209,8 @@
     .metric-help {
       display: inline-block;
       position: relative;
+      align-self: flex-start;
+      margin-top: 0;
     }
     .metric-help__summary {
       align-items: center;
@@ -229,11 +1220,15 @@
       color: var(--mmsr-muted);
       cursor: pointer;
       display: inline-flex;
-      font-size: 12px;
-      gap: 4px;
+      font-size: 10px;
       list-style: none;
-      min-height: 22px;
-      padding: 2px 8px;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      min-height: 16px;
+      padding: 0;
+      line-height: 16px;
+      vertical-align: top;
     }
     .metric-help__summary::-webkit-details-marker { display: none; }
     .metric-help__summary::marker { content: ""; }
@@ -242,11 +1237,28 @@
       border-color: var(--mmsr-muted);
       color: var(--mmsr-text);
     }
-    .metric-help__icon { font-weight: 700; }
+    .metric-help__icon { font-weight: 700; line-height: 1; }
+    .metric-help__unit {
+      margin: 6px 0 0;
+      font-size: 12px;
+      white-space: normal;
+    }
+    .metric-help__meta {
+      margin: 6px 0 0;
+      font-size: 12px;
+      white-space: normal;
+    }
     .metric-help__label {
       font-size: 11px;
       text-transform: uppercase;
       letter-spacing: 0.03em;
+    }
+    .report-page__header > .metric-help .metric-help__label {
+      display: none;
+    }
+    .report-page__header > .metric-help {
+      align-self: center;
+      margin-top: 0;
     }
     .metric-help__body {
       background: #fff;
@@ -254,17 +1266,35 @@
       border-radius: 12px;
       box-shadow: 0 8px 28px rgba(24, 32, 47, 0.12);
       color: var(--mmsr-text);
-      margin-top: 6px;
       max-width: min(520px, calc(100vw - 64px));
       min-width: 260px;
       padding: 12px;
-      position: absolute;
-      right: 0;
-      z-index: 10;
+      position: fixed;
+      left: 16px;
+      top: 16px;
+      z-index: 99999;
     }
     .metric-help__body p {
       margin: 6px 0 0;
       white-space: pre-wrap;
+    }
+    .metric-help__formula-wrap {
+      margin-top: 8px;
+      border-top: 1px solid var(--mmsr-border);
+      padding-top: 8px;
+    }
+    .metric-help__formula-label {
+      margin: 0 0 4px;
+      color: var(--mmsr-muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      font-weight: 600;
+    }
+    .metric-help__formula {
+      margin: 0;
+      font-size: 13px;
+      white-space: normal;
     }
     .metric-table__metric-cell {
       align-items: flex-start;
@@ -333,21 +1363,51 @@
       padding: 12px;
       background: linear-gradient(180deg, #f9fbff 0%, var(--mmsr-panel) 100%);
     }
-    .time-series-chart__data, .plotly-chart__data-summary, .heatmap__data {
+    .time-series-chart__data, .heatmap__data {
       margin-top: 10px;
-    }
-    .plotly-chart__data-summary {
-      color: var(--mmsr-muted);
-      font-size: 13px;
-    }
-    .plotly-chart__data-summary summary {
-      cursor: pointer;
-      font-weight: 700;
-      margin-bottom: 6px;
     }
     .plotly-chart__figure {
       min-height: 360px;
       min-width: 640px;
+    }
+    .plotly-chart .component-heading {
+      border-bottom: 1px solid var(--mmsr-border);
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+    }
+    .plotly-chart .component-heading h3 {
+      font-size: 20px;
+      line-height: 1.25;
+    }
+    .plotly-chart--sectioned {
+      background: transparent;
+      border: 0;
+      margin-top: 0;
+      padding: 0;
+    }
+    .plotly-chart__card {
+      border: 1px solid var(--mmsr-border);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 1px 6px rgba(16, 39, 66, 0.06);
+      padding: 8px;
+      box-sizing: border-box;
+    }
+    .plotly-chart__card-header {
+      align-items: center;
+      display: flex;
+      gap: 8px;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .plotly-chart__card-header .component-heading__help {
+      flex-wrap: nowrap;
+      gap: 0;
+    }
+    .plotly-chart--sectioned .plotly-chart__visual {
+      background: transparent;
+      border: 0;
+      padding: 0;
     }
     .time-series-chart__data summary, .heatmap__data summary {
       color: var(--mmsr-muted);
@@ -877,6 +1937,10 @@
     .brand-footer { color: var(--mmsr-muted); font-size: 13px; }
     @media (max-width: 900px) {
       .report-shell { border-left: 0; border-right: 0; padding: 14px 12px 20px; }
+      .report-header-v2 { grid-template-columns: 1fr; align-items: start; }
+      .report-header-v2__title { max-width: none; }
+      .report-header-v2__meta-row { flex-direction: column; gap: 10px; }
+      .report-header-v2__sep { display: none; }
       .brand-header__content { grid-template-columns: 1fr; }
       .brand-header__meta { width: 100%; }
       .report-title { font-size: 31px; }
@@ -889,6 +1953,9 @@
       .report-page--summary > .html-block[data-block-title="Market KPI Snapshot"] {
         grid-column: 1 / -1;
       }
+      .report-page--summary > .html-block[data-block-title="Market Overview"] {
+        grid-column: 1 / -1;
+      }
       .report-page--summary > .html-block[data-block-title="Executive Market Overview"] {
         grid-column: 1 / -1;
       }
@@ -898,45 +1965,54 @@
       .report-control-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .report-meta-strip__action { grid-column: 1 / -1; justify-content: flex-start; }
       .kpi-snapshot { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .market-overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .automated-insight__grid { grid-template-columns: 1fr; }
       .drilldown-matrix-explorer__grid { grid-template-columns: 1fr; }
       .symbol-anomaly-explorer__grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
-  {% set summary_meta = namespace(body_html='') %}
-  {% if document.pages %}
-    {% for block in document.pages[0].html_blocks %}
-      {% if block.title == 'Report Meta' %}
-        {% set summary_meta.body_html = block.body_html %}
-      {% endif %}
-    {% endfor %}
-  {% endif %}
+  {% set header = document.header_meta or {} %}
   <main class="report-shell">
-    <header class="brand-header">
-      {% if document.branding.header_image_src %}
-        <img class="brand-banner" src="{{ document.branding.header_image_src }}" alt="Report header image">
-      {% endif %}
-      <div class="brand-header__content">
-        {% if document.branding.logo_image_src %}
-          <img class="brand-logo" src="{{ document.branding.logo_image_src }}" alt="Brand logo">
-        {% endif %}
-        <div>
-          {% if document.branding.brand_name %}<div class="report-meta">{{ document.branding.brand_name }}</div>{% endif %}
-          <h1 class="report-title">{{ document.title }}</h1>
-          {% if document.generated_at_text %}<div class="report-meta">Generated: {{ document.generated_at_text }}</div>{% endif %}
+    <header class="report-header-v2">
+      <section class="report-header-v2__title">
+        <div class="report-header-v2__eyebrow">
+          {% if document.branding.logo_image_src %}
+            <img class="report-header-v2__logo" src="{{ document.branding.logo_image_src }}" alt="Brand logo">
+          {% else %}
+            <span class="report-header-v2__chip">MI</span>
+          {% endif %}
+          <span class="report-header-v2__brand">{{ document.branding.brand_name or "Microstructure AI" }}</span>
         </div>
-        {% if summary_meta.body_html %}
-          <section class="brand-header__meta" aria-label="Report metadata and controls">
-            <div class="html-block__body">{{ summary_meta.body_html | safe }}</div>
-          </section>
-        {% endif %}
-      </div>
+        <div>
+          <h1 class="report-title">{{ document.title }}</h1>
+        </div>
+      </section>
+      <section class="report-header-v2__meta" aria-label="Report metadata and controls">
+        <div class="report-header-v2__meta-row">
+          <article class="report-header-v2__item">
+            <p class="report-header-v2__label">Period</p>
+            <p class="report-header-v2__value">{{ header.get("period_text", "n/a") }}</p>
+          </article>
+          <span class="report-header-v2__sep" aria-hidden="true"></span>
+          <article class="report-header-v2__item">
+            <p class="report-header-v2__label">Universe</p>
+            <p class="report-header-v2__value">{{ header.get("universe", "n/a") }}</p>
+          </article>
+          <span class="report-header-v2__sep" aria-hidden="true"></span>
+          <article class="report-header-v2__item">
+            <p class="report-header-v2__label">Benchmark</p>
+            <p class="report-header-v2__value">{{ header.get("benchmark_period_text", "n/a") }}</p>
+          </article>
+        </div>
+        <button class="report-header-v2__action" type="button" data-export-pdf>Export PDF</button>
+      </section>
     </header>
 
     {% for page in document.pages %}
       {%- set page_class = 'report-page' -%}
-      {%- if page.title == 'Market Summary' -%}
+      {%- if page.title == 'Market Summary' or page.title == 'Market Overview' -%}
         {%- set page_class = page_class + ' report-page--summary' -%}
       {%- elif page.title == 'Activity Distribution' -%}
         {%- set page_class = page_class + ' report-page--activity' -%}
@@ -944,7 +2020,7 @@
         {%- set page_class = page_class + ' report-page--liquidity' -%}
       {%- elif page.title == 'Reference and Target Daily Trends' -%}
         {%- set page_class = page_class + ' report-page--daily-trends' -%}
-      {%- endif -%}
+        {%- endif -%}
       <section class="{{ page_class }}"{% if page.anchor_id %} id="{{ page.anchor_id }}"{% endif %}>
         {% if page.title == "Metric Definitions Appendix" %}
           <details class="metric-definitions-page">
@@ -960,21 +2036,49 @@
           </details>
         {% else %}
         <div class="report-page__header">
-          {% if page.title != "Metric Definitions Appendix" %}
+          {% if page.title != "Market Summary" and page.title != "Metric Definitions Appendix" %}
             <span class="report-page__index">{{ loop.index }}</span>
           {% endif %}
           <h2 class="report-page__title">{{ page.title }}</h2>
+          {% if page.title == "Market Summary" or page.title == "Market Overview" %}
+            {{ help_control(
+              "Market Summary",
+              "How to Read Cards\n"
+              ~ "- Value: target-period aggregate.\n"
+              ~ "- Delta: % change versus benchmark period.\n"
+              ~ "- Spark bars: trend over time.\n"
+              ~ "- Dashed line: benchmark-period mean.\n\n"
+              ~ "Card Trend Granularity\n"
+              ~ "- Daily for <= 30 days.\n"
+              ~ "- Weekly for > 30 days.\n"
+              ~ "- Monthly for > 30 weeks.\n"
+              ~ "- Quarterly for > 30 months.",
+              "Section help"
+            ) }}
+          {% endif %}
         </div>
-        {% if page.title == "Market Summary" %}
+        {% if page.title == "Market Summary" or page.title == "Market Overview" %}
           {% for block in page.html_blocks %}
-            {% if block.title == "Market KPI Snapshot" %}
-              <section class="html-block" data-block-title="{{ block.title }}">
-                <div class="component-heading">
-                  <h3>{{ block.title }}</h3>
-                  {{ help_control(block.title, block.help_text, "Section help") }}
-                </div>
+            {% if block.title == "Market Overview" %}
+              <div class="html-block__body">{{ block.body_html | safe }}</div>
+            {% elif block.title == "Automated Insight Summary" %}
+              <div class="html-block__body">{{ block.body_html | safe }}</div>
+            {% elif block.title == "Detailed Metric Trends" %}
+              <div data-block-title="{{ block.title }}">
                 <div class="html-block__body">{{ block.body_html | safe }}</div>
-              </section>
+              </div>
+            {% elif block.title == "Intraday Turnover Distribution" %}
+              <div data-block-title="{{ block.title }}">
+                <div class="html-block__body">{{ block.body_html | safe }}</div>
+              </div>
+            {% elif block.title == "Intraday Liquidity Distribution" %}
+              <div data-block-title="{{ block.title }}">
+                <div class="html-block__body">{{ block.body_html | safe }}</div>
+              </div>
+            {% elif block.title == "PTS Stats" %}
+              <div data-block-title="{{ block.title }}">
+                <div class="html-block__body">{{ block.body_html | safe }}</div>
+              </div>
             {% endif %}
           {% endfor %}
         {% else %}
@@ -989,7 +2093,7 @@
           {% endfor %}
         {% endif %}
 
-        {% if page.metric_cards %}
+        {% if page.metric_cards and page.title != "Market Summary" and page.title != "Market Overview" %}
           <div class="metric-grid">
             {% for card in page.metric_cards %}
               {% include "partials/metric_card.html.j2" %}
@@ -1009,7 +2113,7 @@
           {% include "partials/heatmap.html.j2" %}
         {% endfor %}
 
-        {% if page.title == "Market Summary" %}
+        {% if page.title == "Market Summary" or page.title == "Market Overview" %}
           {% for block in page.html_blocks %}
             {% if block.title == "Executive Market Overview" %}
               <section class="html-block" data-block-title="{{ block.title }}">
@@ -1050,6 +2154,57 @@
   </main>
   <script>
     window.addEventListener("DOMContentLoaded", function () {
+      var exportPdfButton = document.querySelector("[data-export-pdf]");
+      if (exportPdfButton) {
+        exportPdfButton.addEventListener("click", function () {
+          window.print();
+        });
+      }
+      var closeMetricHelp = function (exceptNode) {
+        document.querySelectorAll(".metric-help[open]").forEach(function (node) {
+          if (exceptNode && node === exceptNode) {
+            return;
+          }
+          node.removeAttribute("open");
+        });
+      };
+      var positionMetricHelp = function (detailsNode) {
+        var trigger = detailsNode.querySelector(".metric-help__summary");
+        var body = detailsNode.querySelector(".metric-help__body");
+        if (!trigger || !body) {
+          return;
+        }
+        var triggerRect = trigger.getBoundingClientRect();
+        var bodyRect = body.getBoundingClientRect();
+        var desiredTop = triggerRect.bottom + 8;
+        var desiredLeft = triggerRect.left;
+        var maxLeft = Math.max(8, window.innerWidth - bodyRect.width - 8);
+        var maxTop = Math.max(8, window.innerHeight - bodyRect.height - 8);
+        body.style.left = Math.min(Math.max(8, desiredLeft), maxLeft) + "px";
+        body.style.top = Math.min(Math.max(8, desiredTop), maxTop) + "px";
+        if (window.MathJax && window.MathJax.typesetPromise) {
+          window.MathJax.typesetPromise([body]).catch(function () {});
+        }
+      };
+      document.querySelectorAll(".metric-help").forEach(function (detailsNode) {
+        detailsNode.addEventListener("toggle", function () {
+          if (!detailsNode.open) {
+            return;
+          }
+          closeMetricHelp(detailsNode);
+          positionMetricHelp(detailsNode);
+        });
+      });
+      document.addEventListener("click", function (event) {
+        if (!event.target.closest(".metric-help")) {
+          closeMetricHelp(null);
+        }
+      });
+      window.addEventListener("resize", function () {
+        document.querySelectorAll(".metric-help[open]").forEach(function (node) {
+          positionMetricHelp(node);
+        });
+      });
       var withBasePlotlyConfig = function (config) {
         var base = {
           responsive: true,
@@ -1058,6 +2213,31 @@
         };
         return Object.assign({}, base, config || {});
       };
+      var resizePlotlyForPrint = function () {
+        if (!window.Plotly) {
+          return;
+        }
+        document.querySelectorAll('.js-plotly-plot').forEach(function (node) {
+          var parent = node.parentElement;
+          var width = parent ? Math.max(280, Math.floor(parent.getBoundingClientRect().width)) : null;
+          var layout = {autosize: true};
+          if (width) {
+            layout.width = width;
+          }
+          try {
+            window.Plotly.relayout(node, layout);
+            window.Plotly.Plots.resize(node);
+          } catch (error) {
+            /* ignore print resize failures */
+          }
+        });
+      };
+      window.addEventListener('beforeprint', function () {
+        resizePlotlyForPrint();
+      });
+      window.addEventListener('afterprint', function () {
+        resizePlotlyForPrint();
+      });
       var renderCharts = function () {
         if (!window.Plotly) {
           return;
@@ -1079,6 +2259,386 @@
       };
       renderCharts();
       window.setTimeout(renderCharts, 250);
+
+      var initDetailedTrends = function () {
+        if (!window.Plotly) {
+          return;
+        }
+        document.querySelectorAll("[data-detailed-trends]").forEach(function (container) {
+          var specNode = container.querySelector("[data-detailed-trends-spec]");
+          var chartTarget = container.querySelector("[data-detailed-trends-chart]");
+          var selector = container.querySelector("[data-detailed-trends-select]");
+          var gridTarget = container.querySelector("[data-detailed-trends-grid]");
+          var detailTarget = container.querySelector("[data-detailed-trends-detail]");
+          var toggleButton = container.querySelector("[data-detailed-trends-toggle]");
+          var insightsGridSection = container.querySelector("[data-detailed-trends-insights-grid]");
+          var insightsGridContent = container.querySelector("[data-detailed-trends-insights-grid-content]");
+          var insightFocusSection = container.querySelector("[data-detailed-trends-insight-focus]");
+          var insightFocusContent = container.querySelector("[data-detailed-trends-insight-focus-content]");
+          if (!specNode || !chartTarget || !selector || !gridTarget || !detailTarget || !toggleButton) {
+            return;
+          }
+          var spec = JSON.parse(specNode.textContent || "{}");
+          var metrics = spec.metrics || {};
+          var orderedMetrics = spec.ordered_metrics || Object.keys(metrics);
+          var escapeHtml = function (value) {
+            return String(value)
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;")
+              .replace(/"/g, "&quot;")
+              .replace(/'/g, "&#39;");
+          };
+          var sectionHelpTextNode = container.querySelector("[data-detailed-trends-section-help-text]");
+          if (sectionHelpTextNode) {
+            sectionHelpTextNode.textContent = spec.section_help || "";
+          }
+          var currentMetricName = spec.default_metric || selector.value || null;
+          var renderInsightHtml = function (metricName) {
+            var metric = metrics[metricName];
+            if (!metric) {
+              return "";
+            }
+            var insights = (metric.insights || []).slice(0, 2);
+            if (!insights.length) {
+              insights = ["No automated insight available for this metric."];
+            }
+            var itemsHtml = insights.map(function (line) {
+              return '<li>' + escapeHtml(line) + "</li>";
+            }).join("");
+            return (
+              '<article class="automated-insight__item">'
+              + '<h4 class="automated-insight__metric">' + escapeHtml(metric.metric_label || metricName) + "</h4>"
+              + '<ul class="automated-insight__list">' + itemsHtml + "</ul>"
+              + "</article>"
+            );
+          };
+          var refreshGridInsights = function () {
+            if (!insightsGridContent) {
+              return;
+            }
+            insightsGridContent.innerHTML = orderedMetrics
+              .filter(function (metricName) { return !!metrics[metricName]; })
+              .map(function (metricName) { return renderInsightHtml(metricName); })
+              .join("");
+          };
+          var refreshFocusedInsight = function (metricName) {
+            if (!insightFocusContent) {
+              return;
+            }
+            insightFocusContent.innerHTML = renderInsightHtml(metricName);
+          };
+          var createInfoControl = function (label, metricSpec) {
+            var wrapper = document.createElement("details");
+            wrapper.className = "metric-help detailed-trends__help";
+            wrapper.addEventListener("click", function (event) {
+              event.stopPropagation();
+            });
+            wrapper.addEventListener("mousedown", function (event) {
+              event.stopPropagation();
+            });
+            wrapper.addEventListener("toggle", function () {
+              if (!wrapper.open) {
+                return;
+              }
+              closeMetricHelp(wrapper);
+              positionMetricHelp(wrapper);
+              if (window.MathJax && window.MathJax.typesetPromise) {
+                var popupBody = wrapper.querySelector(".metric-help__body");
+                if (popupBody) {
+                  window.MathJax.typesetPromise([popupBody]).catch(function () {});
+                }
+              }
+            });
+            var description = (metricSpec && metricSpec.description) ? metricSpec.description : "No definition available.";
+            var unitText = (metricSpec && metricSpec.unit_text) ? metricSpec.unit_text : "n/a";
+            var aggregationText = (metricSpec && metricSpec.aggregation_text) ? metricSpec.aggregation_text : "";
+            var formulaLatex = (metricSpec && metricSpec.formula_latex) ? metricSpec.formula_latex : "";
+            var aggregationHtml = aggregationText
+              ? '<p class="metric-help__meta"><strong>Aggregation:</strong> ' + escapeHtml(aggregationText) + '</p>'
+              : "";
+            var formulaHtml = formulaLatex
+              ? '<div class="metric-help__formula-wrap"><p class="metric-help__formula-label">Formula</p><p class="metric-help__formula">\\(' + escapeHtml(formulaLatex) + '\\)</p></div>'
+              : "";
+            wrapper.innerHTML =
+              '<summary class="metric-help__summary metric-info" aria-label="Metric definition: ' + escapeHtml(label) + '">'
+              + '<span class="metric-help__icon" aria-hidden="true">i</span>'
+              + "</summary>"
+              + '<div class="metric-help__body"><strong class="metric-help__title">Metric definition: ' + escapeHtml(label) + '</strong>'
+              + '<p>' + escapeHtml(description) + '</p>'
+              + '<p class="metric-help__meta"><strong>Unit:</strong> ' + escapeHtml(unitText) + '</p>'
+              + aggregationHtml
+              + formulaHtml
+              + "</div>";
+            var summary = wrapper.querySelector("summary");
+            if (summary) {
+              summary.addEventListener("click", function (event) {
+                event.stopPropagation();
+              });
+              summary.addEventListener("mousedown", function (event) {
+                event.stopPropagation();
+              });
+            }
+            return wrapper;
+          };
+          var controlsRow = container.querySelector(".detailed-trends__controls");
+          var focusedMetricHelpSlot = document.createElement("span");
+          focusedMetricHelpSlot.className = "detailed-trends__focused-help";
+          if (controlsRow) {
+            controlsRow.appendChild(focusedMetricHelpSlot);
+          }
+          var refreshFocusedMetricHelp = function (metricName) {
+            var metric = metrics[metricName];
+            if (!metric || !focusedMetricHelpSlot) {
+              return;
+            }
+            focusedMetricHelpSlot.replaceChildren(
+              createInfoControl(metric.metric_label || metricName, metric)
+            );
+          };
+          var setMode = function (mode) {
+            if (mode === "detail") {
+              gridTarget.style.display = "none";
+              detailTarget.style.display = "block";
+              if (insightsGridSection) {
+                insightsGridSection.style.display = "none";
+              }
+              if (insightFocusSection) {
+                insightFocusSection.style.display = "flex";
+              }
+              toggleButton.textContent = "Grid";
+              return;
+            }
+            detailTarget.style.display = "none";
+            gridTarget.style.display = "grid";
+            if (insightsGridSection) {
+              insightsGridSection.style.display = "flex";
+            }
+            if (insightFocusSection) {
+              insightFocusSection.style.display = "none";
+            }
+            toggleButton.textContent = "Focused";
+          };
+          var yAxisWithPadding = function (metric, labels, values) {
+            var numericValues = values
+              .map(function (value) { return Number(value); })
+              .filter(function (value) { return Number.isFinite(value); });
+            var yAxis = {title: metric.unit || "value"};
+            if (numericValues.length > 0) {
+              var minValue = Math.min.apply(null, numericValues);
+              var maxValue = Math.max.apply(null, numericValues);
+              if (minValue === maxValue) {
+                var delta = Math.abs(minValue) * 0.05;
+                if (delta === 0) {
+                  delta = 1;
+                }
+                yAxis.range = [minValue - delta, maxValue + delta];
+              } else {
+                var pad = (maxValue - minValue) * 0.08;
+                yAxis.range = [minValue - pad, maxValue + pad];
+              }
+              yAxis.range[0] = Math.max(0, yAxis.range[0]);
+            }
+            return yAxis;
+          };
+          var meanLineTraces = function (metric, labels, periodFlags) {
+            var benchmarkMean = metric.benchmark_mean;
+            var targetMean = metric.target_mean;
+            var benchmarkIndexes = [];
+            var targetIndexes = [];
+            periodFlags.forEach(function (flag, idx) {
+              if (flag === "benchmark") {
+                benchmarkIndexes.push(idx);
+              } else if (flag === "target") {
+                targetIndexes.push(idx);
+              }
+            });
+            var traces = [];
+            if (Number.isFinite(benchmarkMean) && benchmarkIndexes.length > 0) {
+              var benchmarkLeft = benchmarkIndexes[0] - 0.5;
+              var benchmarkRight = benchmarkIndexes[benchmarkIndexes.length - 1] + 0.5;
+              traces.push({
+                type: "scatter",
+                mode: "lines",
+                x: [benchmarkLeft, benchmarkRight],
+                y: [benchmarkMean, benchmarkMean],
+                line: {color: "#6f7d90", width: 1.6, dash: "dash"},
+                hovertemplate: "Benchmark mean: %{y:.4g}<extra></extra>",
+                showlegend: false,
+              });
+            }
+            if (Number.isFinite(targetMean) && targetIndexes.length > 0) {
+              var targetLeft = targetIndexes[0] - 0.5;
+              var targetRight = targetIndexes[targetIndexes.length - 1] + 0.5;
+              traces.push({
+                type: "scatter",
+                mode: "lines",
+                x: [targetLeft, targetRight],
+                y: [targetMean, targetMean],
+                line: {color: "#0f4a7a", width: 1.6, dash: "dash"},
+                hovertemplate: "Target mean: %{y:.4g}<extra></extra>",
+                showlegend: false,
+              });
+            }
+            return traces;
+          };
+          var buildBarTrace = function (labels, values, periodFlags) {
+            var xIndexes = labels.map(function (_, idx) { return idx; });
+            var colors = periodFlags.map(function (flag) {
+              return flag === "benchmark" ? "#a9b5c6" : "#2d5d93";
+            });
+            return {
+              type: "bar",
+              x: xIndexes,
+              y: values,
+              customdata: labels,
+              marker: {color: colors},
+              hovertemplate: "%{customdata}<br>%{y:.4g}<extra></extra>",
+              showlegend: false,
+            };
+          };
+          var renderMetric = function (metricName) {
+            var metric = metrics[metricName];
+            if (!metric) {
+              return;
+            }
+            currentMetricName = metricName;
+            refreshFocusedMetricHelp(metricName);
+            refreshFocusedInsight(metricName);
+            var labels = metric.labels || [];
+            var values = metric.values || [];
+            var periodFlags = metric.period_flags || [];
+            var yAxis = yAxisWithPadding(metric, labels, values);
+            var presetXRange = [-0.5, Math.max(0.8, labels.length - 0.2)];
+            var presetYRange = (yAxis.range && yAxis.range.length === 2) ? [yAxis.range[0], yAxis.range[1]] : null;
+            chartTarget._detailedPresetRanges = {
+              x: presetXRange,
+              y: presetYRange,
+            };
+            return Plotly.react(
+              chartTarget,
+              [buildBarTrace(labels, values, periodFlags)].concat(meanLineTraces(metric, labels, periodFlags)),
+              {
+                template: "plotly_white",
+                autosize: true,
+                margin: {l: 56, r: 28, t: 10, b: 120},
+                xaxis: {
+                  type: "linear",
+                  range: presetXRange,
+                  tickmode: "array",
+                  tickvals: labels.map(function (_, idx) { return idx; }),
+                  ticktext: labels,
+                  tickangle: 90,
+                  automargin: true,
+                },
+                yaxis: yAxis,
+                dragmode: "zoom",
+                height: 460,
+              },
+              withBasePlotlyConfig({
+                displayModeBar: true,
+                scrollZoom: false,
+                doubleClick: false,
+                staticPlot: false,
+                modeBarButtonsToRemove: [
+                  "autoScale2d",
+                  "resetScale2d",
+                  "lasso2d",
+                  "select2d",
+                  "toImage",
+                ],
+                modeBarButtonsToAdd: [
+                  {
+                    name: "homePreset",
+                    title: "Reset to metric preset",
+                    icon: Plotly.Icons.home,
+                    click: function () {
+                      var metricName = currentMetricName || selector.value || spec.default_metric;
+                      renderMetric(metricName);
+                    },
+                  },
+                ],
+              })
+            ).then(function () {
+              Plotly.Plots.resize(chartTarget);
+            });
+          };
+          orderedMetrics.forEach(function (metricName) {
+            var metric = metrics[metricName];
+            if (!metric) {
+              return;
+            }
+            var miniId = "detailed-trends-mini-" + metricName;
+            var card = document.createElement("article");
+            card.className = "detailed-trends__mini";
+            card.innerHTML = '<p class="detailed-trends__mini-title"><span>'
+              + metric.metric_label
+              + '</span></p>'
+              + '<div class="detailed-trends__mini-chart" id="' + miniId + '"></div>';
+            var miniTitle = card.querySelector(".detailed-trends__mini-title");
+            if (miniTitle) {
+              miniTitle.appendChild(createInfoControl(metric.metric_label || metricName, metric));
+            }
+            card.addEventListener("click", function () {
+              selector.value = metricName;
+              renderMetric(metricName);
+              setMode("detail");
+            });
+            gridTarget.appendChild(card);
+            var miniTarget = card.querySelector(".detailed-trends__mini-chart");
+            var labels = metric.labels || [];
+            var values = metric.values || [];
+            var periodFlags = metric.period_flags || [];
+            Plotly.newPlot(
+              miniTarget,
+              [buildBarTrace(labels, values, periodFlags)].concat(meanLineTraces(metric, labels, periodFlags)),
+              {
+                template: "plotly_white",
+                autosize: true,
+                margin: {l: 38, r: 16, t: 6, b: 88},
+                xaxis: {
+                  type: "linear",
+                  tickmode: "array",
+                  tickvals: labels.map(function (_, idx) { return idx; }),
+                  ticktext: labels,
+                  tickangle: 90,
+                  fixedrange: true,
+                  automargin: true,
+                },
+                yaxis: Object.assign({}, yAxisWithPadding(metric, labels, values), {fixedrange: true}),
+                dragmode: false,
+                height: 240,
+              },
+              withBasePlotlyConfig({
+                displayModeBar: false,
+                scrollZoom: false,
+                doubleClick: false,
+                staticPlot: true,
+              })
+            );
+          });
+          var initialMetric = selector.value || spec.default_metric;
+          refreshGridInsights();
+          if (initialMetric) {
+            renderMetric(initialMetric);
+          }
+          setMode("grid");
+          selector.addEventListener("change", function () {
+            renderMetric(selector.value);
+          });
+          toggleButton.addEventListener("click", function () {
+            if (detailTarget.style.display === "block") {
+              setMode("grid");
+            } else {
+              setMode("detail");
+              window.requestAnimationFrame(function () {
+                renderMetric(selector.value || spec.default_metric);
+              });
+            }
+          });
+        });
+      };
+      initDetailedTrends();
 
       if (window.Plotly) {
         document.querySelectorAll("[data-drilldown-matrix]").forEach(function (container) {

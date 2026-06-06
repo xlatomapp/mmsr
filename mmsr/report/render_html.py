@@ -99,20 +99,9 @@ def render_report(
 ) -> str:
     """Render a full HTML report document.
 
-    The default report template is intentionally stable so repeated report runs
-    have a consistent layout. Project-specific/client-specific branding can be
-    supplied through ``ReportBranding`` or by passing a custom template directory.
+    Project-specific/client-specific branding can be supplied through
+    ``ReportBranding`` or by passing a custom template directory.
     """
     env = build_template_environment(template_dir)
     template = env.get_template("report.html.j2")
-    return template.render(document=document, plotly_inline_js=_load_local_plotly_js(template_dir))
-
-
-def render_report_v2(
-    document: ReportDocument,
-    template_dir: str | Path | None = None,
-) -> str:
-    """Render a fresh-format HTML report document."""
-    env = build_template_environment(template_dir)
-    template = env.get_template("report_v2.html.j2")
     return template.render(document=document, plotly_inline_js=_load_local_plotly_js(template_dir))
