@@ -180,17 +180,32 @@ def test_liquidity_contract_rejects_non_liquidity_metric() -> None:
 
 def test_toxicity_reversion_input_contracts_list_required_source_columns() -> None:
     (
+        trade_contract,
         pts_contract,
         pts_quote_contract,
         primary_quote_contract,
         reference_contract,
     ) = toxicity_reversion_input_schema_contracts(
+        trades_table="trade_primary_l1",
         pts_trades_table="trade_pts_l1",
         pts_quotes_table="quote_pts_l1",
         primary_quotes_table="quote_primary_l1",
         reference_table="ref_l1",
     )
 
+    assert trade_contract.template_name == "toxicity_reversion"
+    assert trade_contract.table_role == "trades"
+    assert trade_contract.table_name == "trade_primary_l1"
+    assert trade_contract.required_columns == (
+        "date",
+        "time",
+        "sym",
+        "session",
+        "auction",
+        "venue",
+        "tradePrice",
+        "tradeSize",
+    )
     assert pts_contract.template_name == "toxicity_reversion"
     assert pts_contract.table_role == "pts_trades"
     assert pts_contract.table_name == "trade_pts_l1"
@@ -233,9 +248,21 @@ def test_toxicity_reversion_input_contracts_list_required_source_columns() -> No
 
 def test_toxicity_reversion_input_contracts_validate_extra_columns() -> None:
     validate_toxicity_reversion_input_schemas(
+        trades_table="trade_primary_l1",
         pts_trades_table="trade_pts_l1",
         pts_quotes_table="quote_pts_l1",
         primary_quotes_table="quote_primary_l1",
+        trades_columns=(
+            "date",
+            "time",
+            "sym",
+            "session",
+            "auction",
+            "venue",
+            "tradePrice",
+            "tradeSize",
+            "exec_id",
+        ),
         pts_trades_columns=(
             "date",
             "time",
@@ -274,6 +301,15 @@ def test_toxicity_reversion_input_contracts_validate_extra_columns() -> None:
 def test_toxicity_reversion_input_contracts_reject_missing_venue() -> None:
     with pytest.raises(OutputSchemaContractError, match="venue"):
         validate_toxicity_reversion_input_schemas(
+            trades_columns=(
+                "date",
+                "time",
+                "sym",
+                "session",
+                "auction",
+                "tradePrice",
+                "tradeSize",
+            ),
             pts_trades_columns=(
                 "date",
                 "time",
@@ -303,7 +339,7 @@ def test_toxicity_reversion_input_contracts_reject_missing_venue() -> None:
 
 
 def test_toxicity_reversion_input_contracts_reject_string_column_argument() -> None:
-    venue_contract, _, _, _ = toxicity_reversion_input_schema_contracts()
+    venue_contract, _, _, _, _ = toxicity_reversion_input_schema_contracts()
 
     with pytest.raises(OutputSchemaContractError, match="sequence of column names"):
         venue_contract.validate_columns("date,time,sym")

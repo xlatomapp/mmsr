@@ -35,12 +35,13 @@ REVERSION_METRIC_PREFIX = "primary_quote_reversion_"
 REVERSION_METRIC_SUFFIX = "_bps"
 DEFAULT_REVERSION_VENUE_ORDER: tuple[str, ...] = ("TSE", "SBIJ", "ODX")
 DEFAULT_REVERSION_HORIZON_ORDER: tuple[str, ...] = (
-    "10ms",
     "100ms",
     "500ms",
     "1s",
-    "5s",
     "10s",
+    "30s",
+    "1m",
+    "5m",
 )
 ToxicityContextRanking = Literal[
     "max_positive_reversion",

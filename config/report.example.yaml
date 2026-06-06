@@ -117,12 +117,13 @@ metrics:
   - top_of_book_depth
   - parkinson_volatility_bps
   - pts_turnover
-  - primary_quote_reversion_10ms_bps
   - primary_quote_reversion_100ms_bps
   - primary_quote_reversion_500ms_bps
   - primary_quote_reversion_1s_bps
-  - primary_quote_reversion_5s_bps
   - primary_quote_reversion_10s_bps
+  - primary_quote_reversion_30s_bps
+  - primary_quote_reversion_1m_bps
+  - primary_quote_reversion_5m_bps
 
 commentary:
   mode: template
@@ -136,12 +137,13 @@ toxicity:
   section_title: "Cross-Venue Toxicity"
   primary_venue: "TSE"
   reversion_horizons:
-    - "10ms"
     - "100ms"
     - "500ms"
     - "1s"
-    - "5s"
     - "10s"
+    - "30s"
+    - "1m"
+    - "5m"
   default_visual:
     type: "venue_reversion_curve"
     x_axis: "horizon"

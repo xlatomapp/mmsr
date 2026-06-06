@@ -20,17 +20,22 @@ def test_production_minimal_config_loads_supported_kdb_metrics() -> None:
         "trade_count",
         "quoted_spread_bps",
         "top_of_book_depth",
-        "primary_quote_reversion_10ms_bps",
+        "parkinson_volatility_bps",
+        "pts_turnover",
         "primary_quote_reversion_100ms_bps",
         "primary_quote_reversion_500ms_bps",
         "primary_quote_reversion_1s_bps",
-        "primary_quote_reversion_5s_bps",
         "primary_quote_reversion_10s_bps",
+        "primary_quote_reversion_30s_bps",
+        "primary_quote_reversion_1m_bps",
+        "primary_quote_reversion_5m_bps",
     ]
     assert {template_for_metric(metric) for metric in config.metrics} == {
         "activity",
         "liquidity",
+        "pts_activity",
         "toxicity_reversion",
+        "volatility",
     }
     assert config.kdb.raw_data_functions.to_source_functions()["pts_trades"] == (".sb.mmsr.getPtsTrade")
     assert config.kdb.raw_data_functions.to_source_functions()["pts_quotes"] == (".sb.mmsr.getPtsQuote")
@@ -41,6 +46,9 @@ def test_production_minimal_config_loads_supported_kdb_metrics() -> None:
         "market_bucket",
         "topix_cap_group",
         "topix_cap_group_bucket",
+        "venue",
+        "venue_symbol",
+        "venue_topix_cap_group",
     )
 
 
@@ -53,16 +61,22 @@ def test_example_config_uses_market_monitoring_metrics() -> None:
         "trade_count",
         "quoted_spread_bps",
         "top_of_book_depth",
-        "primary_quote_reversion_10ms_bps",
+        "parkinson_volatility_bps",
+        "pts_turnover",
         "primary_quote_reversion_100ms_bps",
         "primary_quote_reversion_500ms_bps",
         "primary_quote_reversion_1s_bps",
-        "primary_quote_reversion_5s_bps",
         "primary_quote_reversion_10s_bps",
+        "primary_quote_reversion_30s_bps",
+        "primary_quote_reversion_1m_bps",
+        "primary_quote_reversion_5m_bps",
     ]
     assert config.kdb.aggregation_levels == (
         "market",
         "market_bucket",
         "topix_cap_group",
         "topix_cap_group_bucket",
+        "venue",
+        "venue_symbol",
+        "venue_topix_cap_group",
     )

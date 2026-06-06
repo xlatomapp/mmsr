@@ -771,11 +771,12 @@
     0!result
     };
 
-{{ calculation_namespace }}.prepareToxicityReversion:{[runDate;rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;params]
+{{ calculation_namespace }}.prepareToxicityReversion:{[runDate;rawTradeRows;rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;params]
     / Source functions in the day runner are expected to return one runDate.
     / The date predicates below are kept as defensive guards for direct
     / multi-day template calls, but production day execution should not depend on
     / them for performance.
+    rawPrimaryTrades: rawTradeRows lj refs;
     rawPtsTrades: rawPtsTradeRows lj refs;
     rawPtsQuotes: rawPtsQuoteRows lj refs;
     rawPrimaryQuotes: rawPrimaryQuoteRows lj refs;
@@ -799,6 +800,26 @@
               tradePrice > 0,
               not null venue,
               not null sym;
+    primaryVenueTrades:
+        select
+            date,
+            time,
+            sym,
+            topixCapGrp,
+            session,
+            auction,
+            venue: params`primary_venue,
+            tradePrice,
+            tradeSize,
+            notional: tradePrice * tradeSize
+        from rawPrimaryTrades
+        where date = runDate,
+              ((0=count params`venues) | (params`primary_venue) in params`venues),
+              ((not params`exclude_auction) | auction = 0),
+              tradeSize > 0,
+              tradePrice > 0,
+              not null sym;
+    ptsTrades: ptsTrades, primaryVenueTrades;
     ptsTrades: update sym1: {{ calculation_namespace }}.venueSymKey[sym;venue] from ptsTrades;
     ptsQuotes:
         select
@@ -815,7 +836,6 @@
               askPrice > bidPrice,
               not null venue,
               not null sym;
-    ptsQuotes: update sym1: {{ calculation_namespace }}.venueSymKey[sym;venue] from ptsQuotes;
     primaryQuotes:
         select
             date,
@@ -831,6 +851,18 @@
               bidPrice > 0,
               askPrice > bidPrice,
               not null sym;
+    primaryVenueQuotes:
+        select
+            date,
+            time,
+            ptsQuoteTime: time,
+            sym,
+            venue: params`primary_venue,
+            ptsMid: primaryMid
+        from primaryQuotes
+        where ((0=count params`venues) | (params`primary_venue) in params`venues);
+    ptsQuotes: ptsQuotes, primaryVenueQuotes;
+    ptsQuotes: update sym1: {{ calculation_namespace }}.venueSymKey[sym;venue] from ptsQuotes;
     sortedPtsTrades: {{ calculation_namespace }}.partedSym[`sym1`time xasc ptsTrades];
     sortedPtsQuotes: {{ calculation_namespace }}.partedSym[`sym1`time xasc ptsQuotes];
     tradeWithPtsQuote:
@@ -909,9 +941,10 @@
     0!result
     };
 
-{{ calculation_namespace }}.calcToxicityReversion:{[runDate;rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;params]
+{{ calculation_namespace }}.calcToxicityReversion:{[runDate;rawTradeRows;rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;params]
     prepared: {{ calculation_namespace }}.prepareToxicityReversion[
         runDate;
+        rawTradeRows;
         rawPtsTradeRows;
         rawPtsQuoteRows;
         rawPrimaryQuoteRows;
@@ -923,11 +956,12 @@
         params]
     };
 
-{{ calculation_namespace }}.calcToxicityReversionFamily:{[runDate;rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;paramsByMetric;metricNames]
+{{ calculation_namespace }}.calcToxicityReversionFamily:{[runDate;rawTradeRows;rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;paramsByMetric;metricNames]
     if[0=count metricNames; :()!()];
     firstParams: paramsByMetric first metricNames;
     prepared: {{ calculation_namespace }}.prepareToxicityReversion[
         runDate;
+        rawTradeRows;
         rawPtsTradeRows;
         rawPtsQuoteRows;
         rawPrimaryQuoteRows;
@@ -1042,6 +1076,7 @@
             if[0<count reversionMetrics;
                 resultDict,: {{ calculation_namespace }}.calcToxicityReversionFamily[
                     runDate;
+                    rawSources`trades;
                     rawSources`pts_trades;
                     rawSources`pts_quotes;
                     rawSources`primary_quotes;

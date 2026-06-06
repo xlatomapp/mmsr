@@ -685,7 +685,6 @@ def test_pts_stats_block_renders_toxicity_heatmap_from_symbol_scoped_rows() -> N
 
     block = market_report_module._build_pts_stats_block(
         report_input,
-        definitions,
         options=MarketReportOptions(include_metric_definitions_appendix=False),
     )
 
@@ -696,6 +695,91 @@ def test_pts_stats_block_renders_toxicity_heatmap_from_symbol_scoped_rows() -> N
     assert ">10ms<" in block.body_html
     assert "2.67 bps" in block.body_html
     assert "-1.50 bps" in block.body_html
+
+
+def test_pts_stats_block_keeps_toxicity_section_when_current_series_is_empty() -> None:
+    definitions = {
+        "turnover": MetricDefinition(
+            name="turnover",
+            label="Turnover",
+            category="Activity",
+            description="Summed traded value.",
+            formula="sum(price*qty)",
+            interpretation="Higher values indicate more turnover.",
+            unit="JPY",
+            higher_is_better=None,
+            default_aggregation="sum",
+            supports_intraday=True,
+            supports_symbol_level=True,
+            required_tables=["trades"],
+            required_columns=["tradePrice", "tradeSize"],
+        ),
+        "pts_turnover": MetricDefinition(
+            name="pts_turnover",
+            label="PTS Turnover",
+            category="PTS",
+            description="Summed PTS turnover by venue.",
+            formula="sum(price*qty)",
+            interpretation="Higher values indicate more PTS turnover.",
+            unit="JPY",
+            higher_is_better=None,
+            default_aggregation="sum",
+            supports_intraday=True,
+            supports_symbol_level=True,
+            required_tables=["pts_trades"],
+            required_columns=["venue", "tradePrice", "tradeSize"],
+        ),
+        "primary_quote_reversion_10ms_bps": MetricDefinition(
+            name="primary_quote_reversion_10ms_bps",
+            label="10ms Reversion",
+            category="Toxicity",
+            description="Primary quote reversion 10ms after trade.",
+            formula="side*(future_mid-pre_mid)",
+            interpretation="Positive values indicate adverse reversion.",
+            unit="bps",
+            higher_is_better=None,
+            default_aggregation="weighted_mean",
+            supports_intraday=True,
+            supports_symbol_level=True,
+            required_tables=["pts_trades", "quotes"],
+            required_columns=["venue", "sym", "time"],
+        ),
+    }
+    report_input = MarketReportInput(
+        metric_definitions=definitions,
+        current_series=(
+            MetricTimeSeries(
+                metric_name="turnover",
+                observations=(MetricObservation("turnover", date(2026, 5, 1), "DAILY", {"topixCapGrp": "Large"}, 100.0),),
+            ),
+            MetricTimeSeries(
+                metric_name="pts_turnover",
+                observations=(MetricObservation("pts_turnover", date(2026, 5, 1), "DAILY", {"venue": "SBIJ"}, 25.0),),
+            ),
+            MetricTimeSeries(metric_name="primary_quote_reversion_10ms_bps", observations=()),
+        ),
+        comparisons=(),
+        reference_series=(
+            MetricTimeSeries(
+                metric_name="turnover",
+                observations=(MetricObservation("turnover", date(2026, 4, 1), "DAILY", {"topixCapGrp": "Large"}, 90.0),),
+            ),
+            MetricTimeSeries(
+                metric_name="pts_turnover",
+                observations=(MetricObservation("pts_turnover", date(2026, 4, 1), "DAILY", {"venue": "SBIJ"}, 20.0),),
+            ),
+        ),
+    )
+
+    block = market_report_module._build_pts_stats_block(
+        report_input,
+        options=MarketReportOptions(include_metric_definitions_appendix=False),
+    )
+
+    assert block is not None
+    assert "Venue Toxicity Heatmap" in block.body_html
+    assert ">SBIJ<" in block.body_html
+    assert "n/a" in block.body_html
 
 
 def test_turnover_distribution_renders_group_session_heatmap_table() -> None:

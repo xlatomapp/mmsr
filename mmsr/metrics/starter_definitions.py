@@ -150,6 +150,9 @@ PRIMARY_QUOTE_REVERSION_HORIZONS: tuple[tuple[str, str], ...] = (
     ("1s", "+1s Reversion"),
     ("5s", "+5s Reversion"),
     ("10s", "+10s Reversion"),
+    ("30s", "+30s Reversion"),
+    ("1m", "+1m Reversion"),
+    ("5m", "+5m Reversion"),
 )
 
 for horizon, label in PRIMARY_QUOTE_REVERSION_HORIZONS:

@@ -75,12 +75,13 @@ def test_toxicity_config_defaults_match_reversion_report_contract() -> None:
     assert config.toxicity.primary_venue == "TSE"
     assert config.toxicity.venues is None
     assert config.toxicity.reversion_horizons == (
-        "10ms",
         "100ms",
         "500ms",
         "1s",
-        "5s",
         "10s",
+        "30s",
+        "1m",
+        "5m",
     )
     assert config.toxicity.side_source == "inferred"
     assert config.toxicity.filters.max_primary_quote_age == "1s"

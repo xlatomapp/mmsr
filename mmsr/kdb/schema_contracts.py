@@ -459,12 +459,14 @@ def volatility_output_schema_contract(
 
 def toxicity_reversion_input_schema_contracts(
     *,
+    trades_table: str = "trades",
     pts_trades_table: str = "pts_trades",
     pts_quotes_table: str = "pts_quotes",
     primary_quotes_table: str = "primary_quotes",
     reference_table: str = "reference_data",
     extra_required_columns: Sequence[str] = (),
 ) -> tuple[
+    QTemplateInputTableSchemaContract,
     QTemplateInputTableSchemaContract,
     QTemplateInputTableSchemaContract,
     QTemplateInputTableSchemaContract,
@@ -478,6 +480,16 @@ def toxicity_reversion_input_schema_contracts(
     """
 
     return (
+        QTemplateInputTableSchemaContract(
+            template_name="toxicity_reversion",
+            table_role="trades",
+            table_name=trades_table,
+            required_columns=_dedupe((*REVERSION_PTS_TRADES_REQUIRED_COLUMNS, *extra_required_columns)),
+            assumptions=(
+                "Primary-venue trades must use the same timestamp and symbol conventions as the primary quote feed.",
+                *REVERSION_PTS_TRADES_ASSUMPTIONS[1:],
+            ),
+        ),
         QTemplateInputTableSchemaContract(
             template_name="toxicity_reversion",
             table_role="pts_trades",
@@ -509,9 +521,11 @@ def toxicity_reversion_input_schema_contracts(
 
 def validate_toxicity_reversion_input_schemas(
     *,
+    trades_columns: Sequence[str],
     pts_trades_columns: Sequence[str],
     pts_quotes_columns: Sequence[str],
     primary_quotes_columns: Sequence[str],
+    trades_table: str = "trades",
     pts_trades_table: str = "pts_trades",
     pts_quotes_table: str = "pts_quotes",
     primary_quotes_table: str = "primary_quotes",
@@ -519,15 +533,18 @@ def validate_toxicity_reversion_input_schemas(
     """Validate raw-source columns for ``toxicity_reversion``."""
 
     (
+        trades_contract,
         pts_contract,
         pts_quote_contract,
         primary_quote_contract,
         _reference_contract,
     ) = toxicity_reversion_input_schema_contracts(
+        trades_table=trades_table,
         pts_trades_table=pts_trades_table,
         pts_quotes_table=pts_quotes_table,
         primary_quotes_table=primary_quotes_table,
     )
+    trades_contract.validate_columns(trades_columns)
     pts_contract.validate_columns(pts_trades_columns)
     pts_quote_contract.validate_columns(pts_quotes_columns)
     primary_quote_contract.validate_columns(primary_quotes_columns)

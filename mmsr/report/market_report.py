@@ -932,6 +932,16 @@ def _build_pts_stats_block(
         for horizon in options.toxicity_reversion_horizon_order
         if f"primary_quote_reversion_{horizon}_bps" in toxicity_metric_names
     ]
+    remaining_horizons = sorted(
+        {
+            series.metric_name[len("primary_quote_reversion_") : -len("_bps")]
+            for series in toxicity_metric_series
+            if series.metric_name.startswith("primary_quote_reversion_")
+            and series.metric_name.endswith("_bps")
+            and series.metric_name[len("primary_quote_reversion_") : -len("_bps")] not in ordered_horizons
+        }
+    )
+    ordered_horizons.extend(remaining_horizons)
     toxicity_rows_html = ""
     if ordered_horizons:
         toxicity_weighted_sum_by_venue_horizon: dict[tuple[str, str], float] = {}
@@ -964,11 +974,7 @@ def _build_pts_stats_block(
             if total_weight > 0.0
         }
 
-        toxicity_venues = [
-            venue
-            for venue in options.toxicity_reversion_venue_order
-            if any((venue, horizon) in toxicity_value_by_venue_horizon for horizon in ordered_horizons)
-        ]
+        toxicity_venues = list(options.toxicity_reversion_venue_order)
         remaining_venues = sorted(
             {
                 venue
@@ -985,9 +991,9 @@ def _build_pts_stats_block(
             strength = min(1.0, abs(value) / max_abs_toxicity)
             alpha = 0.08 + 0.34 * strength
             if value > 0:
-                return f"background: rgba(186, 26, 26, {alpha:.3f}); color: #7b1111;"
-            if value < 0:
                 return f"background: rgba(45, 93, 147, {alpha:.3f}); color: #163b63;"
+            if value < 0:
+                return f"background: rgba(186, 26, 26, {alpha:.3f}); color: #7b1111;"
             return ""
 
         toxicity_rows_html = "".join(
@@ -1057,7 +1063,7 @@ def _build_pts_stats_block(
     )
     toxicity_section_html = (
         ""
-        if not toxicity_rows_html
+        if not ordered_horizons
         else (
             '<div class="pts-stats__toxicity">'
             '<div class="plotly-chart__card-header">'

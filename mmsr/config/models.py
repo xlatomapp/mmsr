@@ -503,12 +503,13 @@ class ToxicityConfig:
     primary_venue: str = "TSE"
     venues: tuple[str, ...] | list[str] | None = None
     reversion_horizons: tuple[str, ...] | list[str] = (
-        "10ms",
         "100ms",
         "500ms",
         "1s",
-        "5s",
         "10s",
+        "30s",
+        "1m",
+        "5m",
     )
     default_visual: ToxicityVisualConfig = field(default_factory=ToxicityVisualConfig)
     side_source: str = "inferred"

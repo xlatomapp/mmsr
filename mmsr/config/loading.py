@@ -272,7 +272,7 @@ def _toxicity_config(section: Mapping[str, Any]) -> ToxicityConfig:
             str(value)
             for value in section.get(
                 "reversion_horizons",
-                ["10ms", "100ms", "500ms", "1s", "5s", "10s"],
+                ["100ms", "500ms", "1s", "10s", "30s", "1m", "5m"],
             )
         ),
         default_visual=ToxicityVisualConfig(

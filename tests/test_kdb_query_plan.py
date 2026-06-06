@@ -165,7 +165,7 @@ def test_query_planner_exposes_reversion_optional_metadata_contract() -> None:
     assert plan.result_group_by == ("venue", "horizon", "sym")
     assert plan.required_output_columns == (
         "date",
-        "time_bucket",
+        "timeBucket",
         "venue",
         "horizon",
         "sym",
@@ -178,6 +178,7 @@ def test_query_planner_exposes_reversion_optional_metadata_contract() -> None:
     )
     assert plan.optional_output_columns == ("context_sort_order",)
     assert plan.documented_output_columns[-1] == "context_sort_order"
+    assert plan.input_contracts[0].table_role == "trades"
     assert plan.input_contracts[0].required_columns == (
         "date",
         "time",
@@ -188,10 +189,11 @@ def test_query_planner_exposes_reversion_optional_metadata_contract() -> None:
         "tradePrice",
         "tradeSize",
     )
-    assert plan.input_contracts[1].table_role == "pts_quotes"
-    assert plan.input_contracts[2].table_role == "primary_quotes"
-    assert plan.input_contracts[3].table_role == "reference_data"
-    assert plan.input_contracts[3].required_columns == (
+    assert plan.input_contracts[1].table_role == "pts_trades"
+    assert plan.input_contracts[2].table_role == "pts_quotes"
+    assert plan.input_contracts[3].table_role == "primary_quotes"
+    assert plan.input_contracts[4].table_role == "reference_data"
+    assert plan.input_contracts[4].required_columns == (
         "date",
         "sym",
         "ric",
@@ -338,6 +340,7 @@ def test_reversion_planner_uses_user_defined_trade_and_quote_source_functions() 
             period=_period(),
             group_by=[],
             source_functions={
+                "trades": ".sb.mmsr.getTrade",
                 "pts_trades": ".sb.mmsr.getPtsTrade",
                 "pts_quotes": ".sb.mmsr.getPtsQuote",
                 "primary_quotes": ".sb.mmsr.getQuote",
@@ -348,13 +351,15 @@ def test_reversion_planner_uses_user_defined_trade_and_quote_source_functions() 
         )
     )
 
-    assert plan.input_contracts[0].table_name == ".sb.mmsr.getPtsTrade"
-    assert plan.input_contracts[1].table_name == ".sb.mmsr.getPtsQuote"
-    assert plan.input_contracts[2].table_name == ".sb.mmsr.getQuote"
-    assert plan.input_contracts[3].table_name == ".sb.mmsr.getRef"
-    assert ".sb.mmsrCalc.calcToxicityReversion[rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;" in plan.query
-    assert "calcToxicityReversion[rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;" in plan.query
+    assert plan.input_contracts[0].table_name == ".sb.mmsr.getTrade"
+    assert plan.input_contracts[1].table_name == ".sb.mmsr.getPtsTrade"
+    assert plan.input_contracts[2].table_name == ".sb.mmsr.getPtsQuote"
+    assert plan.input_contracts[3].table_name == ".sb.mmsr.getQuote"
+    assert plan.input_contracts[4].table_name == ".sb.mmsr.getRef"
+    assert ".sb.mmsrCalc.calcToxicityReversion[2026.05.01;rawTrades;rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;" in plan.query
+    assert "calcToxicityReversion[2026.05.01;rawTrades;rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;" in plan.query
     assert "rawRefs: select from (.sb.mmsr.getRef[2026.05.01]);" in plan.query
+    assert "rawTrades: (.sb.mmsr.getTrade[2026.05.01;0!refs]);" in plan.query
     assert "rawPtsTradeRows: (.sb.mmsr.getPtsTrade[2026.05.01;0!refs]);" in plan.query
     assert "rawPtsQuoteRows: (.sb.mmsr.getPtsQuote[2026.05.01;0!refs]);" in plan.query
     assert "rawPrimaryQuoteRows: (.sb.mmsr.getQuote[2026.05.01;0!refs]);" in plan.query

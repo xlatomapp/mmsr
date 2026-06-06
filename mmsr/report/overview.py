@@ -32,7 +32,10 @@ _MARKET_SUMMARY_FAMILIES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("Displayed liquidity", ("quoted_spread_bps", "top_of_book_depth")),
     (
         "Cross-venue reversion",
-        tuple(f"primary_quote_reversion_{horizon}_bps" for horizon in ("10ms", "100ms", "500ms", "1s", "5s", "10s")),
+        tuple(
+            f"primary_quote_reversion_{horizon}_bps"
+            for horizon in ("100ms", "500ms", "1s", "10s", "30s", "1m", "5m")
+        ),
     ),
 )
 

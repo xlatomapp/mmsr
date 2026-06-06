@@ -128,6 +128,20 @@
     `time$ startMs + n?spanMs
     };
 
+{{ source_namespace }}.deterministicRandTimes:{[start;end;n;seed]
+    if[n<=0; :0#start];
+    startMs:`int$start;
+    spanMs:1 + (`int$end) - startMs;
+    candidateCount:(4 * n) | 32;
+    candidateOffsets:asc distinct (seed + {{ source_namespace }}.seedA * til candidateCount) mod spanMs;
+    if[count candidateOffsets < n;
+        fallbackOffsets:(spanMs * til n) div n;
+        candidateOffsets:asc distinct candidateOffsets,fallbackOffsets
+        ];
+    sampledOffsets:n#candidateOffsets;
+    `time$ startMs + sampledOffsets
+    };
+
 {{ source_namespace }}.toTimestamp:{[runDate;tm]
     (`timestamp$`datetime$runDate) + `timespan$tm
     };
@@ -154,23 +168,27 @@
     nAm:0 | nAm;
     nAm:nBase & nAm;
     nPm:nBase - nAm;
-    amTimes:asc {{ source_namespace }}.randTimes[
+    amTimes:{{ source_namespace }}.deterministicRandTimes[
         {{ source_namespace }}.amContinuousStart;
         {{ source_namespace }}.amContinuousEnd;
-        nAm];
-    pmTimes:asc {{ source_namespace }}.randTimes[
+        nAm;
+        {{ source_namespace }}.mixSeed[dayInt;sid;{{ source_namespace }}.seedA;41j]];
+    pmTimes:{{ source_namespace }}.deterministicRandTimes[
         {{ source_namespace }}.pmContinuousStart;
         {{ source_namespace }}.pmContinuousEnd;
-        nPm];
-    amOpenTimes:asc {{ source_namespace }}.randTimes[
+        nPm;
+        {{ source_namespace }}.mixSeed[dayInt;sid;{{ source_namespace }}.seedB;43j]];
+    amOpenTimes:{{ source_namespace }}.deterministicRandTimes[
         {{ source_namespace }}.amOpen;
         {{ source_namespace }}.amOpenDelayEnd;
-        amOpenCount];
+        amOpenCount;
+        {{ source_namespace }}.mixSeed[dayInt;sid;{{ source_namespace }}.seedC;47j]];
     amCloseTimes:mandatoryAmClose#{{ source_namespace }}.amClose;
-    pmOpenTimes:asc {{ source_namespace }}.randTimes[
+    pmOpenTimes:{{ source_namespace }}.deterministicRandTimes[
         {{ source_namespace }}.pmOpen;
         {{ source_namespace }}.pmOpenDelayEnd;
-        mandatoryPmOpen];
+        mandatoryPmOpen;
+        {{ source_namespace }}.mixSeed[dayInt;sid;{{ source_namespace }}.seedD;53j]];
     pmCloseTimes:pmCloseCount#{{ source_namespace }}.pmClose;
     amAllTimes:asc raze (amOpenTimes; amTimes; amCloseTimes);
     pmAllTimes:asc raze (pmOpenTimes; pmTimes; pmCloseTimes);

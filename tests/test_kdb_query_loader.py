@@ -157,6 +157,16 @@ def test_render_simulated_source_function_bootstrap_installs_kdb_sources() -> No
     assert "{{" not in rendered
 
 
+def test_render_simulated_source_function_bootstrap_uses_deterministic_intraday_grid() -> None:
+    rendered = render_simulated_source_function_bootstrap(".dev.mmsr")
+
+    assert ".dev.mmsr.deterministicRandTimes" in rendered
+    assert ".dev.mmsr.randTimes" in rendered
+    assert "n?spanMs" in rendered
+    assert ".dev.mmsr.deterministicRandTimes[" in rendered
+    assert "candidateOffsets:asc distinct" in rendered
+
+
 def test_render_simulated_source_function_bootstrap_accepts_symbol_count() -> None:
     rendered = render_simulated_source_function_bootstrap(
         ".dev.mmsr",

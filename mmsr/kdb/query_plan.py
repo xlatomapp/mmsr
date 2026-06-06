@@ -32,7 +32,7 @@ _ACTIVITY_METRICS = frozenset({"turnover", "volume", "trade_count"})
 _PTS_ACTIVITY_METRICS = frozenset({"pts_turnover"})
 _LIQUIDITY_METRICS = frozenset({"quoted_spread_bps", "top_of_book_depth"})
 _VOLATILITY_METRICS = frozenset({"parkinson_volatility_bps"})
-_REVERSION_METRIC_PATTERN = re.compile(r"^primary_quote_reversion_(?P<horizon>10ms|100ms|500ms|1s|5s|10s)_bps$")
+_REVERSION_METRIC_PATTERN = re.compile(r"^primary_quote_reversion_(?P<horizon>10ms|100ms|500ms|1s|5s|10s|30s|1m|5m)_bps$")
 _REVERSION_GROUP_COLUMNS = ("venue", "horizon")
 _REVERSION_HORIZON_SORT_ORDER = {
     "10ms": 1,
@@ -41,10 +41,14 @@ _REVERSION_HORIZON_SORT_ORDER = {
     "1s": 4,
     "5s": 5,
     "10s": 6,
+    "30s": 7,
+    "1m": 8,
+    "5m": 9,
 }
 _REVERSION_TEMPLATE = "toxicity_reversion"
 _REVERSION_METRICS = frozenset(
-    f"primary_quote_reversion_{horizon}_bps" for horizon in ("10ms", "100ms", "500ms", "1s", "5s", "10s")
+    f"primary_quote_reversion_{horizon}_bps"
+    for horizon in ("10ms", "100ms", "500ms", "1s", "5s", "10s", "30s", "1m", "5m")
 )
 
 _METRIC_TEMPLATE_MAP = {
@@ -60,6 +64,7 @@ _METRIC_TABLE_PARAMETER_MAP = {
     "liquidity": (("quotes", "quotes_table"), ("reference_data", "ref_table")),
     "volatility": (("trades", "trades_table"), ("reference_data", "ref_table")),
     _REVERSION_TEMPLATE: (
+        ("trades", "trades_table"),
         ("pts_trades", "pts_trades_table"),
         ("pts_quotes", "pts_quotes_table"),
         ("primary_quotes", "primary_quotes_table"),
@@ -400,6 +405,10 @@ def _input_contracts_for_template(
         )
     if template_name == _REVERSION_TEMPLATE:
         return toxicity_reversion_input_schema_contracts(
+            trades_table=_source_label(
+                "trades",
+                source_functions,
+            ),
             pts_trades_table=_source_label(
                 "pts_trades",
                 source_functions,
@@ -519,7 +528,7 @@ def _metric_call_expression(
         "volatility": f"{calculation_namespace}.calcParkinsonVolatility[{_q_date(run_date)};rawTrades;refs;{metric_params}]",
         _REVERSION_TEMPLATE: (
             f"{calculation_namespace}.calcToxicityReversion["
-            f"{_q_date(run_date)};rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;{metric_params}]"
+            f"{_q_date(run_date)};rawTrades;rawPtsTradeRows;rawPtsQuoteRows;rawPrimaryQuoteRows;refs;{metric_params}]"
         ),
     }
     try:
